@@ -1,0 +1,24 @@
+{
+  "name": "Kampus — Botswana Beta",
+  "short_name": "Kampus",
+  "description": "Your verified student safety network — campus radar, secure trades, and community rewards.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/images/ClipSnap_20260723201232.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/ClipSnap_20260723201232.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
