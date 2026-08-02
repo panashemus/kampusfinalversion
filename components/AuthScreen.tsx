@@ -24,7 +24,6 @@ function isWhitelisted(email: string) {
   );
 }
 
-
 export default function AuthScreen({
   onVerified,
 }: {
@@ -35,24 +34,15 @@ export default function AuthScreen({
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Pending OTP state
   const [pendingOtp, setPendingOtp] = useState<{ userId: string; email: string } | null>(null);
+  
+  // Username state
   const [username, setUsername] = useState('');
   const [usernameStep, setUsernameStep] = useState(false);
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [usernameChecking, setUsernameChecking] = useState(false);
-
-  const callEdge = async (payload: Record<string, unknown>) => {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-verification`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Request failed');
-    return json;
-  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -74,27 +64,22 @@ export default function AuthScreen({
     setSubmitting(true);
     try {
       if (mode === 'signup') {
-        // Create the account but do NOT auto-login.
         const { data, error: signUpErr } = await supabase.auth.signUp({
           email: email.trim(),
           password,
         });
 
         if (signUpErr) {
-          // If the account already exists, route to OTP verification
-          // (the user may have signed up but never verified their email).
           if (
             signUpErr.message.toLowerCase().includes('already') ||
             signUpErr.message.toLowerCase().includes('registered')
           ) {
-            // Try signing in to get the user id for OTP.
             const { data: signInData, error: signInErr } =
               await supabase.auth.signInWithPassword({
                 email: email.trim(),
                 password,
               });
             if (signInErr) {
-              // Password doesn't match — tell them to sign in instead.
               setError(
                 'An account with this email already exists. Please sign in or use the correct password.'
               );
@@ -107,17 +92,18 @@ export default function AuthScreen({
               setMode('signin');
               return;
             }
-            // Check if already verified.
+            
             const { data: existingProfile } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', existingUserId)
               .maybeSingle();
+              
             if (existingProfile && (existingProfile as Profile).email_verified) {
               onVerified(existingProfile as Profile);
               return;
             }
-            // Not verified — sign out and show OTP.
+            
             await supabase.auth.signOut();
             setPendingOtp({ userId: existingUserId, email: email.trim() });
             return;
@@ -128,22 +114,17 @@ export default function AuthScreen({
         const userId = data.user?.id;
         if (!userId) throw new Error('Account creation failed — no user returned.');
 
-        // The database trigger (on_auth_user_created) auto-creates the
-        // profile row server-side, so no client-side insert is needed.
-
-        // Immediately sign out so the user is NOT logged in.
         await supabase.auth.signOut();
 
-        // Show username selection step before OTP.
-        setUsernameStep(true);
+        // 1. STEP ONE: TRIGGER OTP FIRST IMMEDIATELY AFTER SIGNUP
+        setPendingOtp({ userId, email: email.trim() });
       } else {
-        // Sign-in flow: check email_verified before granting access.
+        // Sign-in flow
         const { error: signInErr } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
         if (signInErr) {
-          // If sign-in fails because the account doesn't exist, suggest signup.
           if (signInErr.message.toLowerCase().includes('invalid login')) {
             setError('No account found with these credentials. Please create an account.');
             setMode('signup');
@@ -164,7 +145,6 @@ export default function AuthScreen({
         if (profileErr) throw profileErr;
         if (!profile) throw new Error('Profile not found.');
 
-        // If not email-verified, sign out and redirect to OTP.
         if (!(profile as Profile).email_verified) {
           await supabase.auth.signOut();
           setPendingOtp({ userId: user.id, email: email.trim() });
@@ -179,33 +159,36 @@ export default function AuthScreen({
     }
   };
 
+  // Called after OTP is entered successfully
   const handleOtpVerified = async () => {
     if (!pendingOtp) return;
-    // After verification, sign in and grant access.
+    const currentUserId = pendingOtp.userId;
+    setPendingOtp(null);
+
+    // Sign in to check if username is already configured
     const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: pendingOtp.email,
+      email: email.trim() || pendingOtp.email,
       password,
     });
+
     if (signInErr) {
       setError(signInErr.message);
-      setPendingOtp(null);
       return;
     }
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setError('Login failed after verification.');
-      setPendingOtp(null);
-      return;
-    }
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', currentUserId)
       .maybeSingle();
-    setPendingOtp(null);
-    if (profile) onVerified(profile as Profile);
+
+    // 2. STEP TWO: IF NO USERNAME IS SET YET, PROMPT FOR USERNAME
+    if (!profile?.username) {
+      setActiveUserId(currentUserId);
+      setUsernameStep(true);
+    } else {
+      if (profile) onVerified(profile as Profile);
+    }
   };
 
   const checkUsername = async (): Promise<boolean> => {
@@ -231,35 +214,83 @@ export default function AuthScreen({
       setUsernameChecking(false);
       return;
     }
-    // Get the user id (sign in temporarily to get it, then sign out).
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    if (signInErr) {
-      setError('Could not set username. Please try again.');
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = user?.id || activeUserId;
+
+    if (!uid) {
+      setError('Could not set username. Session lost, please log in.');
       setUsernameChecking(false);
       return;
     }
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setError('Could not set username. Please try again.');
-      setUsernameChecking(false);
-      return;
-    }
-    await supabase
+
+    // Save username directly to profile
+    const { error: updateErr } = await supabase
       .from('profiles')
       .update({ username: clean })
-      .eq('id', user.id);
-    await supabase.auth.signOut();
+      .eq('id', uid);
+
+    if (updateErr) {
+      setError('Could not set username: ' + updateErr.message);
+      setUsernameChecking(false);
+      return;
+    }
+
+    const { data: updatedProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', uid)
+      .maybeSingle();
+
     setUsernameChecking(false);
     setUsernameStep(false);
-    setPendingOtp({ userId: user.id, email: email.trim() });
+
+    if (updatedProfile) {
+      onVerified(updatedProfile as Profile);
+    }
   };
 
-  // Username selection step (shown after signup, before OTP).
+  // --- 1. OTP SCREEN (SHOWS FIRST) ---
+  if (pendingOtp) {
+    return (
+      <div className="min-h-screen bg-midnight flex justify-center">
+        <div className="w-full max-w-[430px] min-h-screen flex flex-col">
+          <header className="p-6 flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-full bg-surface flex items-center justify-center overflow-hidden">
+              <img
+                src="/images/ClipSnap_20260723201232.png"
+                alt="Kampus logo"
+                className="h-7 w-7 object-contain"
+              />
+            </div>
+            <span className="text-white font-black tracking-tight uppercase text-2xl">
+              KAMPUS
+            </span>
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12">
+            <div className="w-full max-w-sm">
+              <h2 className="text-white text-2xl font-extrabold text-center mb-2">
+                Verify Your Student Email
+              </h2>
+              <p className="text-sage text-sm text-center mb-6 leading-relaxed">
+                We sent a 6-digit code to{' '}
+                <span className="text-white font-bold">{pendingOtp.email}</span>.
+                Enter it below to activate your Kampus account.
+              </p>
+              <OtpModal
+                userId={pendingOtp.userId}
+                email={pendingOtp.email}
+                onClose={() => setPendingOtp(null)}
+                onVerified={handleOtpVerified}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 2. USERNAME SCREEN (SHOWS SECOND) ---
   if (usernameStep) {
     return (
       <div className="min-h-screen bg-midnight flex justify-center">
@@ -321,46 +352,7 @@ export default function AuthScreen({
     );
   }
 
-  // OTP verification screen (shown after signup or unverified signin).
-  if (pendingOtp) {
-    return (
-      <div className="min-h-screen bg-midnight flex justify-center">
-        <div className="w-full max-w-[430px] min-h-screen flex flex-col">
-          <header className="p-6 flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-full bg-surface flex items-center justify-center overflow-hidden">
-              <img
-                src="/images/ClipSnap_20260723201232.png"
-                alt="Kampus logo"
-                className="h-7 w-7 object-contain"
-              />
-            </div>
-            <span className="text-white font-black tracking-tight uppercase text-2xl">
-              KAMPUS
-            </span>
-          </header>
-          <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12">
-            <div className="w-full max-w-sm">
-              <h2 className="text-white text-2xl font-extrabold text-center mb-2">
-                Verify Your Student Email
-              </h2>
-              <p className="text-sage text-sm text-center mb-6 leading-relaxed">
-                We sent a 6-digit code to{' '}
-                <span className="text-white font-bold">{pendingOtp.email}</span>.
-                Enter it below to activate your Kampus account.
-              </p>
-              <OtpModal
-                userId={pendingOtp.userId}
-                email={pendingOtp.email}
-                onClose={() => setPendingOtp(null)}
-                onVerified={handleOtpVerified}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // --- DEFAULT LANDING / FORM ---
   return (
     <div className="min-h-screen bg-midnight flex justify-center">
       <div className="w-full max-w-[430px] min-h-screen flex flex-col">
