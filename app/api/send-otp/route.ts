@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 
-// No external packages imported! Pure standard web fetch.
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
     const { email, code } = await req.json();
     
-    // Grab the API key from Vercel environment variables
     const apiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
 
-    // Call Resend directly using standard fetch to bypass the Next.js compiler bug
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -18,7 +15,7 @@ export async function POST(req: Request) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        from: 'Kampus <onboarding@resend.dev>',
+        from: 'Kampus <verify@kampusbw.site>', // Updated to your verified domain!
         to: [email],
         subject: `${code} is your Kampus verification code`,
         html: `
