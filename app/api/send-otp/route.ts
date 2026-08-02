@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-// Initializes Resend using the environment key configured in Vercel
+// Enforces Node.js runtime to fix module bundling issues with Next.js 13
+export const runtime = 'nodejs';
+
 const resend = new Resend(process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY);
 
 export async function POST(req: Request) {
@@ -9,7 +11,7 @@ export async function POST(req: Request) {
     const { email, code } = await req.json();
 
     const data = await resend.emails.send({
-      from: 'Kampus <onboarding@resend.dev>', // Replace with your domain once verified on Resend
+      from: 'Kampus <onboarding@resend.dev>',
       to: [email],
       subject: `${code} is your Kampus verification code`,
       html: `
