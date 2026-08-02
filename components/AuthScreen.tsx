@@ -14,6 +14,7 @@ const ADMIN_EMAILS = ['musungwa60@gmail.com'];
 const TEST_EMAILS = [
   'chrisvandium@gmail.com',
   'chris.karter1629@gmail.com',
+  'jasonkramer411@gmail.com',
 ];
 
 function isWhitelisted(email: string) {
