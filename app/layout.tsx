@@ -1,25 +1,16 @@
 import './globals.css';
-import type { Metadata, Viewport } from 'next';
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 
 const inter = Inter({ subsets: ['latin'] });
 
-// 1. Fixes Chrome Mobile Layout & Tab Bar Visibility
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: 'cover', // Ensures content extends properly into mobile safe areas
-  themeColor: '#000000',
-};
-
-// 2. Removes Bolt links and replaces them with official Kampus branding
 export const metadata: Metadata = {
   title: 'KAMPUS — Verified Student Safety Network',
   description: 'Your verified student safety network for UB and BAC — campus radar, secure escrow trades, and peer-to-peer community support.',
   manifest: '/manifest.json',
+  themeColor: '#000000',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
   openGraph: {
     title: 'KAMPUS — Verified Student Safety Network',
     description: 'Campus radar, secure escrow trades, and peer-to-peer community support for UB & BAC.',
@@ -27,7 +18,7 @@ export const metadata: Metadata = {
     siteName: 'Kampus',
     images: [
       {
-        url: 'https://kampusbw.site/og-image.png', // Uses your custom banner uploaded to /public
+        url: 'https://kampusbw.site/og-image.png',
         width: 1200,
         height: 630,
         alt: 'Kampus Botswana',
@@ -51,7 +42,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} min-h-dvh bg-black text-white antialiased`}>
+      <body className={`${inter.className} min-h-[100dvh] bg-black text-white antialiased`}>
         {children}
         <Toaster />
       </body>
