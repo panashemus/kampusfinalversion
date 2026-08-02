@@ -1,15 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon, CreditCard, Wallet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { timeAgo } from '@/lib/utils';
 import { uploadImages } from '@/lib/payment';
 import type { Comment, Profile, HustleStatus } from '@/lib/types';
-import CommentThread from '@/components/CommentThread';
 import AdSlot from '@/components/AdSlot';
 import PublicProfileModal from '@/components/PublicProfileModal';
-import PaymentModal from '@/components/PaymentModal';
 import ImageUploader from '@/components/ImageUploader';
 import Lightbox from '@/components/Lightbox';
 import ReportModal from '@/components/ReportModal';
@@ -72,7 +69,6 @@ export default function HustleHub({
   const { toast } = useToast();
   const [activeFilter, setActiveFilter] = useState<Category>('All');
   const [showModal, setShowModal] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
   const [gigs, setGigs] = useState<Gig[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
@@ -81,6 +77,15 @@ export default function HustleHub({
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
+  // 2-Step Checkout State
+  const [step, setStep] = useState<1 | 2>(1);
+  const [paymentMethod, setPaymentMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
+  const [referenceCode, setReferenceCode] = useState('');
+  const [incontactId, setIncontactId] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedNum, setCopiedNum] = useState(false);
+
+  // Form State
   const [newTitle, setNewTitle] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newCategory, setNewCategory] = useState<Exclude<Category, 'All'>>('Tech');
@@ -127,8 +132,6 @@ export default function HustleHub({
     return () => { supabase.removeChannel(channel); };
   }, [loadGigs]);
 
-  // Public feed only shows active gigs (non-admins see only active).
-  // Admins see all gigs including suspended ones.
   const visibleGigs = gigs.filter((g) => {
     if (g.status !== 'active' && !isAdmin) return false;
     const matchesCategory = activeFilter === 'All' || g.category === activeFilter;
@@ -140,7 +143,6 @@ export default function HustleHub({
     return matchesCategory && matchesSearch;
   });
 
-  // My suspended gigs (for the author's dashboard view)
   const mySuspendedGigs = gigs.filter(
     (g) => g.status === 'unpaid_suspended' && g.sellerId === profile?.id
   );
@@ -152,11 +154,21 @@ export default function HustleHub({
     Number(newPrice) > 0 &&
     newDescription.trim().length >= 10;
 
-  const handlePaymentConfirm = async (referenceCode: string, paymentRefId: string) => {
+  // Handles generating the KMP-XXXX code and moving to payment UI
+  const handleProceedToPayment = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!canPostGig) return;
+    
+    // Generate clean 4-digit code e.g. KMP-8402
+    const randomCode = `KMP-${Math.floor(1000 + Math.random() * 9000)}`;
+    setReferenceCode(randomCode);
+    setStep(2);
+  };
+
+  const handlePublishGig = async () => {
     if (!profile || !canPostGig) return;
     setPosting(true);
 
-    // Optimistic: insert immediately with status=active
     const { data, error } = await supabase
       .from('hustles')
       .insert({
@@ -167,7 +179,7 @@ export default function HustleHub({
         category: newCategory,
         description: newDescription.trim(),
         reference_code: referenceCode,
-        payment_ref_id: paymentRefId || null,
+        payment_ref_id: incontactId || null,
         status: 'active',
         images: newImages.length > 0 ? newImages : null,
       })
@@ -194,7 +206,7 @@ export default function HustleHub({
       description: newDescription.trim(),
       comments: [],
       referenceCode: referenceCode,
-      paymentRefId: paymentRefId || null,
+      paymentRefId: incontactId || null,
       status: 'active',
       images: newImages,
     };
@@ -205,13 +217,26 @@ export default function HustleHub({
       description: `Your listing is live. Ref: ${referenceCode}`,
     });
 
+    // Reset flow
     setPosting(false);
-    setShowPayment(false);
     setShowModal(false);
+    setStep(1);
     setNewTitle('');
     setNewPrice('');
     setNewDescription('');
     setNewImages([]);
+    setIncontactId('');
+  };
+
+  const copyToClipboard = (text: string, isCode: boolean) => {
+    navigator.clipboard.writeText(text);
+    if (isCode) {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } else {
+      setCopiedNum(true);
+      setTimeout(() => setCopiedNum(false), 2000);
+    }
   };
 
   const flagAsUnpaid = async (gig: Gig) => {
@@ -240,7 +265,7 @@ export default function HustleHub({
   };
 
   return (
-    <div className="flex-1 bg-midnight flex flex-col">
+    <div className="flex-1 bg-midnight flex flex-col relative">
       <div className="px-4 py-3">
         <div className="flex gap-2 overflow-x-auto no-scrollbar">
           {FILTERS.map((f) => (
@@ -260,7 +285,7 @@ export default function HustleHub({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24">
-        {/* Suspended listings warning cards (author only) */}
+        {/* Suspended listings warning cards */}
         {mySuspendedGigs.length > 0 && (
           <div className="flex flex-col gap-3 mb-4">
             {mySuspendedGigs.map((gig) => (
@@ -338,14 +363,14 @@ export default function HustleHub({
                       )}
                     </div>
                     <div className="p-3 flex flex-col gap-1">
-                      <span className="text-white text-sm font-bold">{gig.title}</span>
+                      <span className="text-white text-sm font-bold truncate">{gig.title}</span>
                       <span className="text-pine text-xs font-extrabold">{gig.price}</span>
                     </div>
                   </button>
                   <div className="px-3 pb-3">
                     <button
                       onClick={() => setProfileUser(gig.seller)}
-                      className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
+                      className="text-sage text-[10px] font-bold hover:text-pine transition-colors truncate w-full text-left"
                     >
                       {gig.seller}
                     </button>
@@ -360,153 +385,276 @@ export default function HustleHub({
         </div>
       </div>
 
+      {/* Floating List Gig Button */}
       <button
-        onClick={() => requireVerified(() => setShowModal(true))}
-        className="absolute bottom-24 right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine active:scale-95 transition-transform"
+        onClick={() => requireVerified(() => { setShowModal(true); setStep(1); })}
+        className="absolute bottom-24 right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine active:scale-95 transition-transform shadow-lg"
       >
         <Plus className="w-5 h-5 text-black" strokeWidth={2.5} />
         <span className="text-black font-bold text-sm">List a Gig</span>
       </button>
 
-      {/* Create Gig Modal */}
+      {/* 2-STEP CREATE GIG MODAL */}
       {showModal && (
-        <div className="absolute inset-0 z-30 flex items-end">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowModal(false)} />
-          <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85%] overflow-y-auto no-scrollbar">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+          
+          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(24px,env(safe-area-inset-bottom))]">
+            
             <div className="flex items-center justify-between">
-              <span className="text-white font-black text-lg">List a New Gig</span>
+              <span className="text-white font-black text-lg">
+                {step === 1 ? 'List a New Gig' : 'Payment Checkout'}
+              </span>
               <button onClick={() => setShowModal(false)} aria-label="Close">
-                <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
+                <X className="w-5 h-5 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
               </button>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sage text-xs font-bold uppercase tracking-wider">Gig Title</label>
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. Laptop Screen Repair"
-                required
-                minLength={3}
-                className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-sage transition-colors"
-              />
-            </div>
+            {/* STEP 1: GIG DETAILS FORM */}
+            {step === 1 && (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sage text-xs font-bold uppercase tracking-wider">Gig Title</label>
+                  <input
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="e.g. Laptop Screen Repair"
+                    required
+                    minLength={3}
+                    className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors"
+                  />
+                </div>
 
-            <div className="flex flex-col gap-2">
-              <span className="text-sage text-xs font-bold uppercase tracking-wider">Category</span>
-              <div className="flex flex-wrap gap-2">
-                {FILTERS.filter((f) => f !== 'All').map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setNewCategory(cat as Exclude<Category, 'All'>)}
-                    className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
-                      newCategory === cat
-                        ? 'bg-pine text-black'
-                        : 'bg-transparent border border-sage text-sage'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
+                <div className="flex flex-col gap-2">
+                  <span className="text-sage text-xs font-bold uppercase tracking-wider">Category</span>
+                  <div className="flex flex-wrap gap-2">
+                    {FILTERS.filter((f) => f !== 'All').map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setNewCategory(cat as Exclude<Category, 'All'>)}
+                        className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                          newCategory === cat
+                            ? 'bg-pine text-black'
+                            : 'bg-transparent border border-sage text-sage'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sage text-xs font-bold uppercase tracking-wider">Price (Pula)</label>
-              <input
-                type="number"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                placeholder="e.g. 150"
-                required
-                min={1}
-                className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-sage transition-colors"
-              />
-            </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sage text-xs font-bold uppercase tracking-wider">Price (Pula)</label>
+                  <input
+                    type="number"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(e.target.value)}
+                    placeholder="e.g. 150"
+                    required
+                    min={1}
+                    className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors"
+                  />
+                </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sage text-xs font-bold uppercase tracking-wider">Description</label>
-              <textarea
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                onPaste={(e) => {
-                  const items = e.clipboardData?.items;
-                  if (!items) return;
-                  const imageFiles: File[] = [];
-                  for (let i = 0; i < items.length; i++) {
-                    if (items[i].type.startsWith('image/')) {
-                      const f = items[i].getAsFile();
-                      if (f) imageFiles.push(f);
-                    }
-                  }
-                  if (imageFiles.length > 0) {
-                    e.preventDefault();
-                    if (profile) {
-                      uploadImages(imageFiles, profile.id).then((urls) => {
-                        if (urls.length > 0) {
-                          setNewImages((prev) => [...prev, ...urls]);
-                          toast({ title: 'Image pasted', description: `${urls.length} image(s) attached.` });
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sage text-xs font-bold uppercase tracking-wider">Description</label>
+                  <textarea
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    onPaste={(e) => {
+                      const items = e.clipboardData?.items;
+                      if (!items) return;
+                      const imageFiles: File[] = [];
+                      for (let i = 0; i < items.length; i++) {
+                        if (items[i].type.startsWith('image/')) {
+                          const f = items[i].getAsFile();
+                          if (f) imageFiles.push(f);
                         }
-                      });
-                    }
-                  }
-                }}
-                placeholder="Describe what you offer, delivery time, and any conditions..."
-                rows={3}
-                required
-                minLength={10}
-                className="bg-ink rounded-lg w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-sage transition-colors resize-none"
-              />
-            </div>
+                      }
+                      if (imageFiles.length > 0) {
+                        e.preventDefault();
+                        if (profile) {
+                          uploadImages(imageFiles, profile.id).then((urls) => {
+                            if (urls.length > 0) {
+                              setNewImages((prev) => [...prev, ...urls]);
+                              toast({ title: 'Image pasted', description: `${urls.length} image(s) attached.` });
+                            }
+                          });
+                        }
+                      }
+                    }}
+                    placeholder="Describe what you offer, delivery time, and any conditions..."
+                    rows={3}
+                    required
+                    minLength={10}
+                    className="bg-ink rounded-lg w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors resize-none"
+                  />
+                </div>
 
-            {profile && (
-              <ImageUploader
-                userId={profile.id}
-                onUploaded={(urls) => setNewImages((prev) => [...prev, ...urls])}
-                onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
-              />
+                {profile && (
+                  <ImageUploader
+                    userId={profile.id}
+                    onUploaded={(urls) => setNewImages((prev) => [...prev, ...urls])}
+                    onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
+                  />
+                )}
+
+                <button
+                  onClick={handleProceedToPayment}
+                  disabled={!canPostGig}
+                  className="w-full mt-2 h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2"
+                >
+                  Proceed to Payment
+                </button>
+              </div>
             )}
 
-            <button
-              onClick={() => {
-                if (!canPostGig) return;
-                setShowModal(false);
-                setShowPayment(true);
-              }}
-              disabled={!canPostGig}
-              className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2"
-            >
-              Proceed to Payment
-            </button>
+            {/* STEP 2: CHECKOUT & PAYMENT FLOW */}
+            {step === 2 && (
+              <div className="flex flex-col gap-4">
+                
+                {/* Reference Code Header */}
+                <div className="bg-ink border border-pine/30 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-sage font-bold">Your Reference Code</div>
+                    <div className="text-2xl font-extrabold text-pine tracking-wider mt-1">{referenceCode}</div>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(referenceCode, true)}
+                    className="flex items-center gap-1.5 bg-pine/10 border border-pine/30 text-pine px-3 py-2 rounded-lg text-xs font-semibold hover:bg-pine/20 transition-colors"
+                  >
+                    {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copiedCode ? 'Copied' : 'Copy Code'}
+                  </button>
+                </div>
+
+                {/* Listing Fee Info */}
+                <div className="bg-ink border border-gray-800 rounded-xl p-4 flex items-center justify-between">
+                  <span className="text-white font-semibold">Listing Fee</span>
+                  <span className="text-xl font-bold text-pine">P10</span>
+                </div>
+
+                {/* Payment Method Selector */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setPaymentMethod('pay2cell')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
+                      paymentMethod === 'pay2cell'
+                        ? 'bg-pine text-black border-pine'
+                        : 'bg-ink text-sage border-gray-800'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4" /> FNB Pay2Cell
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('ewallet')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
+                      paymentMethod === 'ewallet'
+                        ? 'bg-pine text-black border-pine'
+                        : 'bg-ink text-sage border-gray-800'
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4" /> eWallet
+                  </button>
+                </div>
+
+                {/* Instructions Box */}
+                {paymentMethod === 'pay2cell' ? (
+                  <div className="bg-ink border border-gray-800 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-sage">FNB Pay2Cell Number</div>
+                        <div className="text-lg font-extrabold text-white">77037168</div>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard('77037168', false)}
+                        className="flex items-center gap-1 text-pine text-xs font-bold"
+                      >
+                        {copiedNum ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        {copiedNum ? 'Copied' : 'Copy Number'}
+                      </button>
+                    </div>
+                    <div className="bg-black/50 p-3 rounded-lg text-xs text-sage leading-relaxed">
+                      Open FNB App &gt; Transact &gt; Pay2Cell (or dial *130*321#) &gt; Send payment to <strong className="text-white">77037168</strong> &gt; Set payment reference to <strong className="text-pine">{referenceCode}</strong>.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-ink border border-gray-800 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-sage">eWallet Number</div>
+                        <div className="text-lg font-extrabold text-white">71321163</div>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard('71321163', false)}
+                        className="flex items-center gap-1 text-pine text-xs font-bold"
+                      >
+                        {copiedNum ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        {copiedNum ? 'Copied' : 'Copy Number'}
+                      </button>
+                    </div>
+                    <div className="bg-black/50 p-3 rounded-lg text-xs text-sage leading-relaxed">
+                      Send eWallet payment to <strong className="text-white">71321163</strong> &gt; Include <strong className="text-pine">{referenceCode}</strong> in the message or keep your reference ID handy.
+                    </div>
+                  </div>
+                )}
+
+                {/* Optional inContact ID Input */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="block text-[10px] uppercase font-bold text-sage">
+                    FNB inContact / SMS Confirmation ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Paste your confirmation ID"
+                    value={incontactId}
+                    onChange={(e) => setIncontactId(e.target.value)}
+                    className="bg-ink rounded-lg h-11 w-full px-3 border border-gray-800 text-white placeholder:text-sage text-sm outline-none focus:border-pine transition-colors"
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="pt-2 space-y-2">
+                  <button
+                    onClick={handlePublishGig}
+                    disabled={posting}
+                    className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center"
+                  >
+                    {posting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Publish Gig'}
+                  </button>
+                  <button
+                    onClick={() => setStep(1)}
+                    className="w-full text-center text-xs text-sage hover:text-white py-2 transition-colors"
+                  >
+                    ← Back to Gig Details
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-center text-sage pt-1">
+                  Your listing goes live instantly. Admin will verify payment shortly.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Payment Modal */}
-      <PaymentModal
-        open={showPayment}
-        onClose={() => setShowPayment(false)}
-        onConfirm={handlePaymentConfirm}
-        amount={10}
-        ctaLabel="Publish Gig"
-      />
-
-      {/* Gig Detail Modal */}
+      {/* Gig Detail Modal (Escrow UI) */}
       {selectedGig && (
-        <div className="absolute inset-0 z-30 flex items-end">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedGig(null)} />
-          <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85%] overflow-y-auto no-scrollbar">
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedGig(null)} />
+          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar pb-[max(24px,env(safe-area-inset-bottom))]">
             <div className="flex items-center justify-between">
-              <span className="text-white font-black text-lg">{selectedGig.title}</span>
+              <span className="text-white font-black text-lg truncate max-w-[85%]">{selectedGig.title}</span>
               <button onClick={() => setSelectedGig(null)} aria-label="Close">
                 <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
               </button>
             </div>
 
-            {/* Images */}
             {selectedGig.images.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                 {selectedGig.images.map((img, i) => (
                   <button
                     key={i}
@@ -535,13 +683,12 @@ export default function HustleHub({
 
             <div className="flex flex-col gap-1">
               <span className="text-sage text-xs font-bold uppercase tracking-wider">Listing Details</span>
-              <p className="text-white text-sm leading-relaxed">
+              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
                 {selectedGig.description || 'No description provided.'}
               </p>
-              <span className="text-pine text-lg font-black mt-1">{selectedGig.price}</span>
+              <span className="text-pine text-lg font-black mt-2">{selectedGig.price}</span>
             </div>
 
-            {/* Admin audit panel */}
             {isAdmin && (
               <div className="bg-ink rounded-xl border border-gray-800 p-4 flex flex-col gap-2">
                 <span className="text-sage text-[10px] font-bold uppercase tracking-wider">Admin Audit</span>
@@ -552,7 +699,7 @@ export default function HustleHub({
                 {selectedGig.status === 'active' && (
                   <button
                     onClick={() => flagAsUnpaid(selectedGig)}
-                    className="w-full h-10 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 text-xs font-bold active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+                    className="w-full h-10 mt-2 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 text-xs font-bold active:scale-95 transition-transform flex items-center justify-center gap-1.5"
                   >
                     <AlertTriangle className="w-3.5 h-3.5" strokeWidth={2} /> Flag as Unpaid
                   </button>
@@ -561,12 +708,8 @@ export default function HustleHub({
             )}
 
             <button
-              onClick={() =>
-                requireVerified(() =>
-                  toast({ title: 'Secure Escrow', description: 'Initializing secure Escrow...' })
-                )
-              }
-              className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
+              onClick={() => requireVerified(() => toast({ title: 'Secure Escrow', description: 'Initializing secure Escrow...' }))}
+              className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2 mt-2"
             >
               <ShieldCheck className="w-5 h-5" strokeWidth={2} />
               Start Escrow Trade
@@ -574,7 +717,7 @@ export default function HustleHub({
 
             <button
               onClick={() => onMessageSeller(selectedGig.sellerId, selectedGig.seller)}
-              className="w-full h-12 rounded-lg bg-transparent border border-yellow-400 text-yellow-400 font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-lg bg-transparent border border-pine text-pine font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
             >
               <MessageCircle className="w-5 h-5" strokeWidth={2} />
               Message Seller
@@ -583,7 +726,6 @@ export default function HustleHub({
         </div>
       )}
 
-      {/* Report Modal */}
       {reportGig && profile && (
         <ReportModal
           open={!!reportGig}
@@ -594,7 +736,6 @@ export default function HustleHub({
         />
       )}
 
-      {/* Lightbox */}
       {lightboxImages && (
         <Lightbox images={lightboxImages} onClose={() => setLightboxImages(null)} />
       )}
