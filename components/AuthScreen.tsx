@@ -5,7 +5,7 @@ import { Lock, Shield, Medal, Loader as Loader2, CircleAlert as AlertCircle } fr
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 
-const WHITELIST_DOMAINS = ['@ub.ac.bw', '@thuto.bac.ac.bw', '@bac.ac.bw',];
+const WHITELIST_DOMAINS = ['@ub.ac.bw', '@thuto.bac.ac.bw', '@bac.ac.bw'];
 
 // Only full admins get admin privileges
 const ADMIN_EMAILS = ['musungwa60@gmail.com'];
@@ -78,6 +78,10 @@ export default function AuthScreen({
 
     setSubmitting(true);
     try {
+      const cleanEmail = email.trim().toLowerCase();
+      const isTestUser = ADMIN_EMAILS.includes(cleanEmail) || TEST_EMAILS.includes(cleanEmail);
+      const isTrustedDevice = typeof window !== 'undefined' ? localStorage.getItem(`kampus_trusted_${cleanEmail}`) === 'true' : false;
+
       if (mode === 'signup') {
         const { data, error: signUpErr } = await supabase.auth.signUp({
           email: email.trim(),
@@ -94,11 +98,13 @@ export default function AuthScreen({
                 email: email.trim(),
                 password,
               });
+            
             if (signInErr) {
               setError('An account with this email already exists. Please sign in or use the correct password.');
               setMode('signin');
               return;
             }
+            
             const existingUserId = signInData.user?.id;
             if (!existingUserId) return;
             
@@ -108,7 +114,13 @@ export default function AuthScreen({
               .eq('id', existingUserId)
               .maybeSingle();
               
-            if (existingProfile && (existingProfile as Profile).email_verified) {
+            // Bypass OTP if already verified, on a trusted device, or using a test account
+            if (existingProfile && ((existingProfile as Profile).email_verified || isTrustedDevice || isTestUser)) {
+              // Ensure DB is updated just in case it was out of sync
+              if (!(existingProfile as Profile).email_verified) {
+                await supabase.from('profiles').update({ email_verified: true }).eq('id', existingUserId);
+              }
+              if (typeof window !== 'undefined') localStorage.setItem(`kampus_trusted_${cleanEmail}`, 'true');
               onVerified(existingProfile as Profile);
               return;
             }
@@ -123,6 +135,21 @@ export default function AuthScreen({
 
         const userId = data.user?.id;
         if (!userId) throw new Error('Account creation failed.');
+
+        // For brand new signups using test accounts, auto-verify immediately
+        if (isTestUser) {
+          await supabase.from('profiles').update({ email_verified: true }).eq('id', userId);
+          if (typeof window !== 'undefined') localStorage.setItem(`kampus_trusted_${cleanEmail}`, 'true');
+          
+          const { data: newProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+            
+          onVerified(newProfile as Profile);
+          return;
+        }
 
         await supabase.auth.signOut();
         
@@ -147,11 +174,17 @@ export default function AuthScreen({
           
         if (profileErr) throw profileErr;
 
-        if (!(profile as Profile).email_verified) {
+        // Same bypass logic for signing in
+        if (!(profile as Profile).email_verified && !isTrustedDevice && !isTestUser) {
           await supabase.auth.signOut();
-          await sendKampusCode(email.trim()); // SEND THE CODE
+          await sendKampusCode(email.trim()); 
           setPendingOtp({ userId: user.id, email: email.trim() });
         } else {
+          // Sync DB to true if they got past the gate
+          if (!(profile as Profile).email_verified) {
+            await supabase.from('profiles').update({ email_verified: true }).eq('id', user.id);
+          }
+          if (typeof window !== 'undefined') localStorage.setItem(`kampus_trusted_${cleanEmail}`, 'true');
           onVerified(profile as Profile);
         }
       }
@@ -165,23 +198,29 @@ export default function AuthScreen({
   const handleOtpVerified = async () => {
     if (!pendingOtp) return;
     const currentUserId = pendingOtp.userId;
+    const currentEmail = pendingOtp.email;
     setPendingOtp(null);
 
-    // 1. Mark as verified in the database since we bypassed Supabase's native link
-    await supabase
-      .from('profiles')
-      .update({ email_verified: true })
-      .eq('id', currentUserId);
-
-    // 2. Sign the user in
+    // 1. SIGN THE USER IN FIRST! (This ensures RLS allows the profile update below)
     const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: email.trim() || pendingOtp.email,
+      email: email.trim() || currentEmail,
       password,
     });
 
     if (signInErr) {
       setError(signInErr.message);
       return;
+    }
+
+    // 2. NOW update the database to officially mark them as verified
+    await supabase
+      .from('profiles')
+      .update({ email_verified: true })
+      .eq('id', currentUserId);
+
+    // 3. Save trusted device token so they never get asked for this email again
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`kampus_trusted_${(email.trim() || currentEmail).toLowerCase()}`, 'true');
     }
 
     const { data: profile } = await supabase
