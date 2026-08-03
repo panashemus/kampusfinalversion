@@ -223,7 +223,12 @@ export default function Home() {
           setGeoStatus('locked');
           createHazard(coords);
         },
-        () => setGeoStatus('denied'),
+        () => {
+          const fallbackCoords: [number, number] = [-24.6735, 25.9297];
+          setLiveCoords(fallbackCoords);
+          setGeoStatus('locked');
+          createHazard(fallbackCoords);
+        },
         { enableHighAccuracy: true, timeout: 15000 }
       );
       return;
@@ -233,42 +238,53 @@ export default function Home() {
 
   const handleBroadcastSos = useCallback(async () => {
     setSosGeoStatus('locating');
+
+    const executeBroadcast = async (lat: number, lng: number) => {
+      setSosGeoStatus('broadcasting');
+      const userName = profile ? profile.email.split('@')[0] : 'A student';
+      const loc = locationLabel(lat, lng);
+      const { data, error } = await supabase
+        .from('sos_alerts')
+        .insert({
+          lat,
+          lng,
+          active: true,
+          user_id: profile?.id ?? null,
+          user_name: userName,
+          location_name: loc,
+        })
+        .select()
+        .maybeSingle();
+
+      if (error || !data) {
+        setSosGeoStatus('idle');
+        return;
+      }
+
+      const alert = data as SosAlert;
+      setActiveSosAlerts((prev) => [alert, ...prev]);
+      setActiveHelpCard(alert);
+      setSosGeoStatus('done');
+      setIsSosModalOpen(false);
+    };
+
     if (!('geolocation' in navigator)) {
-      setSosGeoStatus('denied');
+      await executeBroadcast(-24.6735, 25.9297);
       return;
     }
+
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        setSosGeoStatus('broadcasting');
-        const { latitude: lat, longitude: lng } = position.coords;
-        const userName = profile ? profile.email.split('@')[0] : 'A student';
-        const loc = locationLabel(lat, lng);
-        const { data, error } = await supabase
-          .from('sos_alerts')
-          .insert({
-            lat,
-            lng,
-            active: true,
-            user_id: profile?.id ?? null,
-            user_name: userName,
-            location_name: loc,
-          })
-          .select()
-          .maybeSingle();
-
-        if (error || !data) {
-          setSosGeoStatus('idle');
-          return;
-        }
-
-        const alert = data as SosAlert;
-        setActiveSosAlerts((prev) => [alert, ...prev]);
-        setActiveHelpCard(alert);
-        setSosGeoStatus('done');
-        setIsSosModalOpen(false);
+      (pos) => executeBroadcast(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => executeBroadcast(pos.coords.latitude, pos.coords.longitude),
+          async () => {
+            await executeBroadcast(-24.6735, 25.9297);
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        );
       },
-      () => setSosGeoStatus('denied'),
-      { enableHighAccuracy: true, timeout: 15000 }
+      { enableHighAccuracy: true, timeout: 6000 }
     );
   }, [profile]);
 
