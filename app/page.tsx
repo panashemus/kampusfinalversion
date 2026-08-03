@@ -35,7 +35,7 @@ const RadarMap = dynamic(() => import('@/components/RadarMap'), {
 const HEADER_TITLES: Record<Exclude<View, 'auth'>, string> = {
   radar: 'KAMPUS RADAR',
   hustle: 'HUSTLE HUB',
-  community: 'KAMPUS FEED',
+  community: 'CAMPUS FEED',
   escrow: 'ESCROW & PAYMENTS',
   profile: 'STUDENT ID',
 };
@@ -347,7 +347,15 @@ export default function Home() {
         .maybeSingle();
       if (data && mounted) {
         setProfile(data as Profile);
-        setActiveView('radar');
+        
+        // Check if they used a direct link like /#hustle
+        const initialHash = window.location.hash.replace('#', '') as View;
+        if (['radar', 'hustle', 'community', 'escrow', 'profile'].includes(initialHash)) {
+          setActiveView(initialHash);
+        } else {
+          setActiveView('radar');
+        }
+
         // If they haven't passed OTP verification in Supabase yet, show it.
         if (!(data as Profile).email_verified) {
           setShowOtp(true);
@@ -366,6 +374,30 @@ export default function Home() {
       .maybeSingle();
     if (data) setProfile(data as Profile);
   }, [profile]);
+
+  // --- URL SYNC & BACK BUTTON TRAP ---
+  useEffect(() => {
+    // 1. Change the URL in the browser when they click a BottomNav tab
+    if (activeView !== 'auth') {
+      const currentHash = window.location.hash.replace('#', '');
+      if (currentHash !== activeView) {
+        window.history.pushState(null, '', `#${activeView}`);
+      }
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    // 2. Intercept the phone's Back/Forward buttons and just switch tabs
+    const handlePopState = () => {
+      const hash = window.location.hash.replace('#', '') as View;
+      if (['radar', 'hustle', 'community', 'escrow', 'profile'].includes(hash)) {
+        setActiveView(hash);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+  // -----------------------------------
 
   if (activeView === 'auth') {
     return (
@@ -817,7 +849,7 @@ export default function Home() {
           />
         )}
 
-        {/* Legal Footer (ADDED BACK AND MOVED UP!) */}
+        {/* Legal Footer */}
         <footer className="absolute bottom-[max(72px,calc(72px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-midnight/90 backdrop-blur-md border-t border-gray-900 px-4 py-2.5 flex items-center justify-center gap-4">
           <button
             onClick={() => setLegalModal('terms')}
