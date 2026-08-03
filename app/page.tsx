@@ -35,7 +35,7 @@ const RadarMap = dynamic(() => import('@/components/RadarMap'), {
 const HEADER_TITLES: Record<Exclude<View, 'auth'>, string> = {
   radar: 'KAMPUS RADAR',
   hustle: 'HUSTLE HUB',
-  community: 'CAMPUS FEED',
+  community: 'KAMPUS FEED',
   escrow: 'ESCROW & PAYMENTS',
   profile: 'STUDENT ID',
 };
