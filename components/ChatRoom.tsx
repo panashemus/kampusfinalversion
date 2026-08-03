@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Send, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { X, Send, ArrowLeft, ShieldAlert, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   getOrCreateConversation,
@@ -9,6 +9,7 @@ import {
   sendMessage,
 } from '@/lib/chat';
 import type { Message } from '@/lib/types';
+import PublicProfileModal from '@/components/PublicProfileModal';
 
 export default function ChatRoom({
   myId,
@@ -26,6 +27,7 @@ export default function ChatRoom({
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,21 +91,32 @@ export default function ChatRoom({
   return (
     <div className="absolute inset-0 z-[2500] flex flex-col bg-midnight">
       {/* Header */}
-      <header className="flex items-center gap-3 p-4 border-b border-gray-800 bg-midnight">
+      <header className="flex items-center gap-3 p-4 border-b border-gray-800 bg-midnight shrink-0">
         <button onClick={onClose} aria-label="Back" className="shrink-0">
           <ArrowLeft className="w-5 h-5 text-sage" strokeWidth={1.5} />
         </button>
-        <div className="flex flex-col">
-          <span className="text-white font-bold text-sm">{peerUsername}</span>
-          <span className="text-sage text-[10px]">Direct chat</span>
-        </div>
-        <button onClick={onClose} aria-label="Close" className="ml-auto">
+        
+        {/* Interactive Profile Button */}
+        <button 
+          onClick={() => setShowProfileModal(true)}
+          className="flex items-center gap-2.5 text-left group"
+        >
+          <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0 group-active:scale-95 transition-transform">
+            <User className="w-4 h-4 text-pine" strokeWidth={1.5} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-white font-bold text-sm leading-tight">{peerUsername}</span>
+            <span className="text-sage text-[10px]">Tap to view profile</span>
+          </div>
+        </button>
+
+        <button onClick={onClose} aria-label="Close" className="ml-auto shrink-0">
           <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
         </button>
       </header>
 
       {/* Safety Warning Banner */}
-      <div className="flex items-start gap-2 bg-yellow-950/40 border-b border-yellow-700/40 px-4 py-2.5">
+      <div className="flex items-start gap-2 bg-yellow-950/40 border-b border-yellow-700/40 px-4 py-2.5 shrink-0">
         <ShieldAlert className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" strokeWidth={2} />
         <p className="text-yellow-200/90 text-[10px] leading-snug">
           <span className="font-bold">Safety Warning:</span> Keep your chats inside Kampus to protect your account and transactions. Kampus is not liable for deals moved off-platform. Never pay for items prior to inspection in a public campus location.
@@ -116,6 +129,9 @@ export default function ChatRoom({
           <span className="text-sage text-sm text-center mt-8">Loading chat…</span>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2">
+            <div className="w-12 h-12 rounded-full bg-surface border border-gray-800 flex items-center justify-center mb-2">
+              <User className="w-5 h-5 text-pine" strokeWidth={1.5} />
+            </div>
             <span className="text-white text-sm font-bold">No messages yet</span>
             <span className="text-sage text-xs">Say hello to {peerUsername}</span>
           </div>
@@ -142,7 +158,7 @@ export default function ChatRoom({
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-800 flex items-center gap-2 pb-24">
+      <div className="p-4 border-t border-gray-800 flex items-center gap-2 pb-[max(24px,env(safe-area-inset-bottom))] shrink-0 bg-midnight">
         <input
           type="text"
           value={input}
@@ -160,6 +176,14 @@ export default function ChatRoom({
           <Send className="w-5 h-5 text-black" strokeWidth={2} />
         </button>
       </div>
+
+      {/* Render Public Profile Modal if triggered */}
+      {showProfileModal && (
+        <PublicProfileModal
+          username={peerUsername}
+          onClose={() => setShowProfileModal(false)}
+        />
+      )}
     </div>
   );
 }
