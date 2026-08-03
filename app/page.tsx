@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
 import type { View, Hazard, Comment, SosAlert, Profile, HazardRow } from '@/lib/types';
 import { haversineMeters, locationLabel } from '@/lib/utils';
+import WelcomeModal from '@/components/WelcomeModal';
 import AuthScreen from '@/components/AuthScreen';
 import HustleHub from '@/components/HustleHub';
 import CommunityHub from '@/components/CommunityHub';
