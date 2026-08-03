@@ -42,7 +42,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} min-h-[100dvh] bg-black text-white antialiased`}>
+      <body className={`${inter.className} h-[100dvh] w-full overflow-hidden bg-black text-white antialiased flex flex-col`}>
         {children}
         <Toaster />
       </body>
