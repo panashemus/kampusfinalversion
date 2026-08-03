@@ -285,6 +285,16 @@ export default function HustleHub({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24">
+        
+        {/* STATIC LIST GIG BUTTON */}
+        <button
+          onClick={() => requireVerified(() => { setShowModal(true); setStep(1); })}
+          className="w-full mb-5 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg"
+        >
+          <Plus className="w-5 h-5" strokeWidth={2.5} />
+          <span className="font-bold text-sm">List a New Gig</span>
+        </button>
+
         {/* Suspended listings warning cards */}
         {mySuspendedGigs.length > 0 && (
           <div className="flex flex-col gap-3 mb-4">
@@ -297,7 +307,7 @@ export default function HustleHub({
         {loading ? (
           <span className="text-sage text-sm text-center mt-8 block">Loading gigs...</span>
         ) : visibleGigs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 pt-16">
+          <div className="flex flex-col items-center justify-center h-full gap-3 pt-4">
             <div className="w-16 h-16 rounded-full bg-surface border border-gray-800 flex items-center justify-center">
               <PackageOpen className="w-7 h-7 text-sage" strokeWidth={1.5} />
             </div>
@@ -385,21 +395,12 @@ export default function HustleHub({
         </div>
       </div>
 
-      {/* Floating List Gig Button */}
-      <button
-        onClick={() => { setShowModal(true); setStep(1); }}
-        className="absolute bottom-24 right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine active:scale-95 transition-transform shadow-lg"
-      >
-        <Plus className="w-5 h-5 text-black" strokeWidth={2.5} />
-        <span className="text-black font-bold text-sm">List a Gig</span>
-      </button>
-
       {/* 2-STEP CREATE GIG MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           
-          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(24px,env(safe-area-inset-bottom))]">
+          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))]">
             
             <div className="flex items-center justify-between">
               <span className="text-white font-black text-lg">
@@ -412,7 +413,7 @@ export default function HustleHub({
 
             {/* STEP 1: GIG DETAILS FORM */}
             {step === 1 && (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 pb-6">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sage text-xs font-bold uppercase tracking-wider">Gig Title</label>
                   <input
@@ -513,7 +514,7 @@ export default function HustleHub({
 
             {/* STEP 2: CHECKOUT & PAYMENT FLOW */}
             {step === 2 && (
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 pb-6">
                 
                 {/* Reference Code Header */}
                 <div className="bg-ink border border-pine/30 rounded-xl p-4 flex items-center justify-between">
@@ -645,7 +646,7 @@ export default function HustleHub({
       {selectedGig && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedGig(null)} />
-          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar pb-[max(24px,env(safe-area-inset-bottom))]">
+          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))]">
             <div className="flex items-center justify-between">
               <span className="text-white font-black text-lg truncate max-w-[85%]">{selectedGig.title}</span>
               <button onClick={() => setSelectedGig(null)} aria-label="Close">
@@ -681,7 +682,7 @@ export default function HustleHub({
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 pb-6">
               <span className="text-sage text-xs font-bold uppercase tracking-wider">Listing Details</span>
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
                 {selectedGig.description || 'No description provided.'}
