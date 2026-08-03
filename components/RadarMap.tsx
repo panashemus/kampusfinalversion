@@ -211,8 +211,8 @@ export default function RadarMap({
             className="absolute inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => setSelectedSos(null)}
           />
-          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-2xl p-6 flex flex-col gap-4 animate-slide-up shadow-2xl">
-            <div className="flex items-center justify-between">
+          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up shadow-2xl max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 {selectedSos.active ? (
                   <>
@@ -235,7 +235,7 @@ export default function RadarMap({
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 bg-ink rounded-xl p-4 border border-gray-800">
+            <div className="flex flex-col gap-3 bg-ink rounded-xl p-4 border border-gray-800 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
                   <User className="w-4 h-4 text-pine" strokeWidth={1.5} />
@@ -275,13 +275,13 @@ export default function RadarMap({
                   setSelectedSos(null);
                   if (uid) onMessageUser(uid, uname);
                 }}
-                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform shrink-0 mt-2"
               >
                 <MessageCircle className="w-4 h-4" strokeWidth={2} />
                 Check Up / Message Student
               </button>
             ) : (
-              <p className="text-sage text-xs text-center">Broadcasted by an unlinked guest user.</p>
+              <p className="text-sage text-xs text-center shrink-0">Broadcasted by an unlinked guest user.</p>
             )}
           </div>
         </div>
