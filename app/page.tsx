@@ -493,7 +493,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="absolute bottom-6 right-4 z-[1001] flex flex-col items-center gap-3">
+              <div className="absolute bottom-28 right-4 z-[1001] flex flex-col items-center gap-3">
                 <button
                   onClick={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
                   aria-label="Campus SOS — request help"
