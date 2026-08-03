@@ -387,7 +387,7 @@ export default function HustleHub({
 
       {/* Floating List Gig Button */}
       <button
-        onClick={() => requireVerified(() => { setShowModal(true); setStep(1); })}
+        onClick={() => { setShowModal(true); setStep(1); }}
         className="absolute bottom-24 right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine active:scale-95 transition-transform shadow-lg"
       >
         <Plus className="w-5 h-5 text-black" strokeWidth={2.5} />
