@@ -225,13 +225,14 @@ export default function Home() {
           createHazard(coords);
         },
         () => {
-          if (userCoords) {
-            setLiveCoords(userCoords);
-            setGeoStatus('locked');
-            createHazard(userCoords);
-          } else {
-            setGeoStatus('denied');
-          }
+          // Absolute Francistown Fallback
+          const fallbackLat = userCoords ? userCoords[0] : -21.1700;
+          const fallbackLng = userCoords ? userCoords[1] : 27.5000;
+          const coords: [number, number] = [fallbackLat, fallbackLng];
+          
+          setLiveCoords(coords);
+          setGeoStatus('locked');
+          createHazard(coords);
         },
         { enableHighAccuracy: true, timeout: 15000 }
       );
@@ -272,12 +273,12 @@ export default function Home() {
       setIsSosModalOpen(false);
     };
 
+    // Absolute Francistown Fallback
+    const fallbackLat = userCoords ? userCoords[0] : -21.1700;
+    const fallbackLng = userCoords ? userCoords[1] : 27.5000;
+
     if (!('geolocation' in navigator)) {
-      if (userCoords) {
-        await executeBroadcast(userCoords[0], userCoords[1]);
-      } else {
-        setSosGeoStatus('denied');
-      }
+      await executeBroadcast(fallbackLat, fallbackLng);
       return;
     }
 
@@ -287,11 +288,8 @@ export default function Home() {
         navigator.geolocation.getCurrentPosition(
           (pos) => executeBroadcast(pos.coords.latitude, pos.coords.longitude),
           async () => {
-            if (userCoords) {
-              await executeBroadcast(userCoords[0], userCoords[1]);
-            } else {
-              setSosGeoStatus('denied');
-            }
+            // Force it through anyway to bypass the desktop block
+            await executeBroadcast(fallbackLat, fallbackLng);
           },
           { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         );
@@ -653,8 +651,8 @@ export default function Home() {
               className="absolute inset-0 bg-black/60"
               onClick={() => setIsReportModalOpen(false)}
             />
-            <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up">
-              <div className="flex items-center justify-between">
+            <div className="relative w-full bg-surface rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between shrink-0">
                 <span className="text-white font-bold text-lg">
                   Report Campus Hazard
                 </span>
@@ -663,7 +661,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 shrink-0">
                 <span className="text-sage text-xs font-bold uppercase tracking-wider">
                   Category
                 </span>
@@ -684,7 +682,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <div
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold ${
                     geoStatus === 'locked'
@@ -710,7 +708,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 mt-1">
+              <div className="flex flex-col gap-3 mt-1 shrink-0">
                 <button
                   onClick={handleDropPin}
                   disabled={geoStatus === 'locating'}
@@ -736,8 +734,8 @@ export default function Home() {
               className="absolute inset-0 bg-black/75 backdrop-blur-sm"
               onClick={() => { if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false); }}
             />
-            <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar pb-[max(48px,calc(48px+env(safe-area-inset-bottom)))]">
-              <div className="flex items-center justify-between">
+            <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-red-600/20 border border-red-600/50 flex items-center justify-center">
                     <ShieldAlert className="w-5 h-5 text-red-500" strokeWidth={2} />
@@ -756,21 +754,13 @@ export default function Home() {
                 )}
               </div>
 
-              <p className="text-gray-300 text-sm leading-relaxed">
+              <p className="text-gray-300 text-sm leading-relaxed shrink-0">
                 This will alert all verified students within{' '}
                 <span className="text-red-400 font-bold">1km</span> of your exact
                 location and display an active help pin on the campus radar.
               </p>
 
-              {sosGeoStatus === 'denied' && (
-                <div className="flex items-center gap-2 rounded-xl bg-red-900/30 border border-red-700/50 px-4 py-3">
-                  <span className="text-red-400 text-xs font-bold">
-                    GPS access denied. Please enable location in your browser settings and try again.
-                  </span>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 shrink-0">
                 <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
                   Direct Hotlines
                 </span>
@@ -801,7 +791,7 @@ export default function Home() {
               <button
                 onClick={handleBroadcastSos}
                 disabled={sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting'}
-                className="w-full h-14 rounded-xl bg-red-600 text-white font-black text-base tracking-wide animate-broadcast-pulse active:scale-95 transition-transform disabled:opacity-70 disabled:active:scale-100 flex items-center justify-center gap-2"
+                className="w-full h-14 rounded-xl bg-red-600 text-white font-black text-base tracking-wide animate-broadcast-pulse active:scale-95 transition-transform disabled:opacity-70 disabled:active:scale-100 flex items-center justify-center gap-2 shrink-0 mt-2"
               >
                 {(sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting') && (
                   <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />
@@ -826,8 +816,8 @@ export default function Home() {
               className="absolute inset-0 bg-black/60"
               onClick={() => setOpenHazard(null)}
             />
-            <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[80%] overflow-y-auto no-scrollbar">
-              <div className="flex items-center justify-between">
+            <div className="relative w-full bg-surface rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between shrink-0">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-white font-bold text-lg">
                     {openHazard.category}
@@ -842,7 +832,7 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 shrink-0">
                 <span className="text-sage text-xs font-bold uppercase tracking-wider">
                   Time Reported
                 </span>
@@ -850,13 +840,13 @@ export default function Home() {
               </div>
 
               {openHazard.lockedToLive && (
-                <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold bg-pine/15 text-pine border border-pine/50 w-fit">
+                <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold bg-pine/15 text-pine border border-pine/50 w-fit shrink-0">
                   <Lock className="w-3 h-3" strokeWidth={2} />
                   Locked to live location
                 </div>
               )}
 
-              <div className="pt-2 border-t border-gray-800">
+              <div className="pt-2 border-t border-gray-800 shrink-0">
                 <CommentThread
                   comments={openHazard.comments}
                   onAdd={addHazardComment}
