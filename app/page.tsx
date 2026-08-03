@@ -87,14 +87,15 @@ export default function Home() {
   const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([]);
   const [activeHelpCard, setActiveHelpCard] = useState<SosAlert | null>(null);
 
-  // Load active SOS alerts on radar view
+  // Load SOS alerts created in the last 24 hours (active red & resolved grey)
   useEffect(() => {
     if (activeView !== 'radar') return;
     const fetchAlerts = async () => {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data } = await supabase
         .from('sos_alerts')
         .select('*')
-        .eq('active', true)
+        .gte('created_at', twentyFourHoursAgo)
         .order('created_at', { ascending: false });
       if (data) setActiveSosAlerts(data as SosAlert[]);
     };
@@ -110,7 +111,7 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [activeView]);
 
-  // Real-time SOS alert listener
+  // Real-time SOS alert push listener
   useEffect(() => {
     const channel = supabase
       .channel('sos_alerts_push')
@@ -155,7 +156,7 @@ export default function Home() {
           const row = payload.new as HazardRow;
           toast({
             title: '🚨 PEER GUARD',
-            description: 'Active SOS Alert Nearby!',
+            description: 'Active Hazard Pin Nearby!',
           });
           const hazard: Hazard = {
             id: row.id,
@@ -224,17 +225,20 @@ export default function Home() {
           createHazard(coords);
         },
         () => {
-          const fallbackCoords: [number, number] = [-24.6735, 25.9297];
-          setLiveCoords(fallbackCoords);
-          setGeoStatus('locked');
-          createHazard(fallbackCoords);
+          if (userCoords) {
+            setLiveCoords(userCoords);
+            setGeoStatus('locked');
+            createHazard(userCoords);
+          } else {
+            setGeoStatus('denied');
+          }
         },
         { enableHighAccuracy: true, timeout: 15000 }
       );
       return;
     }
     createHazard(liveCoords);
-  }, [geoStatus, liveCoords, createHazard]);
+  }, [geoStatus, liveCoords, createHazard, userCoords]);
 
   const handleBroadcastSos = useCallback(async () => {
     setSosGeoStatus('locating');
@@ -269,7 +273,11 @@ export default function Home() {
     };
 
     if (!('geolocation' in navigator)) {
-      await executeBroadcast(-24.6735, 25.9297);
+      if (userCoords) {
+        await executeBroadcast(userCoords[0], userCoords[1]);
+      } else {
+        setSosGeoStatus('denied');
+      }
       return;
     }
 
@@ -279,14 +287,18 @@ export default function Home() {
         navigator.geolocation.getCurrentPosition(
           (pos) => executeBroadcast(pos.coords.latitude, pos.coords.longitude),
           async () => {
-            await executeBroadcast(-24.6735, 25.9297);
+            if (userCoords) {
+              await executeBroadcast(userCoords[0], userCoords[1]);
+            } else {
+              setSosGeoStatus('denied');
+            }
           },
           { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         );
       },
       { enableHighAccuracy: true, timeout: 6000 }
     );
-  }, [profile]);
+  }, [profile, userCoords]);
 
   const handleDismissHelpCard = useCallback(async () => {
     if (!activeHelpCard) return;
@@ -294,7 +306,11 @@ export default function Home() {
       .from('sos_alerts')
       .update({ active: false })
       .eq('id', activeHelpCard.id);
-    setActiveSosAlerts((prev) => prev.filter((a) => a.id !== activeHelpCard.id));
+    
+    // Update local state to show grey resolved pin instead of deleting immediately
+    setActiveSosAlerts((prev) =>
+      prev.map((a) => (a.id === activeHelpCard.id ? { ...a, active: false } : a))
+    );
     setActiveHelpCard(null);
     setSosGeoStatus('idle');
   }, [activeHelpCard]);
@@ -364,7 +380,6 @@ export default function Home() {
       if (data && mounted) {
         setProfile(data as Profile);
         
-        // Check if they used a direct link like /#hustle
         const initialHash = window.location.hash.replace('#', '') as View;
         if (['radar', 'hustle', 'community', 'escrow', 'profile'].includes(initialHash)) {
           setActiveView(initialHash);
@@ -372,7 +387,6 @@ export default function Home() {
           setActiveView('radar');
         }
 
-        // If they haven't passed OTP verification in Supabase yet, show it.
         if (!(data as Profile).email_verified) {
           setShowOtp(true);
         }
@@ -391,9 +405,8 @@ export default function Home() {
     if (data) setProfile(data as Profile);
   }, [profile]);
 
-  // --- URL SYNC & BACK BUTTON TRAP ---
+  // URL sync & back button listener
   useEffect(() => {
-    // 1. Change the URL in the browser when they click a BottomNav tab
     if (activeView !== 'auth') {
       const currentHash = window.location.hash.replace('#', '');
       if (currentHash !== activeView) {
@@ -403,7 +416,6 @@ export default function Home() {
   }, [activeView]);
 
   useEffect(() => {
-    // 2. Intercept the phone's Back/Forward buttons and just switch tabs
     const handlePopState = () => {
       const hash = window.location.hash.replace('#', '') as View;
       if (['radar', 'hustle', 'community', 'escrow', 'profile'].includes(hash)) {
@@ -413,7 +425,6 @@ export default function Home() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-  // -----------------------------------
 
   if (activeView === 'auth') {
     return (
@@ -432,7 +443,7 @@ export default function Home() {
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#0B1611] items-center">
       <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-midnight">
         
-        {/* WELCOME MODAL INJECTED HERE */}
+        {/* WELCOME MODAL */}
         <WelcomeModal />
 
         {/* Global Top Header */}
@@ -515,7 +526,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* View Content (Notice pb-32 to protect from bottom cutoff!) */}
+        {/* Main Content View */}
         <main className="flex-1 relative overflow-y-auto overscroll-y-contain pb-32">
           {activeView === 'radar' && (
             <div className="absolute inset-0">
@@ -525,23 +536,24 @@ export default function Home() {
                 onOpenHazard={setOpenHazard}
                 sosAlerts={activeSosAlerts}
                 onLocate={(pos) => setUserCoords(pos)}
+                onMessageUser={openChat}
               />
 
-              {activeSosAlerts.length === 0 && (
+              {activeSosAlerts.filter((a) => a.active).length === 0 && (
                 <div className="absolute top-20 left-4 right-4 z-[500] pointer-events-none">
                   <div className="bg-surface/80 backdrop-blur-sm rounded-2xl border border-gray-800 p-4 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-pine/15 border border-pine/40 flex items-center justify-center shrink-0">
                       <ShieldCheck className="w-5 h-5 text-pine" strokeWidth={1.5} />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-white text-sm font-bold">No active hazards reported nearby</span>
+                      <span className="text-white text-sm font-bold">No active emergencies reported nearby</span>
                       <span className="text-sage text-xs">Campus is clear!</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* MOVED HIGHER: bottom-28 instead of bottom-6 */}
+              {/* Floating Action Buttons */}
               <div className="absolute bottom-28 right-4 z-[1001] flex flex-col items-center gap-3">
                 <button
                   onClick={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
@@ -559,7 +571,7 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* MOVED HIGHER: bottom-48 instead of bottom-28 to not overlap buttons */}
+              {/* Active User SOS Status Card */}
               {activeHelpCard && (
                 <div className="absolute bottom-48 left-4 right-4 z-[1001]">
                   <div className="bg-red-950/90 border border-red-600/60 rounded-2xl p-4 backdrop-blur-sm shadow-xl flex flex-col gap-3 animate-slide-up">
@@ -634,6 +646,7 @@ export default function Home() {
           )}
         </main>
 
+        {/* Hazard Report Modal */}
         {isReportModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -645,9 +658,7 @@ export default function Home() {
                 <span className="text-white font-bold text-lg">
                   Report Campus Hazard
                 </span>
-                <button
-                  onClick={() => setIsReportModalOpen(false)}
-                >
+                <button onClick={() => setIsReportModalOpen(false)}>
                   <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
                 </button>
               </div>
@@ -705,9 +716,7 @@ export default function Home() {
                   disabled={geoStatus === 'locating'}
                   className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-60 disabled:active:scale-100"
                 >
-                  {geoStatus === 'locating'
-                    ? 'Locking GPS...'
-                    : 'Drop Alert Pin'}
+                  {geoStatus === 'locating' ? 'Locking GPS...' : 'Drop Alert Pin'}
                 </button>
                 <button
                   onClick={() => setIsReportModalOpen(false)}
@@ -720,6 +729,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* SOS Broadcast Modal */}
         {isSosModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -809,6 +819,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* Hazard Detail Modal */}
         {openHazard && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
