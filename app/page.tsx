@@ -493,6 +493,7 @@ export default function Home() {
                 </div>
               )}
 
+              {/* MOVED HIGHER: bottom-28 instead of bottom-6 */}
               <div className="absolute bottom-28 right-4 z-[1001] flex flex-col items-center gap-3">
                 <button
                   onClick={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
@@ -510,8 +511,9 @@ export default function Home() {
                 </button>
               </div>
 
+              {/* MOVED HIGHER: bottom-48 instead of bottom-28 to not overlap buttons */}
               {activeHelpCard && (
-                <div className="absolute bottom-28 left-4 right-4 z-[1001]">
+                <div className="absolute bottom-48 left-4 right-4 z-[1001]">
                   <div className="bg-red-950/90 border border-red-600/60 rounded-2xl p-4 backdrop-blur-sm shadow-xl flex flex-col gap-3 animate-slide-up">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -534,20 +536,20 @@ export default function Home() {
                       alerted. Help is on the way.
                     </p>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                       <a
                         href="tel:+26735523962"
-                        className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg bg-red-700/60 text-white text-xs font-bold active:scale-95 transition-transform"
+                        className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-red-700/60 text-white text-xs font-bold active:scale-95 transition-transform"
                       >
-                        <Phone className="w-3.5 h-3.5" strokeWidth={2} />
-                        UB Protection
+                        <Phone className="w-4 h-4" strokeWidth={2} />
+                        UB Protection (355 2396)
                       </a>
                       <a
                         href="tel:+26739530622"
-                        className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg bg-red-700/60 text-white text-xs font-bold active:scale-95 transition-transform"
+                        className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-red-700/60 text-white text-xs font-bold active:scale-95 transition-transform"
                       >
-                        <Phone className="w-3.5 h-3.5" strokeWidth={2} />
-                        BAC Security
+                        <Phone className="w-4 h-4" strokeWidth={2} />
+                        BAC Security (395 3062)
                       </a>
                     </div>
 
@@ -714,20 +716,26 @@ export default function Home() {
                 <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
                   Direct Hotlines
                 </span>
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-2">
                   <a
                     href="tel:+26735523962"
-                    className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-red-900/40 border border-red-700/50 text-white text-sm font-bold active:scale-95 transition-transform"
+                    className="w-full flex items-center justify-between px-4 h-12 rounded-xl bg-red-900/40 border border-red-700/50 text-white text-sm font-bold active:scale-95 transition-transform"
                   >
-                    <Phone className="w-4 h-4 text-red-400" strokeWidth={2} />
-                    UB Protection
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-red-400" strokeWidth={2} />
+                      UB Protection
+                    </div>
+                    <span className="text-red-400 tracking-wider">355 2396</span>
                   </a>
                   <a
                     href="tel:+26739530622"
-                    className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-red-900/40 border border-red-700/50 text-white text-sm font-bold active:scale-95 transition-transform"
+                    className="w-full flex items-center justify-between px-4 h-12 rounded-xl bg-red-900/40 border border-red-700/50 text-white text-sm font-bold active:scale-95 transition-transform"
                   >
-                    <Phone className="w-4 h-4 text-red-400" strokeWidth={2} />
-                    BAC Security
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-red-400" strokeWidth={2} />
+                      BAC Security
+                    </div>
+                    <span className="text-red-400 tracking-wider">395 3062</span>
                   </a>
                 </div>
               </div>
@@ -808,6 +816,23 @@ export default function Home() {
             onMessageUser={openChat}
           />
         )}
+
+        {/* Legal Footer (ADDED BACK AND MOVED UP!) */}
+        <footer className="absolute bottom-[max(72px,calc(72px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-midnight/90 backdrop-blur-md border-t border-gray-900 px-4 py-2.5 flex items-center justify-center gap-4">
+          <button
+            onClick={() => setLegalModal('terms')}
+            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
+          >
+            Terms of Service
+          </button>
+          <span className="text-gray-700 text-[10px]">|</span>
+          <button
+            onClick={() => setLegalModal('privacy')}
+            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
+          >
+            Privacy Policy
+          </button>
+        </footer>
 
         {/* Global Bottom Nav */}
         <BottomNav active={activeView} onChange={setActiveView} />
