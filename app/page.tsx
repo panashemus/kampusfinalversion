@@ -110,8 +110,7 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [activeView]);
 
-  // Real-time SOS alert listener — broadcasts in-app push notification
-  // to all users within 1km of the alert.
+  // Real-time SOS alert listener
   useEffect(() => {
     const channel = supabase
       .channel('sos_alerts_push')
@@ -120,7 +119,6 @@ export default function Home() {
         { event: 'INSERT', schema: 'public', table: 'sos_alerts' },
         (payload) => {
           const alert = payload.new as SosAlert;
-          // Only show push if we have the user's location and it's within 1km.
           if (userCoords) {
             const dist = haversineMeters(
               userCoords[0],
@@ -145,7 +143,7 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [userCoords]);
 
-  // Real-time hazards subscription — Peer Guard toast on new SOS hazard.
+  // Real-time hazards subscription
   useEffect(() => {
     if (activeView !== 'radar') return;
     const channel = supabase
@@ -159,7 +157,6 @@ export default function Home() {
             title: '🚨 PEER GUARD',
             description: 'Active SOS Alert Nearby!',
           });
-          // Also surface as a local hazard pin for immediate visibility.
           const hazard: Hazard = {
             id: row.id,
             position: [row.lat, row.lng],
@@ -351,8 +348,10 @@ export default function Home() {
       if (data && mounted) {
         setProfile(data as Profile);
         setActiveView('radar');
-        // Prompt verification for unverified users.
-        if (!(data as Profile).email_verified) setShowOtp(true);
+        // If they haven't passed OTP verification in Supabase yet, show it.
+        if (!(data as Profile).email_verified) {
+          setShowOtp(true);
+        }
       }
     })();
     return () => { mounted = false; };
@@ -382,8 +381,12 @@ export default function Home() {
   const showSearch = activeView === 'hustle' || activeView === 'community';
 
   return (
-    <div className="flex flex-col h-screen h-[100dvh] w-full overflow-hidden bg-[#0B1611] items-center">
-      <div className="relative w-full max-w-[430px] h-screen h-[100dvh] flex flex-col overflow-hidden bg-midnight">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#0B1611] items-center">
+      <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-midnight">
+        
+        {/* WELCOME MODAL INJECTED HERE */}
+        <WelcomeModal />
+
         {/* Global Top Header */}
         <header className="sticky top-0 z-[1000] bg-midnight p-4 flex items-center justify-between">
           <span className="text-white font-black text-xl tracking-tight">
@@ -417,7 +420,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Search bar (Hustle Hub) */}
+        {/* Search bar */}
         {showSearch && searchOpen && (
           <div className="px-4 pb-3 bg-midnight">
             <input
@@ -464,8 +467,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* View Content */}
-        <main className="flex-1 relative overflow-y-auto overscroll-y-contain pb-24">
+        {/* View Content (Notice pb-32 to protect from bottom cutoff!) */}
+        <main className="flex-1 relative overflow-y-auto overscroll-y-contain pb-32">
           {activeView === 'radar' && (
             <div className="absolute inset-0">
               <RadarMap
@@ -476,7 +479,6 @@ export default function Home() {
                 onLocate={(pos) => setUserCoords(pos)}
               />
 
-              {/* Empty state overlay when no hazards and no SOS alerts */}
               {activeSosAlerts.length === 0 && (
                 <div className="absolute top-20 left-4 right-4 z-[500] pointer-events-none">
                   <div className="bg-surface/80 backdrop-blur-sm rounded-2xl border border-gray-800 p-4 flex items-center gap-3">
@@ -491,9 +493,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* FAB cluster: hazard pin + SOS */}
               <div className="absolute bottom-6 right-4 z-[1001] flex flex-col items-center gap-3">
-                {/* SOS FAB */}
                 <button
                   onClick={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
                   aria-label="Campus SOS — request help"
@@ -501,8 +501,6 @@ export default function Home() {
                 >
                   <ShieldAlert className="w-6 h-6 text-white" strokeWidth={2} />
                 </button>
-
-                {/* Hazard pin FAB */}
                 <button
                   onClick={() => setIsReportModalOpen(true)}
                   className="h-14 w-14 rounded-full bg-pine flex items-center justify-center active:scale-95 transition-transform shadow-lg"
@@ -512,11 +510,9 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Active Help Request Card */}
               {activeHelpCard && (
                 <div className="absolute bottom-28 left-4 right-4 z-[1001]">
                   <div className="bg-red-950/90 border border-red-600/60 rounded-2xl p-4 backdrop-blur-sm shadow-xl flex flex-col gap-3 animate-slide-up">
-                    {/* Pulsing header row */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-broadcast-pulse inline-block" />
@@ -526,7 +522,6 @@ export default function Home() {
                       </div>
                       <button
                         onClick={handleDismissHelpCard}
-                        aria-label="Dismiss help request"
                         className="text-red-400 hover:text-white transition-colors"
                       >
                         <X className="w-4 h-4" strokeWidth={2} />
@@ -589,7 +584,6 @@ export default function Home() {
           )}
         </main>
 
-        {/* Hazard Report Modal */}
         {isReportModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -603,7 +597,6 @@ export default function Home() {
                 </span>
                 <button
                   onClick={() => setIsReportModalOpen(false)}
-                  aria-label="Close"
                 >
                   <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
                 </button>
@@ -630,7 +623,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Geofence status micro-badge */}
               <div className="flex items-center gap-2">
                 <div
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold ${
@@ -678,7 +670,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* SOS Trigger Modal */}
         {isSosModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -686,8 +677,6 @@ export default function Home() {
               onClick={() => { if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false); }}
             />
             <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up">
-
-              {/* Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-red-600/20 border border-red-600/50 flex items-center justify-center">
@@ -700,7 +689,6 @@ export default function Home() {
                 {sosGeoStatus !== 'broadcasting' && (
                   <button
                     onClick={() => setIsSosModalOpen(false)}
-                    aria-label="Close SOS modal"
                     className="text-red-400 hover:text-white transition-colors"
                   >
                     <X className="w-5 h-5" strokeWidth={2} />
@@ -708,14 +696,12 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Description */}
               <p className="text-gray-300 text-sm leading-relaxed">
                 This will alert all verified students within{' '}
                 <span className="text-red-400 font-bold">1km</span> of your exact
                 location and display an active help pin on the campus radar.
               </p>
 
-              {/* GPS denied warning */}
               {sosGeoStatus === 'denied' && (
                 <div className="flex items-center gap-2 rounded-xl bg-red-900/30 border border-red-700/50 px-4 py-3">
                   <span className="text-red-400 text-xs font-bold">
@@ -724,7 +710,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Direct Hotlines */}
               <div className="flex flex-col gap-2">
                 <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
                   Direct Hotlines
@@ -745,23 +730,8 @@ export default function Home() {
                     BAC Security
                   </a>
                 </div>
-                <div className="flex gap-3">
-                  <a
-                    href="tel:+26735523962"
-                    className="flex-1 text-center text-gray-500 text-[10px]"
-                  >
-                    +267 355 2396
-                  </a>
-                  <a
-                    href="tel:+26739530622"
-                    className="flex-1 text-center text-gray-500 text-[10px]"
-                  >
-                    +267 395 3062
-                  </a>
-                </div>
               </div>
 
-              {/* Broadcast button */}
               <button
                 onClick={handleBroadcastSos}
                 disabled={sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting'}
@@ -779,15 +749,10 @@ export default function Home() {
                   </>
                 )}
               </button>
-
-              <p className="text-gray-600 text-[10px] text-center leading-relaxed">
-                Only use in a genuine emergency. False alerts may result in account suspension.
-              </p>
             </div>
           </div>
         )}
 
-        {/* Hazard Pin Drawer */}
         {openHazard && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -805,7 +770,7 @@ export default function Home() {
                     <span className="text-sage text-xs">{openHazard.label}</span>
                   </div>
                 </div>
-                <button onClick={() => setOpenHazard(null)} aria-label="Close">
+                <button onClick={() => setOpenHazard(null)}>
                   <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
                 </button>
               </div>
@@ -836,7 +801,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Public Profile Modal (from hazard drawer) */}
         {profileUser && openHazard && (
           <PublicProfileModal
             username={profileUser}
@@ -845,39 +809,18 @@ export default function Home() {
           />
         )}
 
-        {/* Footer with legal links */}
-        <footer className="absolute bottom-0 left-0 right-0 z-[500] bg-midnight border-t border-gray-900 px-4 py-2 flex items-center justify-center gap-4">
-          <button
-            onClick={() => setLegalModal('terms')}
-            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
-          >
-            Terms of Service
-          </button>
-          <span className="text-gray-700 text-[10px]">|</span>
-          <button
-            onClick={() => setLegalModal('privacy')}
-            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
-          >
-            Privacy Policy
-          </button>
-        </footer>
-
         {/* Global Bottom Nav */}
         <BottomNav active={activeView} onChange={setActiveView} />
 
-        {/* Subscription modal */}
         <SubscriptionModal
           open={isSubscriptionOpen}
           onClose={() => setIsSubscriptionOpen(false)}
         />
 
-        {/* Admin flagged content queue */}
         <AdminQueue open={adminQueueOpen} onClose={() => setAdminQueueOpen(false)} />
 
-        {/* Legal modals */}
         <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
 
-        {/* OTP verification modal */}
         {showOtp && profile && (
           <OtpModal
             userId={profile.id}
@@ -890,7 +833,6 @@ export default function Home() {
           />
         )}
 
-        {/* Chat inbox */}
         {chatInboxOpen && profile && (
           <ChatInbox
             myId={profile.id}
@@ -902,7 +844,6 @@ export default function Home() {
           />
         )}
 
-        {/* Active chat room */}
         {activeChat && profile && (
           <ChatRoom
             myId={profile.id}
