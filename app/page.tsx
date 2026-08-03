@@ -710,7 +710,7 @@ export default function Home() {
               className="absolute inset-0 bg-black/75 backdrop-blur-sm"
               onClick={() => { if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false); }}
             />
-            <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up">
+            <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar pb-[max(48px,calc(48px+env(safe-area-inset-bottom)))]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-red-600/20 border border-red-600/50 flex items-center justify-center">
