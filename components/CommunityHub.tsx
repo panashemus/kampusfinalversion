@@ -36,7 +36,6 @@ type FeedCommentRow = {
   created_at: string;
 };
 
-// We extend the base type here so we can track the author's real ID for DMs
 type ExtendedCommunityPost = CommunityPost & { authorId: string };
 
 export default function CommunityHub({ 
@@ -57,7 +56,6 @@ export default function CommunityHub({
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
   const [newImages, setNewImages] = useState<string[]>([]);
   
-  // Track both ID and Username so we can message them
   const [profileUser, setProfileUser] = useState<{id: string, username: string} | null>(null);
   
   const [posting, setPosting] = useState(false);
@@ -93,6 +91,7 @@ export default function CommunityHub({
         .filter((c) => c.post_id === p.id)
         .map((c) => ({
           id: c.id,
+          authorId: c.user_id, // We now pass the commenter's ID so we can DM them
           author: c.author_name ?? c.user_id,
           text: c.text,
           time: timeAgo(c.created_at),
@@ -224,7 +223,6 @@ export default function CommunityHub({
         ) : (
           visible.map((post) => (
             <div key={post.id} className="bg-surface rounded-2xl p-4 flex flex-col gap-3 relative">
-              {/* 3-dot menu */}
               <div className="absolute top-2 right-2 z-10">
                 <button
                   onClick={() => setMenuOpenId(menuOpenId === post.id ? null : post.id)}
@@ -261,7 +259,6 @@ export default function CommunityHub({
 
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{post.text}</p>
 
-              {/* Full-width Feed Images */}
               {post.images.length > 0 && (
                 <div className={`grid gap-2 mt-1 ${post.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {post.images.map((img, i) => (
@@ -294,10 +291,9 @@ export default function CommunityHub({
                 <CommentThread
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
-                  onAuthorClick={(username) => {
-                    // For comments, we don't have the exact ID attached yet, 
-                    // so we pass null and it just shows their profile without DM button
-                    setProfileUser({ id: '', username });
+                  onAuthorClick={(username, authorId) => {
+                    // Now we properly pass the commenter's ID to the modal!
+                    setProfileUser({ id: authorId || '', username });
                   }}
                   placeholder="Reply to this post..."
                 />
@@ -315,7 +311,6 @@ export default function CommunityHub({
         <span className="text-black font-bold text-sm">Ask Question</span>
       </button>
 
-      {/* FIXED MODAL LAYOUT */}
       {showAskModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
