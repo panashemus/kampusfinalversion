@@ -54,7 +54,7 @@ export default function CommunityHub({
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
   const [newImages, setNewImages] = useState<string[]>([]);
   
-  const [profileUser, setProfileUser] = useState<string | null>(null);
+  const [profileUser, setProfileUser] = useState<{ id: string; username: string } | null>(null);
   
   const [posting, setPosting] = useState(false);
   const [reportPost, setReportPost] = useState<CommunityPost | null>(null);
@@ -79,6 +79,7 @@ export default function CommunityHub({
 
     const mapped: CommunityPost[] = postRows.map((p) => ({
       id: p.id,
+      authorId: p.user_id,
       author: p.author_name ?? p.user_id,
       time: timeAgo(p.created_at),
       category: p.category as Exclude<CommunityCategory, 'All Questions'>,
@@ -88,6 +89,7 @@ export default function CommunityHub({
         .filter((c) => c.post_id === p.id)
         .map((c) => ({
           id: c.id,
+          authorId: c.user_id,
           author: c.author_name ?? c.user_id,
           text: c.text,
           time: timeAgo(c.created_at),
@@ -162,6 +164,7 @@ export default function CommunityHub({
     if (data) {
       const post: CommunityPost = {
         id: (data as FeedPostRow).id,
+        authorId: profile.id,
         author: myName,
         time: 'just now',
         category: newCategory,
@@ -243,7 +246,7 @@ export default function CommunityHub({
                 </div>
                 <div className="flex flex-col">
                   <button
-                    onClick={() => setProfileUser(post.author)}
+                    onClick={() => setProfileUser({ id: post.authorId, username: post.author })}
                     className="text-white text-xs font-bold hover:text-pine transition-colors text-left"
                   >
                     {post.author}
@@ -286,7 +289,7 @@ export default function CommunityHub({
                 <CommentThread
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
-                  onAuthorClick={(username) => setProfileUser(username)}
+                  onAuthorClick={(username, authorId) => setProfileUser({ id: authorId || '', username })}
                   placeholder="Reply to this post..."
                 />
               </div>
@@ -420,9 +423,12 @@ export default function CommunityHub({
 
       {profileUser && (
         <PublicProfileModal
-          username={profileUser}
+          username={profileUser.username}
           onClose={() => setProfileUser(null)}
-          onMessageUser={onMessageUser}
+          onMessageUser={() => {
+            onMessageUser(profileUser.id, profileUser.username);
+            setProfileUser(null);
+          }}
         />
       )}
     </div>
