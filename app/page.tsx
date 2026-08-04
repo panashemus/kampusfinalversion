@@ -630,7 +630,14 @@ export default function Home() {
               profile={profile}
             />
           )}
-          {activeView === 'community' && <CommunityHub profile={profile} searchQuery={searchQuery} />}
+          {/* VERCEL ERROR FIXED HERE: Passed onMessageUser={openChat} */}
+          {activeView === 'community' && (
+            <CommunityHub 
+              profile={profile} 
+              searchQuery={searchQuery} 
+              onMessageUser={openChat} 
+            />
+          )}
           {activeView === 'escrow' && (
             <EscrowVault requireVerified={requirePremium} />
           )}
