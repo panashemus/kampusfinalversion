@@ -59,6 +59,24 @@ function hasPremiumAccess(p: Profile | null): boolean {
   return !!p.subscribed_until && new Date(p.subscribed_until) > new Date();
 }
 
+// --- SYSTEM NOTIFICATION HELPER ---
+// Bypasses iOS/Android PWA restrictions by routing through the Service Worker
+const fireSystemNotification = (title: string, body: string) => {
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      // Try standard web notification first (Desktop)
+      new Notification(title, { body, icon: '/images/ClipSnap_20260723201232.png' });
+    } catch (e) {
+      // Fallback for Mobile PWAs which strictly require ServiceWorkerRegistration
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((registration) => {
+          registration.showNotification(title, { body, icon: '/images/ClipSnap_20260723201232.png' });
+        });
+      }
+    }
+  }
+};
+
 export default function Home() {
   const [activeView, setActiveView] = useState<View>('auth');
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -92,7 +110,7 @@ export default function Home() {
 
   // Load Database Notifications & Listen for Live Updates
   useEffect(() => {
-    if (!profile) return;
+    if (!profile?.id) return;
 
     // Fetch existing notifications
     const fetchNotifs = async () => {
@@ -106,27 +124,35 @@ export default function Home() {
     };
     fetchNotifs();
 
-    // Subscribe to new notifications
+    // Subscribe to new notifications (Client-side filtered to guarantee delivery)
     const channel = supabase
-      .channel('public:notifications')
+      .channel(`user-notifs-${profile.id}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
           const notif = payload.new as AppNotification;
-          setDbNotifications((prev) => [notif, ...prev]);
           
-          // Pop a live toast!
-          toast({
-            title: notif.type === 'message' ? '💬 New Message' : '🔔 New Reply',
-            description: notif.body,
-          });
+          if (notif.user_id === profile.id) {
+            setDbNotifications((prev) => [notif, ...prev]);
+            
+            const title = notif.type === 'message' ? '💬 New Message' : '🔔 New Reply';
+            
+            // Pop the in-app UI toast
+            toast({
+              title,
+              description: notif.body,
+            });
+
+            // Command the phone OS to buzz/show banner
+            fireSystemNotification(title, notif.body);
+          }
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [profile, toast]);
+  }, [profile?.id, toast]);
 
   const markNotificationsAsRead = async () => {
     if (!profile) return;
@@ -181,7 +207,12 @@ export default function Home() {
               const userName = alert.user_name ?? 'A student';
               const loc = alert.location_name ?? locationLabel(alert.lat, alert.lng);
               const text = `EMERGENCY: ${userName} has triggered an assistance alert near ${loc}.`;
+              
               toast({ title: '🚨 EMERGENCY ALERT', description: text, variant: 'destructive' });
+              
+              // Command the phone OS to buzz/show banner for SOS
+              fireSystemNotification('🚨 EMERGENCY ALERT', text);
+
               setSosNotifications((prev) => [
                 { id: alert.id, text, time: 'just now' },
                 ...prev,
