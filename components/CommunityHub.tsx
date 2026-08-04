@@ -36,8 +36,6 @@ type FeedCommentRow = {
   created_at: string;
 };
 
-type ExtendedCommunityPost = CommunityPost & { authorId: string };
-
 export default function CommunityHub({ 
   profile, 
   searchQuery,
@@ -48,7 +46,7 @@ export default function CommunityHub({
   onMessageUser: (peerId: string, peerUsername: string) => void;
 }) {
   const { toast } = useToast();
-  const [posts, setPosts] = useState<ExtendedCommunityPost[]>([]);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
   const [showAskModal, setShowAskModal] = useState(false);
@@ -56,10 +54,10 @@ export default function CommunityHub({
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
   const [newImages, setNewImages] = useState<string[]>([]);
   
-  const [profileUser, setProfileUser] = useState<{id: string, username: string} | null>(null);
+  const [profileUser, setProfileUser] = useState<string | null>(null);
   
   const [posting, setPosting] = useState(false);
-  const [reportPost, setReportPost] = useState<ExtendedCommunityPost | null>(null);
+  const [reportPost, setReportPost] = useState<CommunityPost | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
@@ -79,9 +77,8 @@ export default function CommunityHub({
       .order('created_at', { ascending: true });
     const commentRows = (commentData as FeedCommentRow[]) ?? [];
 
-    const mapped: ExtendedCommunityPost[] = postRows.map((p) => ({
+    const mapped: CommunityPost[] = postRows.map((p) => ({
       id: p.id,
-      authorId: p.user_id,
       author: p.author_name ?? p.user_id,
       time: timeAgo(p.created_at),
       category: p.category as Exclude<CommunityCategory, 'All Questions'>,
@@ -91,7 +88,6 @@ export default function CommunityHub({
         .filter((c) => c.post_id === p.id)
         .map((c) => ({
           id: c.id,
-          authorId: c.user_id, // We now pass the commenter's ID so we can DM them
           author: c.author_name ?? c.user_id,
           text: c.text,
           time: timeAgo(c.created_at),
@@ -164,9 +160,8 @@ export default function CommunityHub({
       .maybeSingle();
     
     if (data) {
-      const post: ExtendedCommunityPost = {
+      const post: CommunityPost = {
         id: (data as FeedPostRow).id,
-        authorId: profile.id,
         author: myName,
         time: 'just now',
         category: newCategory,
@@ -248,7 +243,7 @@ export default function CommunityHub({
                 </div>
                 <div className="flex flex-col">
                   <button
-                    onClick={() => setProfileUser({ id: post.authorId, username: post.author })}
+                    onClick={() => setProfileUser(post.author)}
                     className="text-white text-xs font-bold hover:text-pine transition-colors text-left"
                   >
                     {post.author}
@@ -291,10 +286,7 @@ export default function CommunityHub({
                 <CommentThread
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
-                  onAuthorClick={(username, authorId) => {
-                    // Now we properly pass the commenter's ID to the modal!
-                    setProfileUser({ id: authorId || '', username });
-                  }}
+                  onAuthorClick={(username) => setProfileUser(username)}
                   placeholder="Reply to this post..."
                 />
               </div>
@@ -428,16 +420,9 @@ export default function CommunityHub({
 
       {profileUser && (
         <PublicProfileModal
-          username={profileUser.username}
+          username={profileUser}
           onClose={() => setProfileUser(null)}
-          onMessageUser={
-            profileUser.id
-              ? (_, __) => {
-                  onMessageUser(profileUser.id, profileUser.username);
-                  setProfileUser(null);
-                }
-              : undefined
-          }
+          onMessageUser={onMessageUser}
         />
       )}
     </div>
