@@ -288,27 +288,33 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
 
       <button
         onClick={() => setShowAskModal(true)}
-        className="absolute bottom-24 right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine active:scale-95 transition-transform"
+        className="absolute bottom-[104px] right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine shadow-lg active:scale-95 transition-transform"
       >
         <Plus className="w-5 h-5 text-black" strokeWidth={2.5} />
         <span className="text-black font-bold text-sm">Ask Question</span>
       </button>
 
+      {/* FIXED MODAL LAYOUT */}
       {showAskModal && (
-        <div className="absolute inset-0 z-30 flex items-end">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             onClick={() => setShowAskModal(false)}
           />
-          <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85%] overflow-y-auto no-scrollbar">
-            <div className="flex items-center justify-between">
+          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(80px,calc(80px+env(safe-area-inset-bottom)))]">
+            
+            <div className="flex items-center justify-between shrink-0">
               <span className="text-white font-black text-lg">Ask a Campus Question</span>
-              <button onClick={() => setShowAskModal(false)} aria-label="Close">
-                <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
+              <button 
+                onClick={() => setShowAskModal(false)} 
+                aria-label="Close"
+                className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" strokeWidth={1.5} />
               </button>
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 shrink-0">
               <span className="text-sage text-xs font-bold uppercase tracking-wider">Category</span>
               <div className="flex flex-wrap gap-2">
                 {FILTERS.filter((f) => f !== 'All Questions').map((cat) => (
@@ -318,7 +324,7 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
                     className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
                       newCategory === cat
                         ? 'bg-pine text-black'
-                        : 'bg-transparent border border-sage text-sage'
+                        : 'bg-transparent border border-gray-800 text-sage'
                     }`}
                   >
                     {cat}
@@ -327,7 +333,7 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 shrink-0">
               <label className="text-sage text-xs font-bold uppercase tracking-wider">Your Question</label>
               <textarea
                 value={newQuestion}
@@ -358,7 +364,7 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
                 rows={3}
                 required
                 minLength={5}
-                className="bg-ink rounded-lg w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-sage transition-colors resize-none"
+                className="bg-ink rounded-xl w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors resize-none text-sm"
               />
               {newQuestion.length > 0 && newQuestion.length < 5 && (
                 <span className="text-red-400 text-[10px] font-bold">Question must be at least 5 characters</span>
@@ -366,21 +372,26 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
             </div>
 
             {profile && (
-              <ImageUploader
-                userId={profile.id}
-                onUploaded={(urls) => setNewImages((prev) => [...prev, ...urls])}
-                onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
-              />
+              <div className="shrink-0">
+                <ImageUploader
+                  userId={profile.id}
+                  onUploaded={(urls) => setNewImages((prev) => [...prev, ...urls])}
+                  onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
+                />
+              </div>
             )}
 
-            <button
-              onClick={submitQuestion}
-              disabled={newQuestion.trim().length < 5 || posting}
-              className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2"
-            >
-              {posting && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
-              {posting ? 'Posting...' : 'Post to Feed'}
-            </button>
+            <div className="pt-2 shrink-0">
+              <button
+                onClick={submitQuestion}
+                disabled={newQuestion.trim().length < 5 || posting}
+                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg"
+              >
+                {posting && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
+                {posting ? 'Posting...' : 'Post to Feed'}
+              </button>
+            </div>
+            
           </div>
         </div>
       )}
