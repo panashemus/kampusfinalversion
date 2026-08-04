@@ -1,4 +1,4 @@
-=export type View = 'auth' | 'radar' | 'hustle' | 'community' | 'escrow' | 'profile';
+export type View = 'auth' | 'radar' | 'hustle' | 'community' | 'escrow' | 'profile';
 
 export type Comment = {
   id: string;
@@ -22,6 +22,7 @@ export type CommunityCategory = 'All Questions' | 'Academic' | 'Housing' | 'Tech
 
 export type CommunityPost = {
   id: string;
+  authorId: string;
   author: string;
   time: string;
   category: Exclude<CommunityCategory, 'All Questions'>;
