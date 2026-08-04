@@ -1,4 +1,4 @@
-='use client';
+'use client';
 
 import { useState } from 'react';
 import { Send, User } from 'lucide-react';
@@ -12,7 +12,7 @@ export default function CommentThread({
 }: {
   comments: Comment[];
   onAdd: (c: Comment) => void;
-  onAuthorClick?: (username: string) => void;
+  onAuthorClick?: (username: string, authorId?: string) => void;
   placeholder?: string;
 }) {
   const [text, setText] = useState('');
@@ -42,7 +42,7 @@ export default function CommentThread({
               <div className="flex flex-col">
                 <div className="flex items-baseline gap-2">
                   <button 
-                    onClick={() => onAuthorClick?.(c.author)}
+                    onClick={() => onAuthorClick?.(c.author, c.authorId)}
                     className="text-white text-xs font-bold hover:text-pine transition-colors"
                   >
                     {c.author}
