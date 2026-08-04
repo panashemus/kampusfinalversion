@@ -213,8 +213,8 @@ export default function HustleHub({
     setGigs((prev) => [gig, ...prev]);
 
     toast({
-      title: 'Gig published!',
-      description: `Your listing is live. Ref: ${referenceCode}`,
+      title: 'Gig published! 🚀',
+      description: `Your listing is instantly live on campus. Ref: ${referenceCode}`,
     });
 
     // Reset flow
@@ -634,7 +634,7 @@ export default function HustleHub({
                 </div>
 
                 <p className="text-[11px] text-center text-sage pt-1">
-                  Your listing goes live instantly. Admin will verify payment shortly.
+                  Your listing is instantly live! Make sure to complete your payment to stay active.
                 </p>
               </div>
             )}
