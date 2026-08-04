@@ -36,18 +36,32 @@ type FeedCommentRow = {
   created_at: string;
 };
 
-export default function CommunityHub({ profile, searchQuery }: { profile: Profile | null; searchQuery: string }) {
+// We extend the base type here so we can track the author's real ID for DMs
+type ExtendedCommunityPost = CommunityPost & { authorId: string };
+
+export default function CommunityHub({ 
+  profile, 
+  searchQuery,
+  onMessageUser 
+}: { 
+  profile: Profile | null; 
+  searchQuery: string;
+  onMessageUser: (peerId: string, peerUsername: string) => void;
+}) {
   const { toast } = useToast();
-  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [posts, setPosts] = useState<ExtendedCommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
   const [showAskModal, setShowAskModal] = useState(false);
   const [newQuestion, setNewQuestion] = useState('');
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
   const [newImages, setNewImages] = useState<string[]>([]);
-  const [profileUser, setProfileUser] = useState<string | null>(null);
+  
+  // Track both ID and Username so we can message them
+  const [profileUser, setProfileUser] = useState<{id: string, username: string} | null>(null);
+  
   const [posting, setPosting] = useState(false);
-  const [reportPost, setReportPost] = useState<CommunityPost | null>(null);
+  const [reportPost, setReportPost] = useState<ExtendedCommunityPost | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
@@ -67,8 +81,9 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
       .order('created_at', { ascending: true });
     const commentRows = (commentData as FeedCommentRow[]) ?? [];
 
-    const mapped: CommunityPost[] = postRows.map((p) => ({
+    const mapped: ExtendedCommunityPost[] = postRows.map((p) => ({
       id: p.id,
+      authorId: p.user_id,
       author: p.author_name ?? p.user_id,
       time: timeAgo(p.created_at),
       category: p.category as Exclude<CommunityCategory, 'All Questions'>,
@@ -148,9 +163,11 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
       })
       .select()
       .maybeSingle();
+    
     if (data) {
-      const post: CommunityPost = {
+      const post: ExtendedCommunityPost = {
         id: (data as FeedPostRow).id,
+        authorId: profile.id,
         author: myName,
         time: 'just now',
         category: newCategory,
@@ -208,7 +225,7 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
           visible.map((post) => (
             <div key={post.id} className="bg-surface rounded-2xl p-4 flex flex-col gap-3 relative">
               {/* 3-dot menu */}
-              <div className="absolute top-2 right-2">
+              <div className="absolute top-2 right-2 z-10">
                 <button
                   onClick={() => setMenuOpenId(menuOpenId === post.id ? null : post.id)}
                   className="w-7 h-7 rounded-full bg-midnight/50 flex items-center justify-center active:scale-95"
@@ -216,7 +233,7 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
                   <MoreVertical className="w-3.5 h-3.5 text-sage" strokeWidth={2} />
                 </button>
                 {menuOpenId === post.id && (
-                  <div className="absolute right-0 top-8 w-36 bg-surface rounded-lg border border-gray-800 shadow-xl flex flex-col overflow-hidden z-20">
+                  <div className="absolute right-0 top-8 w-36 bg-surface rounded-lg border border-gray-800 shadow-xl flex flex-col overflow-hidden">
                     <button
                       onClick={() => { setReportPost(post); setMenuOpenId(null); }}
                       className="flex items-center gap-2 px-3 py-2.5 text-left text-sage text-xs font-bold hover:bg-white/5"
@@ -228,12 +245,12 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
                   <MessageSquare className="w-4 h-4 text-sage" strokeWidth={1.5} />
                 </div>
                 <div className="flex flex-col">
                   <button
-                    onClick={() => setProfileUser(post.author)}
+                    onClick={() => setProfileUser({ id: post.authorId, username: post.author })}
                     className="text-white text-xs font-bold hover:text-pine transition-colors text-left"
                   >
                     {post.author}
@@ -242,16 +259,16 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
                 </div>
               </div>
 
-              <p className="text-white text-sm leading-relaxed">{post.text}</p>
+              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{post.text}</p>
 
-              {/* Images */}
+              {/* Full-width Feed Images */}
               {post.images.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                <div className={`grid gap-2 mt-1 ${post.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {post.images.map((img, i) => (
                     <button
                       key={i}
                       onClick={() => setLightboxImages(post.images)}
-                      className="w-20 h-20 rounded-lg overflow-hidden border border-gray-800 shrink-0"
+                      className="w-full aspect-video rounded-xl overflow-hidden border border-gray-800"
                     >
                       <img src={img} alt={`post-img-${i}`} className="w-full h-full object-cover" />
                     </button>
@@ -277,7 +294,11 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
                 <CommentThread
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
-                  onAuthorClick={setProfileUser}
+                  onAuthorClick={(username) => {
+                    // For comments, we don't have the exact ID attached yet, 
+                    // so we pass null and it just shows their profile without DM button
+                    setProfileUser({ id: '', username });
+                  }}
                   placeholder="Reply to this post..."
                 />
               </div>
@@ -385,7 +406,7 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
               <button
                 onClick={submitQuestion}
                 disabled={newQuestion.trim().length < 5 || posting}
-                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg"
+                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg"
               >
                 {posting && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
                 {posting ? 'Posting...' : 'Post to Feed'}
@@ -412,8 +433,16 @@ export default function CommunityHub({ profile, searchQuery }: { profile: Profil
 
       {profileUser && (
         <PublicProfileModal
-          username={profileUser}
+          username={profileUser.username}
           onClose={() => setProfileUser(null)}
+          onMessageUser={
+            profileUser.id
+              ? (_, __) => {
+                  onMessageUser(profileUser.id, profileUser.username);
+                  setProfileUser(null);
+                }
+              : undefined
+          }
         />
       )}
     </div>
