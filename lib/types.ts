@@ -1,7 +1,8 @@
-export type View = 'auth' | 'radar' | 'hustle' | 'community' | 'escrow' | 'profile';
+=export type View = 'auth' | 'radar' | 'hustle' | 'community' | 'escrow' | 'profile';
 
 export type Comment = {
   id: string;
+  authorId?: string;
   author: string;
   text: string;
   time: string;
@@ -132,7 +133,6 @@ export type HazardRow = {
   created_at: string;
 };
 
-// --- ADDED FOR LIVE NOTIFICATIONS ---
 export type AppNotification = {
   id: string;
   user_id: string;
