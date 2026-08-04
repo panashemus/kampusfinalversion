@@ -88,8 +88,10 @@ export default function ChatRoom({
   }, [input, conversationId, myId]);
 
   return (
+    // 'fixed inset-0' ensures it perfectly covers the screen without overflowing
     <div className="fixed inset-0 z-[3000] bg-midnight flex flex-col animate-slide-up">
-      {/* Header */}
+      
+      {/* Header - shrink-0 prevents it from getting squished */}
       <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-surface shrink-0">
         <button onClick={onClose} aria-label="Go Back">
           <ArrowLeft className="w-6 h-6 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
@@ -108,8 +110,8 @@ export default function ChatRoom({
         </button>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 overflow-y-auto flex flex-col">
+      {/* Main Chat Area - flex-1 allows it to take up middle space and scroll */}
+      <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar">
         {/* Safety Warning Banner */}
         <div className="p-4 shrink-0">
           <div className="bg-orange-950/30 border border-orange-900/50 rounded-xl p-3 flex gap-3">
@@ -163,7 +165,7 @@ export default function ChatRoom({
         </div>
       </div>
 
-      {/* Sticky Input Area */}
+      {/* Sticky Input Area - shrink-0 glues it to the bottom, env(safe-area) protects it from iOS swipe bar */}
       <div className="p-4 bg-surface border-t border-gray-800 pb-[max(16px,env(safe-area-inset-bottom))] flex items-center gap-2 shrink-0">
         <input
           value={input}
