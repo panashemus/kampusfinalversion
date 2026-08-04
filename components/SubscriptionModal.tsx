@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Check, Crown, X, Zap, Star, Copy, CreditCard, Wallet, Loader as Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase'; // <-- Added Supabase import
 
 export type Tier = 'free' | 'plus' | 'pro';
 
@@ -108,13 +109,28 @@ export default function SubscriptionModal({
 
   const handleUpgrade = async () => {
     setSubmitting(true);
-    // Simulate brief network delay for processing
-    await new Promise(r => setTimeout(r, 1500));
+    
+    // Grab the current user
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      // Instantly upgrade the user in your database and log the reference code
+      await supabase
+        .from('profiles')
+        .update({
+          tier: selected, 
+          payment_ref_code: referenceCode, // Logs the KMP code for your manual audit
+          payment_ref_id: incontactId || null // Optional SMS ID
+        })
+        .eq('id', user.id);
+    }
     
     setSubmitting(false);
+    
+    // Instant gratification toast
     toast({
-      title: 'Upgrade Submitted!',
-      description: `Ref: ${referenceCode}. Admin will verify payment shortly.`,
+      title: 'Upgrade Successful! 🎉',
+      description: `You are instantly unlocked on the ${selectedTierInfo.name} plan.`,
     });
     
     // Reset and close
@@ -374,7 +390,7 @@ export default function SubscriptionModal({
                 disabled={submitting}
                 className={`w-full h-12 rounded-lg text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center ${isPro ? 'bg-yellow-500' : 'bg-pine'}`}
               >
-                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Submit Payment'}
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Upgrade'}
               </button>
               <button
                 onClick={() => setStep(1)}
