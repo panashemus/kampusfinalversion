@@ -5,7 +5,7 @@ import { Lock, Shield, Medal, Loader as Loader2, CircleAlert as AlertCircle } fr
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 
-const WHITELIST_DOMAINS = ['@ub.ac.bw', '@thuto.bac.ac.bw', '@bac.ac.bw'];
+const WHITELIST_DOMAINS = ['@ub.ac.bw', '@thuto.bac.ac.bw', '@bac.ac.bw', '@botho.ac.bw];
 
 // Only full admins get admin privileges
 const ADMIN_EMAILS = ['musungwa60@gmail.com'];
