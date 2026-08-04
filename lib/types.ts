@@ -131,3 +131,15 @@ export type HazardRow = {
   lng: number;
   created_at: string;
 };
+
+// --- ADDED FOR LIVE NOTIFICATIONS ---
+export type AppNotification = {
+  id: string;
+  user_id: string;
+  type: 'message' | 'comment' | 'sos';
+  title: string;
+  body: string;
+  reference_id: string | null;
+  read: boolean;
+  created_at: string;
+};
