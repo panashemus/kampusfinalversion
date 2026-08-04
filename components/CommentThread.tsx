@@ -1,85 +1,76 @@
-'use client';
+='use client';
 
 import { useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, User } from 'lucide-react';
 import type { Comment } from '@/lib/types';
-
-let commentSeq = 0;
-function nextCommentId() {
-  commentSeq += 1;
-  return `c-${Date.now()}-${commentSeq}`;
-}
 
 export default function CommentThread({
   comments,
   onAdd,
-  placeholder = 'Add a comment...',
   onAuthorClick,
+  placeholder = 'Write a comment...',
 }: {
   comments: Comment[];
-  onAdd: (comment: Comment) => void;
-  placeholder?: string;
+  onAdd: (c: Comment) => void;
   onAuthorClick?: (username: string) => void;
+  placeholder?: string;
 }) {
-  const [draft, setDraft] = useState('');
+  const [text, setText] = useState('');
 
-  const submit = () => {
-    const text = draft.trim();
-    if (!text) return;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    
     onAdd({
-      id: nextCommentId(),
-      author: '@you',
-      text,
-      time: 'now',
+      id: `temp-${Date.now()}`,
+      author: 'You',
+      text: text.trim(),
+      time: 'just now',
     });
-    setDraft('');
+    setText('');
   };
 
   return (
     <div className="flex flex-col gap-3">
-      <span className="text-sage text-xs font-bold uppercase tracking-wider">
-        Comments & Updates
-      </span>
-
-      <div className="flex flex-col gap-3 max-h-44 overflow-y-auto no-scrollbar">
-        {comments.length === 0 && (
-          <span className="text-sage text-xs italic">No comments yet. Start the thread.</span>
-        )}
-        {comments.map((c) => (
-          <div key={c.id} className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onAuthorClick?.(c.author)}
-                className="text-pine text-xs font-bold hover:underline"
-              >
-                {c.author}
-              </button>
-              <span className="text-sage text-[10px]">{c.time}</span>
+      {comments.length > 0 && (
+        <div className="flex flex-col gap-3 max-h-48 overflow-y-auto no-scrollbar">
+          {comments.map((c) => (
+            <div key={c.id} className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0 mt-0.5">
+                <User className="w-3 h-3 text-sage" strokeWidth={2} />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-baseline gap-2">
+                  <button 
+                    onClick={() => onAuthorClick?.(c.author)}
+                    className="text-white text-xs font-bold hover:text-pine transition-colors"
+                  >
+                    {c.author}
+                  </button>
+                  <span className="text-sage text-[10px]">{c.time}</span>
+                </div>
+                <p className="text-gray-300 text-xs leading-relaxed">{c.text}</p>
+              </div>
             </div>
-            <span className="text-white text-sm leading-snug">{c.text}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 bg-ink rounded-lg h-11 px-3 border border-gray-800 focus-within:border-sage transition-colors">
+          ))}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="relative flex items-center">
         <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit();
-          }}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 bg-transparent text-white text-sm placeholder:text-sage outline-none"
+          className="w-full h-10 rounded-full bg-ink border border-gray-800 pl-4 pr-10 text-white placeholder:text-sage text-xs outline-none focus:border-pine transition-colors"
         />
         <button
-          onClick={submit}
-          aria-label="Send comment"
-          className="text-pine active:scale-90 transition-transform"
+          type="submit"
+          disabled={!text.trim()}
+          className="absolute right-1 w-8 h-8 rounded-full bg-pine flex items-center justify-center text-black disabled:opacity-50 active:scale-95 transition-transform"
         >
-          <Send className="w-4 h-4" strokeWidth={2} />
+          <Send className="w-3.5 h-3.5 -ml-0.5" strokeWidth={2} />
         </button>
-      </div>
+      </form>
     </div>
   );
 }
