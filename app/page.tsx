@@ -5,8 +5,8 @@ import { Bell, Plus, Search, X, MapPin, Lock, MessageSquare, ShieldCheck, Shield
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
-import type { View, Hazard, Comment, SosAlert, Profile, HazardRow } from '@/lib/types';
-import { haversineMeters, locationLabel } from '@/lib/utils';
+import type { View, Hazard, Comment, SosAlert, Profile, HazardRow, AppNotification } from '@/lib/types';
+import { haversineMeters, locationLabel, timeAgo } from '@/lib/utils';
 import WelcomeModal from '@/components/WelcomeModal';
 import AuthScreen from '@/components/AuthScreen';
 import HustleHub from '@/components/HustleHub';
@@ -80,14 +80,64 @@ export default function Home() {
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
   const [activeChat, setActiveChat] = useState<{ peerId: string; peerUsername: string } | null>(null);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
+  
+  // Notification States
   const [sosNotifications, setSosNotifications] = useState<{ id: string; text: string; time: string }[]>([]);
+  const [dbNotifications, setDbNotifications] = useState<AppNotification[]>([]);
 
   // SOS state
   const [sosGeoStatus, setSosGeoStatus] = useState<'idle' | 'locating' | 'broadcasting' | 'done' | 'denied'>('idle');
   const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([]);
   const [activeHelpCard, setActiveHelpCard] = useState<SosAlert | null>(null);
 
-  // Load SOS alerts created in the last 24 hours (active red & resolved grey)
+  // Load Database Notifications & Listen for Live Updates
+  useEffect(() => {
+    if (!profile) return;
+
+    // Fetch existing notifications
+    const fetchNotifs = async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (data) setDbNotifications(data as AppNotification[]);
+    };
+    fetchNotifs();
+
+    // Subscribe to new notifications
+    const channel = supabase
+      .channel('public:notifications')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
+        (payload) => {
+          const notif = payload.new as AppNotification;
+          setDbNotifications((prev) => [notif, ...prev]);
+          
+          // Pop a live toast!
+          toast({
+            title: notif.type === 'message' ? '💬 New Message' : '🔔 New Reply',
+            description: notif.body,
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [profile, toast]);
+
+  const markNotificationsAsRead = async () => {
+    if (!profile) return;
+    const unreadIds = dbNotifications.filter((n) => !n.read).map((n) => n.id);
+    if (unreadIds.length === 0) return;
+
+    setDbNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    await supabase.from('notifications').update({ read: true }).in('id', unreadIds);
+  };
+
+  // Load SOS alerts created in the last 24 hours
   useEffect(() => {
     if (activeView !== 'radar') return;
     const fetchAlerts = async () => {
@@ -111,7 +161,7 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [activeView]);
 
-  // Real-time SOS alert push listener
+  // Real-time SOS alert push listener for proximity warning
   useEffect(() => {
     const channel = supabase
       .channel('sos_alerts_push')
@@ -142,7 +192,7 @@ export default function Home() {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [userCoords]);
+  }, [userCoords, toast]);
 
   // Real-time hazards subscription
   useEffect(() => {
@@ -173,7 +223,7 @@ export default function Home() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [activeView]);
+  }, [activeView, toast]);
 
   const handleNewHazardConsumed = useCallback(() => {
     setPendingHazard(null);
@@ -288,7 +338,6 @@ export default function Home() {
         navigator.geolocation.getCurrentPosition(
           (pos) => executeBroadcast(pos.coords.latitude, pos.coords.longitude),
           async () => {
-            // Force it through anyway to bypass the desktop block
             await executeBroadcast(fallbackLat, fallbackLng);
           },
           { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
@@ -305,7 +354,6 @@ export default function Home() {
       .update({ active: false })
       .eq('id', activeHelpCard.id);
     
-    // Update local state to show grey resolved pin instead of deleting immediately
     setActiveSosAlerts((prev) =>
       prev.map((a) => (a.id === activeHelpCard.id ? { ...a, active: false } : a))
     );
@@ -326,7 +374,7 @@ export default function Home() {
       }
       action();
     },
-    [profile]
+    [profile, toast]
   );
 
   const requirePremium = useCallback(
@@ -346,7 +394,7 @@ export default function Home() {
       }
       action();
     },
-    [profile]
+    [profile, toast]
   );
 
   const openChat = useCallback(
@@ -436,6 +484,9 @@ export default function Home() {
   }
 
   const showSearch = activeView === 'hustle' || activeView === 'community';
+  
+  // Calculate unread badge count
+  const unreadCount = dbNotifications.filter(n => !n.read).length + sosNotifications.length;
 
   return (
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#0B1611] items-center">
@@ -467,12 +518,21 @@ export default function Home() {
               <MessageCircle className="w-6 h-6 text-sage" strokeWidth={1.5} />
             </button>
             <button
-              onClick={() => setIsNotifOpen((v) => !v)}
+              onClick={() => {
+                setIsNotifOpen((v) => {
+                  if (!v) markNotificationsAsRead();
+                  return !v;
+                });
+              }}
               aria-label="Toggle notifications"
               className="relative"
             >
               <Bell className="w-6 h-6 text-sage" strokeWidth={1.5} />
-              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[9px] text-white font-bold animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </header>
@@ -495,31 +555,68 @@ export default function Home() {
         {isNotifOpen && (
           <div className="absolute top-16 left-0 right-0 z-[1500] px-4">
             <div className="bg-surface rounded-2xl border border-gray-800 shadow-xl flex flex-col gap-3 p-4 animate-slide-down">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-2">
                 <span className="text-white font-black text-sm tracking-wider">
                   NOTIFICATIONS
                 </span>
                 <button onClick={() => setIsNotifOpen(false)} aria-label="Close">
-                  <X className="w-4 h-4 text-sage" strokeWidth={1.5} />
+                  <X className="w-4 h-4 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
                 </button>
               </div>
-              {sosNotifications.length === 0 ? (
-                <span className="text-sage text-xs">No new notifications.</span>
-              ) : (
-                sosNotifications.map((n) => (
-                  <div key={n.id} className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-full bg-red-900/30 border border-red-700/50 flex items-center justify-center shrink-0">
-                      <ShieldAlert className="w-4 h-4 text-red-400" strokeWidth={1.5} />
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-white text-sm font-bold leading-snug">
-                        {n.text}
-                      </span>
-                      <span className="text-sage text-[10px]">{n.time}</span>
-                    </div>
-                  </div>
-                ))
-              )}
+              
+              <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto no-scrollbar">
+                {sosNotifications.length === 0 && dbNotifications.length === 0 ? (
+                  <span className="text-sage text-xs">No new notifications.</span>
+                ) : (
+                  <>
+                    {/* Render SOS Proximity Alerts */}
+                    {sosNotifications.map((n) => (
+                      <div key={n.id} className="flex items-start gap-3 p-2 bg-red-900/10 rounded-lg border border-red-900/20">
+                        <div className="w-9 h-9 rounded-full bg-red-900/30 border border-red-700/50 flex items-center justify-center shrink-0">
+                          <ShieldAlert className="w-4 h-4 text-red-400" strokeWidth={1.5} />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-red-100 text-sm font-bold leading-snug">
+                            {n.text}
+                          </span>
+                          <span className="text-red-400/60 text-[10px]">{n.time}</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Render Database Feed/Message Alerts */}
+                    {dbNotifications.map((n) => (
+                      <div 
+                        key={n.id} 
+                        className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${!n.read ? 'bg-pine/5 border border-pine/10' : ''}`}
+                        onClick={() => {
+                          if (n.type === 'message') {
+                            setChatInboxOpen(true);
+                            setIsNotifOpen(false);
+                          } else if (n.type === 'comment') {
+                            setActiveView('community');
+                            setIsNotifOpen(false);
+                          }
+                        }}
+                      >
+                        <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
+                          {n.type === 'message' 
+                            ? <MessageCircle className="w-4 h-4 text-pine" strokeWidth={1.5} /> 
+                            : <MessageSquare className="w-4 h-4 text-sage" strokeWidth={1.5} />
+                          }
+                        </div>
+                        <div className="flex flex-col gap-0.5 cursor-pointer">
+                          <span className="text-white text-sm font-bold leading-snug">
+                            {n.title}
+                          </span>
+                          <span className="text-sage text-xs leading-snug">{n.body}</span>
+                          <span className="text-gray-500 text-[10px]">{timeAgo(n.created_at)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -630,7 +727,6 @@ export default function Home() {
               profile={profile}
             />
           )}
-          {/* VERCEL ERROR FIXED HERE: Passed onMessageUser={openChat} */}
           {activeView === 'community' && (
             <CommunityHub 
               profile={profile} 
