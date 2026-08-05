@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Check, Crown, X, Zap, Star, Copy, CreditCard, Wallet, Loader as Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase'; // <-- Added Supabase import
+import { supabase } from '@/lib/supabase';
 
 export type Tier = 'free' | 'plus' | 'pro';
 
@@ -38,7 +38,7 @@ const TIERS: TierInfo[] = [
     blurb: 'Safety Radar, Hustle Hub, & Campus Feed. (Banner ads only).',
     features: ['Everything in Free', 'Hustle Hub access', 'Campus Feed', 'Banner ads only'],
     icon: Star,
-    accent: 'border-pine',
+    accent: 'border-pine text-pine',
   },
   {
     id: 'pro',
@@ -53,7 +53,7 @@ const TIERS: TierInfo[] = [
       'Highest Sentinel cashback cap',
     ],
     icon: Crown,
-    accent: 'border-yellow-500',
+    accent: 'border-yellow-500 text-yellow-500',
     badge: 'BEST VALUE',
   },
 ];
@@ -110,54 +110,58 @@ export default function SubscriptionModal({
   const handleUpgrade = async () => {
     setSubmitting(true);
     
-    // Grab the current user
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      // 1. Grab the current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) throw new Error('Not authenticated. Please sign in again.');
 
-    if (user) {
-      // Instantly upgrade the user in your database and log the reference code
-      await supabase
+      // 2. Calculate exactly 1 month from right now
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+      // 3. INSTANTLY grant premium access in the database (Trust but verify)
+      const { error: updateError } = await supabase
         .from('profiles')
         .update({
+          is_premium: true, // Immediately unlocks the app features
+          subscribed_until: nextMonth.toISOString(), // Sets the 1 month expiry
           tier: selected, 
           payment_ref_code: referenceCode, // Logs the KMP code for your manual audit
           payment_ref_id: incontactId || null // Optional SMS ID
         })
         .eq('id', user.id);
+
+      if (updateError) throw updateError;
+      
+      // Instant gratification toast
+      toast({
+        title: 'Upgrade Successful! 🎉',
+        description: `You are instantly unlocked on the ${selectedTierInfo.name} plan.`,
+      });
+
+      // 4. Force a hard reload so the entire React app recognizes the new premium status
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+
+    } catch (error: any) {
+      toast({
+        title: 'Upgrade Failed',
+        description: error.message || 'Something went wrong.',
+        variant: 'destructive',
+      });
+      setSubmitting(false);
     }
-    
-    setSubmitting(false);
-    
-    // Instant gratification toast
-    toast({
-      title: 'Upgrade Successful! 🎉',
-      description: `You are instantly unlocked on the ${selectedTierInfo.name} plan.`,
-    });
-    
-    // Reset and close
-    setStep(1);
-    setIncontactId('');
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={() => {
-          setStep(1);
-          onClose();
-        }}
-      />
-
-      {/* Sheet */}
-      <div className="relative w-full max-w-[430px] max-h-[90vh] overflow-y-auto no-scrollbar bg-midnight rounded-t-3xl sm:rounded-3xl border border-gray-800 p-5 pb-[max(32px,env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-300">
-        {/* Handle */}
-        <div className="mx-auto w-10 h-1 rounded-full bg-gray-700 mb-4" />
-
+    <div className="fixed inset-0 z-[7000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      
+      <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-surface rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+        
         {/* Header */}
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-white font-black text-xl">
+        <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0 h-16">
+          <h2 className="text-white font-black text-lg">
             {step === 1 ? 'Choose Your Plan' : 'Payment Checkout'}
           </h2>
           <button
@@ -166,7 +170,7 @@ export default function SubscriptionModal({
               onClose();
             }}
             aria-label="Close"
-            className="w-8 h-8 rounded-full bg-surface flex items-center justify-center active:scale-95 transition-transform"
+            className="w-8 h-8 rounded-full bg-ink flex items-center justify-center active:scale-95 transition-transform"
           >
             <X className="w-4 h-4 text-sage" strokeWidth={2} />
           </button>
@@ -174,14 +178,20 @@ export default function SubscriptionModal({
 
         {/* STEP 1: PLAN SELECTION */}
         {step === 1 && (
-          <div className="flex flex-col gap-3 mt-4">
-            <p className="text-sage text-xs mb-2">
-              Upgrade or cancel anytime. Payments powered by DPO Botswana.
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 no-scrollbar">
+            <p className="text-sage text-xs mb-1 text-center">
+              Upgrade or cancel anytime. Payments powered by Kampus.
             </p>
             {TIERS.map((tier) => {
               const Icon = tier.icon;
               const isSelected = selected === tier.id;
               const isThisPro = tier.id === 'pro';
+              const isThisPlus = tier.id === 'plus';
+              
+              let accentColorClass = 'text-white';
+              if (isThisPro) accentColorClass = 'text-yellow-500';
+              if (isThisPlus) accentColorClass = 'text-pine';
+
               return (
                 <button
                   key={tier.id}
@@ -202,22 +212,17 @@ export default function SubscriptionModal({
                       className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                         isThisPro
                           ? 'bg-yellow-500/15 border border-yellow-500/40'
-                          : 'bg-pine/15 border border-pine/30'
+                          : isThisPlus
+                          ? 'bg-pine/15 border border-pine/30'
+                          : 'bg-gray-800/50 border border-gray-700'
                       }`}
                     >
-                      <Icon
-                        className={isThisPro ? 'w-5 h-5 text-yellow-500' : 'w-5 h-5 text-pine'}
-                        strokeWidth={2}
-                      />
+                      <Icon className={`w-5 h-5 ${accentColorClass}`} strokeWidth={2} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="text-white font-black text-base">{tier.name}</span>
-                        <span
-                          className={`font-black text-sm ${
-                            isThisPro ? 'text-yellow-500' : 'text-pine'
-                          }`}
-                        >
+                        <span className={`font-black text-sm ${accentColorClass}`}>
                           {tier.price}
                         </span>
                       </div>
@@ -226,16 +231,8 @@ export default function SubscriptionModal({
                       </p>
                       <ul className="mt-2 flex flex-col gap-1">
                         {tier.features.map((f) => (
-                          <li
-                            key={f}
-                            className="flex items-center gap-1.5 text-sage text-[11px]"
-                          >
-                            <Check
-                              className={`w-3 h-3 shrink-0 ${
-                                isThisPro ? 'text-yellow-500' : 'text-pine'
-                              }`}
-                              strokeWidth={3}
-                            />
+                          <li key={f} className="flex items-center gap-1.5 text-sage text-[11px]">
+                            <Check className={`w-3 h-3 shrink-0 ${accentColorClass}`} strokeWidth={3} />
                             {f}
                           </li>
                         ))}
@@ -247,7 +244,9 @@ export default function SubscriptionModal({
                         isSelected
                           ? isThisPro
                             ? 'border-yellow-500 bg-yellow-500'
-                            : 'border-pine bg-pine'
+                            : isThisPlus
+                            ? 'border-pine bg-pine'
+                            : 'border-gray-400 bg-gray-400'
                           : 'border-gray-600'
                       }`}
                     >
@@ -259,16 +258,20 @@ export default function SubscriptionModal({
                 </button>
               );
             })}
+          </div>
+        )}
 
+        {step === 1 && (
+          <div className="p-4 border-t border-gray-800 shrink-0">
             <button
               onClick={handleContinue}
-              className={`w-full mt-2 h-12 rounded-xl text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2 ${
-                isPro ? 'bg-yellow-500' : 'bg-pine'
+              className={`w-full h-12 rounded-xl text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2 ${
+                selected === 'pro' ? 'bg-yellow-500' : selected === 'plus' ? 'bg-pine' : 'bg-gray-400'
               }`}
             >
               {selected === 'free' ? 'Confirm Free Plan' : 'Continue to Payment'}
             </button>
-            <p className="text-center text-sage text-[10px] mt-1">
+            <p className="text-center text-sage text-[10px] mt-2">
               By continuing you agree to the Kampus Terms of Service.
             </p>
           </div>
@@ -276,7 +279,7 @@ export default function SubscriptionModal({
 
         {/* STEP 2: PAYMENT FLOW */}
         {step === 2 && (
-          <div className="flex flex-col gap-4 mt-5">
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 no-scrollbar">
             {/* Reference Code Header */}
             <div className={`bg-ink border rounded-xl p-4 flex items-center justify-between ${isPro ? 'border-yellow-500/30' : 'border-pine/30'}`}>
               <div>
@@ -370,7 +373,7 @@ export default function SubscriptionModal({
             )}
 
             {/* Optional inContact ID Input */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 mt-auto">
               <label className="block text-[10px] uppercase font-bold text-sage">
                 FNB inContact / SMS Confirmation ID (Optional)
               </label>
@@ -382,25 +385,27 @@ export default function SubscriptionModal({
                 className={`bg-ink rounded-lg h-11 w-full px-3 border border-gray-800 text-white placeholder:text-sage text-sm outline-none transition-colors ${isPro ? 'focus:border-yellow-500' : 'focus:border-pine'}`}
               />
             </div>
-
-            {/* Action Buttons */}
-            <div className="pt-2 space-y-2">
-              <button
-                onClick={handleUpgrade}
-                disabled={submitting}
-                className={`w-full h-12 rounded-lg text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center ${isPro ? 'bg-yellow-500' : 'bg-pine'}`}
-              >
-                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Upgrade'}
-              </button>
-              <button
-                onClick={() => setStep(1)}
-                className="w-full text-center text-xs text-sage hover:text-white py-2 transition-colors"
-              >
-                ← Back to Plans
-              </button>
-            </div>
           </div>
         )}
+
+        {step === 2 && (
+          <div className="p-4 border-t border-gray-800 shrink-0 space-y-2">
+            <button
+              onClick={handleUpgrade}
+              disabled={submitting}
+              className={`w-full h-12 rounded-lg text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center ${isPro ? 'bg-yellow-500' : 'bg-pine'}`}
+            >
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Payment & Unlock'}
+            </button>
+            <button
+              onClick={() => setStep(1)}
+              className="w-full text-center text-xs text-sage hover:text-white py-2 transition-colors"
+            >
+              ← Back to Plans
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
