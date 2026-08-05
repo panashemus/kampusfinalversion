@@ -12,7 +12,7 @@ const WHITELIST_DOMAINS = ['@ub.ac.bw', '@thuto.bac.ac.bw', '@bac.ac.bw', '@both
 const ADMIN_EMAILS = ['musungwa60@gmail.com'];
 
 // Test accounts allowed to bypass domain locks but do NOT get admin rights
-const TEST_EMAILS: string[] = [];
+const TEST_EMAILS: string[] = ['chrisvandium@gmail.com', 'chris.karter1629@gmail.com'];
 
 export default function AuthScreen({
   onVerified,
