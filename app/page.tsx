@@ -22,6 +22,7 @@ import ChatRoom from '@/components/ChatRoom';
 import ChatInbox from '@/components/ChatInbox';
 import AdminQueue from '@/components/AdminQueue';
 import LegalModal from '@/components/LegalModal';
+import AdminDashboard from '@/components/AdminDashboard'; // <-- Added AdminDashboard Import
 
 const RadarMap = dynamic(() => import('@/components/RadarMap'), {
   ssr: false,
@@ -95,6 +96,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [chatInboxOpen, setChatInboxOpen] = useState(false);
   const [adminQueueOpen, setAdminQueueOpen] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false); // <-- Added state to open Admin Dashboard
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
   const [activeChat, setActiveChat] = useState<{ peerId: string; peerUsername: string } | null>(null);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
@@ -107,6 +109,9 @@ export default function Home() {
   const [sosGeoStatus, setSosGeoStatus] = useState<'idle' | 'locating' | 'broadcasting' | 'done' | 'denied'>('idle');
   const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([]);
   const [activeHelpCard, setActiveHelpCard] = useState<SosAlert | null>(null);
+
+  // Security Check for Admin
+  const isAdminUser = profile?.is_admin || profile?.email === 'musungwa60@gmail.com';
 
   // Load Database Notifications & Listen for Live Updates
   useEffect(() => {
@@ -532,6 +537,17 @@ export default function Home() {
             {HEADER_TITLES[activeView]}
           </span>
           <div className="flex items-center gap-3">
+            
+            {/* <-- NEW ADMIN DASHBOARD BUTTON IN HEADER --> */}
+            {isAdminUser && (
+              <button
+                onClick={() => setShowAdmin(true)}
+                className="bg-orange-600 border border-orange-400 text-black font-black text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full active:scale-95 transition-transform shadow-lg shadow-orange-900/50"
+              >
+                Admin
+              </button>
+            )}
+
             {showSearch && (
               <button
                 onClick={() => setSearchOpen((v) => !v)}
@@ -1060,6 +1076,15 @@ export default function Home() {
             onClose={() => setActiveChat(null)}
           />
         )}
+
+        {/* <-- NEW ADMIN DASHBOARD MODAL --> */}
+        {showAdmin && (
+          <AdminDashboard 
+            onClose={() => setShowAdmin(false)} 
+            adminProfile={profile} 
+          />
+        )}
+
       </div>
     </div>
   );
