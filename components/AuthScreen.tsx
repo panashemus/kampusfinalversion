@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 
-const WHITELIST_DOMAINS = ['@ub.ac.bw', '@thuto.bac.ac.bw', '@bac.ac.bw', '@botho.ac.bw'];
+const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw'];
 
 // Only full admins get admin privileges
 const ADMIN_EMAILS = ['musungwa60@gmail.com'];
