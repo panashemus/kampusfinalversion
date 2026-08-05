@@ -43,7 +43,7 @@ export default function ChatRoom({
     return () => { cancelled = true; };
   }, [myId, peerId, peerUsername]);
 
-  // Real-time subscription for new messages.
+  // Real-time subscription for new messages
   useEffect(() => {
     if (!conversationId) return;
     const channel = supabase
@@ -70,7 +70,7 @@ export default function ChatRoom({
     setSending(true);
     setInput('');
 
-    // Optimistic update so it feels instant
+    // Optimistic update
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
       conversation_id: conversationId,
@@ -88,108 +88,112 @@ export default function ChatRoom({
   }, [input, conversationId, myId]);
 
   return (
-    // 'fixed inset-0' ensures it perfectly covers the screen without overflowing
-    <div className="fixed inset-0 z-[3000] bg-midnight flex flex-col animate-slide-up">
+    // The centered backdrop overlay
+    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       
-      {/* Header - shrink-0 prevents it from getting squished */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-surface shrink-0">
-        <button onClick={onClose} aria-label="Go Back">
-          <ArrowLeft className="w-6 h-6 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
-        </button>
-        <button
-          onClick={() => setShowProfileModal(true)}
-          className="flex flex-col items-center group"
-        >
-          <span className="text-white font-bold text-base group-hover:text-pine transition-colors leading-tight">
-            {peerUsername}
-          </span>
-          <span className="text-sage text-[10px] leading-tight mt-0.5">Tap to view profile</span>
-        </button>
-        <button onClick={onClose} aria-label="Close">
-          <X className="w-6 h-6 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
-        </button>
-      </div>
+      {/* The strictly sized floating window */}
+      <div className="relative w-full max-w-[420px] h-[80dvh] bg-midnight rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+        
+        {/* Header - shrink-0 prevents it from getting squished */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-surface shrink-0">
+          <button onClick={onClose} aria-label="Go Back">
+            <ArrowLeft className="w-6 h-6 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="flex flex-col items-center group"
+          >
+            <span className="text-white font-bold text-base group-hover:text-pine transition-colors leading-tight">
+              {peerUsername}
+            </span>
+            <span className="text-sage text-[10px] leading-tight mt-0.5">Tap to view profile</span>
+          </button>
+          <button onClick={onClose} aria-label="Close">
+            <X className="w-6 h-6 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
+          </button>
+        </div>
 
-      {/* Main Chat Area - flex-1 allows it to take up middle space and scroll */}
-      <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar">
-        {/* Safety Warning Banner */}
-        <div className="p-4 shrink-0">
-          <div className="bg-orange-950/30 border border-orange-900/50 rounded-xl p-3 flex gap-3">
-            <ShieldAlert className="w-5 h-5 text-orange-500 shrink-0" strokeWidth={2} />
-            <p className="text-orange-200 text-[11px] leading-relaxed">
-              <strong className="text-orange-400">Safety Warning:</strong> Keep your chats inside Kampus to protect your account and transactions. Kampus is not liable for deals moved off-platform. Never pay for items prior to inspection in a public campus location.
-            </p>
+        {/* Main Chat Area - flex-1 allows it to take up middle space and scroll */}
+        <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar bg-[#0B1611]">
+          {/* Safety Warning Banner */}
+          <div className="p-4 shrink-0">
+            <div className="bg-orange-950/30 border border-orange-900/50 rounded-xl p-3 flex gap-3">
+              <ShieldAlert className="w-5 h-5 text-orange-500 shrink-0" strokeWidth={2} />
+              <p className="text-orange-200 text-[11px] leading-relaxed">
+                <strong className="text-orange-400">Safety Warning:</strong> Keep your chats inside Kampus to protect your account and transactions. Kampus is not liable for deals moved off-platform. Never pay for items prior to inspection in a public campus location.
+              </p>
+            </div>
+          </div>
+
+          {/* Messages Content */}
+          <div className="px-4 pb-4 flex flex-col gap-4 flex-1">
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-sage" />
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                <div className="w-16 h-16 rounded-full bg-ink border border-gray-800 flex items-center justify-center">
+                  <User className="w-7 h-7 text-sage" strokeWidth={1.5} />
+                </div>
+                <span className="text-white font-bold text-lg">No messages yet</span>
+                <span className="text-sage text-sm">Say hello to {peerUsername}</span>
+              </div>
+            ) : (
+              messages.map((m) => {
+                const mine = m.sender_id === myId;
+                return (
+                  <div
+                    key={m.id}
+                    className={`flex flex-col max-w-[85%] ${mine ? 'self-end items-end' : 'self-start items-start'}`}
+                  >
+                    <div
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        mine
+                          ? 'bg-pine text-black rounded-tr-sm font-medium'
+                          : 'bg-surface border border-gray-800 text-white rounded-tl-sm'
+                      }`}
+                    >
+                      {m.text}
+                    </div>
+                    <span className="text-sage text-[10px] mt-1 px-1">
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+            {/* Empty div to auto-scroll into view */}
+            <div ref={scrollRef} />
           </div>
         </div>
 
-        {/* Messages Content */}
-        <div className="px-4 pb-4 flex flex-col gap-4 flex-1">
-          {loading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-sage" />
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-ink border border-gray-800 flex items-center justify-center">
-                <User className="w-7 h-7 text-sage" strokeWidth={1.5} />
-              </div>
-              <span className="text-white font-bold text-lg">No messages yet</span>
-              <span className="text-sage text-sm">Say hello to {peerUsername}</span>
-            </div>
-          ) : (
-            messages.map((m) => {
-              const mine = m.sender_id === myId;
-              return (
-                <div
-                  key={m.id}
-                  className={`flex flex-col max-w-[85%] ${mine ? 'self-end items-end' : 'self-start items-start'}`}
-                >
-                  <div
-                    className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                      mine
-                        ? 'bg-pine text-black rounded-tr-sm font-medium'
-                        : 'bg-surface border border-gray-800 text-white rounded-tl-sm'
-                    }`}
-                  >
-                    {m.text}
-                  </div>
-                  <span className="text-sage text-[10px] mt-1 px-1">
-                    {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              );
-            })
-          )}
-          {/* Empty div to auto-scroll into view */}
-          <div ref={scrollRef} />
+        {/* Sticky Input Area - guaranteed to sit at the bottom of the modal */}
+        <div className="p-3 bg-surface border-t border-gray-800 flex items-center gap-2 shrink-0">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSend();
+            }}
+            placeholder="Type a message…"
+            className="flex-1 bg-ink rounded-full h-12 px-4 border border-gray-800 text-white placeholder:text-sage text-sm outline-none focus:border-pine transition-colors"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || sending}
+            className="w-12 h-12 rounded-full bg-pine flex items-center justify-center text-black disabled:opacity-50 active:scale-95 transition-transform shrink-0"
+          >
+            {sending ? (
+              <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />
+            ) : (
+              <Send className="w-5 h-5 -ml-0.5" strokeWidth={2} />
+            )}
+          </button>
         </div>
+
       </div>
 
-      {/* Sticky Input Area - shrink-0 glues it to the bottom, env(safe-area) protects it from iOS swipe bar */}
-      <div className="p-4 bg-surface border-t border-gray-800 pb-[max(16px,env(safe-area-inset-bottom))] flex items-center gap-2 shrink-0">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSend();
-          }}
-          placeholder="Type a message…"
-          className="flex-1 bg-ink rounded-full h-12 px-4 border border-gray-800 text-white placeholder:text-sage text-sm outline-none focus:border-pine transition-colors"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || sending}
-          className="w-12 h-12 rounded-full bg-pine flex items-center justify-center text-black disabled:opacity-50 active:scale-95 transition-transform shrink-0"
-        >
-          {sending ? (
-            <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />
-          ) : (
-            <Send className="w-5 h-5 -ml-0.5" strokeWidth={2} />
-          )}
-        </button>
-      </div>
-
-      {/* Render Public Profile Modal if triggered */}
       {showProfileModal && (
         <PublicProfileModal
           username={peerUsername}
