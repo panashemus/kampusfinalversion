@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon, CreditCard, Wallet } from 'lucide-react';
+import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon, CreditCard, Wallet, Send, Tag, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadImages } from '@/lib/payment';
 import type { Comment, Profile, HustleStatus } from '@/lib/types';
@@ -77,13 +77,19 @@ export default function HustleHub({
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
-  // 2-Step Checkout State
+  // 2-Step Checkout State for creating a gig
   const [step, setStep] = useState<1 | 2>(1);
   const [paymentMethod, setPaymentMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
   const [referenceCode, setReferenceCode] = useState('');
   const [incontactId, setIncontactId] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedNum, setCopiedNum] = useState(false);
+
+  // Escrow Checkout State
+  const [escrowGig, setEscrowGig] = useState<Gig | null>(null);
+  const [escrowPaymentMethod, setEscrowPaymentMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
+  const [escrowRef, setEscrowRef] = useState('');
+  const [processingEscrow, setProcessingEscrow] = useState(false);
 
   // Form State
   const [newTitle, setNewTitle] = useState('');
@@ -159,7 +165,6 @@ export default function HustleHub({
     if (e) e.preventDefault();
     if (!canPostGig) return;
     
-    // Generate clean 4-digit code e.g. KMP-8402
     const randomCode = `KMP-${Math.floor(1000 + Math.random() * 9000)}`;
     setReferenceCode(randomCode);
     setStep(2);
@@ -217,7 +222,6 @@ export default function HustleHub({
       description: `Your listing is instantly live on campus. Ref: ${referenceCode}`,
     });
 
-    // Reset flow
     setPosting(false);
     setShowModal(false);
     setStep(1);
@@ -226,6 +230,22 @@ export default function HustleHub({
     setNewDescription('');
     setNewImages([]);
     setIncontactId('');
+  };
+
+  const submitEscrowCheckout = async () => {
+    if (!escrowRef.trim() || !escrowGig || !profile) return;
+    setProcessingEscrow(true);
+    
+    // Simulate payment submission to Kampus Admin
+    setTimeout(() => {
+      setProcessingEscrow(false);
+      setEscrowGig(null);
+      setEscrowRef('');
+      toast({
+        title: 'Escrow Initiated 🔒',
+        description: 'Payment reference sent to Admin! Once manually verified, we will notify the seller to start the service.',
+      });
+    }, 1500);
   };
 
   const copyToClipboard = (text: string, isCode: boolean) => {
@@ -395,25 +415,23 @@ export default function HustleHub({
         </div>
       </div>
 
-      {/* 2-STEP CREATE GIG MODAL */}
+      {/* 2-STEP CREATE GIG MODAL (Centered Floating Window) */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          
-          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))]">
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-surface rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
             
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
               <span className="text-white font-black text-lg">
                 {step === 1 ? 'List a New Gig' : 'Payment Checkout'}
               </span>
-              <button onClick={() => setShowModal(false)} aria-label="Close">
-                <X className="w-5 h-5 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
+              <button onClick={() => setShowModal(false)} aria-label="Close" className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors">
+                <X className="w-5 h-5" strokeWidth={1.5} />
               </button>
             </div>
 
             {/* STEP 1: GIG DETAILS FORM */}
             {step === 1 && (
-              <div className="flex flex-col gap-4 pb-6">
+              <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 no-scrollbar">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sage text-xs font-bold uppercase tracking-wider">Gig Title</label>
                   <input
@@ -423,7 +441,7 @@ export default function HustleHub({
                     placeholder="e.g. Laptop Screen Repair"
                     required
                     minLength={3}
-                    className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors"
+                    className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors text-sm"
                   />
                 </div>
 
@@ -455,7 +473,7 @@ export default function HustleHub({
                     placeholder="e.g. 150"
                     required
                     min={1}
-                    className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors"
+                    className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors text-sm"
                   />
                 </div>
 
@@ -490,22 +508,24 @@ export default function HustleHub({
                     rows={3}
                     required
                     minLength={10}
-                    className="bg-ink rounded-lg w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors resize-none"
+                    className="bg-ink rounded-lg w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors resize-none text-sm"
                   />
                 </div>
 
                 {profile && (
-                  <ImageUploader
-                    userId={profile.id}
-                    onUploaded={(urls) => setNewImages((prev) => [...prev, ...urls])}
-                    onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
-                  />
+                  <div className="shrink-0 mt-2">
+                    <ImageUploader
+                      userId={profile.id}
+                      onUploaded={(urls) => setNewImages((prev) => [...prev, ...urls])}
+                      onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
+                    />
+                  </div>
                 )}
-
+                
                 <button
                   onClick={handleProceedToPayment}
                   disabled={!canPostGig}
-                  className="w-full mt-2 h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2"
+                  className="w-full mt-4 h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center shrink-0"
                 >
                   Proceed to Payment
                 </button>
@@ -514,7 +534,7 @@ export default function HustleHub({
 
             {/* STEP 2: CHECKOUT & PAYMENT FLOW */}
             {step === 2 && (
-              <div className="flex flex-col gap-4 pb-6">
+              <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 no-scrollbar">
                 
                 {/* Reference Code Header */}
                 <div className="bg-ink border border-pine/30 rounded-xl p-4 flex items-center justify-between">
@@ -547,7 +567,7 @@ export default function HustleHub({
                         : 'bg-ink text-sage border-gray-800'
                     }`}
                   >
-                    <CreditCard className="w-4 h-4" /> FNB Pay2Cell
+                    <CreditCard className="w-4 h-4" /> Pay2Cell
                   </button>
                   <button
                     onClick={() => setPaymentMethod('ewallet')}
@@ -602,7 +622,6 @@ export default function HustleHub({
                   </div>
                 )}
 
-                {/* Optional inContact ID Input */}
                 <div className="flex flex-col gap-1.5">
                   <label className="block text-[10px] uppercase font-bold text-sage">
                     FNB inContact / SMS Confirmation ID (Optional)
@@ -616,14 +635,14 @@ export default function HustleHub({
                   />
                 </div>
 
-                {/* Action Buttons */}
-                <div className="pt-2 space-y-2">
+                <div className="pt-2 space-y-2 mt-auto">
                   <button
                     onClick={handlePublishGig}
                     disabled={posting}
-                    className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center"
+                    className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {posting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Publish Gig'}
+                    {posting ? <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} /> : <Tag className="w-5 h-5" strokeWidth={2} />}
+                    {posting ? 'Publishing...' : 'Publish Gig'}
                   </button>
                   <button
                     onClick={() => setStep(1)}
@@ -632,97 +651,197 @@ export default function HustleHub({
                     ← Back to Gig Details
                   </button>
                 </div>
-
-                <p className="text-[11px] text-center text-sage pt-1">
-                  Your listing is instantly live! Make sure to complete your payment to stay active.
-                </p>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Gig Detail Modal (Escrow UI) */}
+      {/* Gig Detail Modal (Centered Floating Window) */}
       {selectedGig && (
-        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedGig(null)} />
-          <div className="relative w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))]">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-surface rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+            
+            <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
               <span className="text-white font-black text-lg truncate max-w-[85%]">{selectedGig.title}</span>
-              <button onClick={() => setSelectedGig(null)} aria-label="Close">
-                <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
+              <button onClick={() => setSelectedGig(null)} aria-label="Close" className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors">
+                <X className="w-5 h-5" strokeWidth={1.5} />
               </button>
             </div>
 
-            {selectedGig.images.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                {selectedGig.images.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setLightboxImages(selectedGig.images)}
-                    className="w-24 h-24 rounded-lg overflow-hidden border border-gray-800 shrink-0"
-                  >
-                    <img src={img} alt={`gig-img-${i}`} className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5 no-scrollbar">
+              {selectedGig.images.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                  {selectedGig.images.map((img, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setLightboxImages(selectedGig.images)}
+                      className="w-24 h-24 rounded-lg overflow-hidden border border-gray-800 shrink-0"
+                    >
+                      <img src={img} alt={`gig-img-${i}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-ink border border-gray-800 flex items-center justify-center">
-                <Star className="w-5 h-5 text-pine" strokeWidth={1.5} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
+                  <Star className="w-5 h-5 text-pine" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <button
+                    onClick={() => setProfileUser(selectedGig.seller)}
+                    className="text-white text-sm font-bold hover:text-pine transition-colors text-left"
+                  >
+                    {selectedGig.seller}
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-col">
+
+              <div className="flex flex-col gap-2">
+                <span className="text-sage text-xs font-bold uppercase tracking-wider">Listing Details</span>
+                <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                  {selectedGig.description || 'No description provided.'}
+                </p>
+                <span className="text-pine text-2xl font-black mt-1">{selectedGig.price}</span>
+              </div>
+
+              {isAdmin && (
+                <div className="bg-ink rounded-xl border border-gray-800 p-4 flex flex-col gap-2">
+                  <span className="text-sage text-[10px] font-bold uppercase tracking-wider">Admin Audit</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white text-xs">Reference: <span className="text-pine font-bold">{selectedGig.referenceCode ?? 'N/A'}</span></span>
+                    <span className="text-white text-xs">Ref ID: <span className="text-sage">{selectedGig.paymentRefId ?? 'None'}</span></span>
+                  </div>
+                  {selectedGig.status === 'active' && (
+                    <button
+                      onClick={() => flagAsUnpaid(selectedGig)}
+                      className="w-full h-10 mt-2 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 text-xs font-bold active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" strokeWidth={2} /> Flag as Unpaid
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 mt-4">
                 <button
-                  onClick={() => setProfileUser(selectedGig.seller)}
-                  className="text-white text-sm font-bold hover:text-pine transition-colors text-left"
+                  onClick={() => requireVerified(() => {
+                    setEscrowGig(selectedGig);
+                    setSelectedGig(null);
+                  })}
+                  className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
                 >
-                  {selectedGig.seller}
+                  <ShieldCheck className="w-5 h-5" strokeWidth={2} />
+                  Start Secure Escrow Trade
+                </button>
+
+                <button
+                  onClick={() => onMessageSeller(selectedGig.sellerId, selectedGig.seller)}
+                  className="w-full h-12 rounded-lg bg-transparent border border-pine text-pine font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-5 h-5" strokeWidth={2} />
+                  Message Seller
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div className="flex flex-col gap-1 pb-6">
-              <span className="text-sage text-xs font-bold uppercase tracking-wider">Listing Details</span>
-              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
-                {selectedGig.description || 'No description provided.'}
-              </p>
-              <span className="text-pine text-lg font-black mt-2">{selectedGig.price}</span>
+      {/* NEW SECURE ESCROW CHECKOUT MODAL (Centered Floating Window) */}
+      {escrowGig && (
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-surface rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+            
+            <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-pine/5 shrink-0">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-pine" strokeWidth={2} />
+                <span className="text-pine font-black text-lg">Escrow Checkout</span>
+              </div>
+              <button onClick={() => setEscrowGig(null)} aria-label="Close" className="text-sage hover:text-white transition-colors">
+                <X className="w-6 h-6" strokeWidth={1.5} />
+              </button>
             </div>
 
-            {isAdmin && (
-              <div className="bg-ink rounded-xl border border-gray-800 p-4 flex flex-col gap-2">
-                <span className="text-sage text-[10px] font-bold uppercase tracking-wider">Admin Audit</span>
-                <div className="flex items-center justify-between">
-                  <span className="text-white text-xs">Reference: <span className="text-pine font-bold">{selectedGig.referenceCode ?? 'N/A'}</span></span>
-                  <span className="text-white text-xs">Ref ID: <span className="text-sage">{selectedGig.paymentRefId ?? 'None'}</span></span>
-                </div>
-                {selectedGig.status === 'active' && (
-                  <button
-                    onClick={() => flagAsUnpaid(selectedGig)}
-                    className="w-full h-10 mt-2 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 text-xs font-bold active:scale-95 transition-transform flex items-center justify-center gap-1.5"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" strokeWidth={2} /> Flag as Unpaid
-                  </button>
-                )}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 no-scrollbar">
+              <div className="flex flex-col gap-1 text-center">
+                <span className="text-sage text-xs uppercase font-bold tracking-wider">Total Escrow Amount</span>
+                <span className="text-white font-black text-4xl">{escrowGig.price}</span>
+                <span className="text-gray-400 text-sm mt-1">For: <strong className="text-white">{escrowGig.title}</strong></span>
               </div>
-            )}
 
-            <button
-              onClick={() => requireVerified(() => toast({ title: 'Secure Escrow', description: 'Initializing secure Escrow...' }))}
-              className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2 mt-2"
-            >
-              <ShieldCheck className="w-5 h-5" strokeWidth={2} />
-              Start Escrow Trade
-            </button>
+              {/* Payment Method Selector */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setEscrowPaymentMethod('pay2cell')}
+                  className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
+                    escrowPaymentMethod === 'pay2cell'
+                      ? 'bg-pine text-black border-pine'
+                      : 'bg-ink text-sage border-gray-800'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" /> Pay2Cell
+                </button>
+                <button
+                  onClick={() => setEscrowPaymentMethod('ewallet')}
+                  className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
+                    escrowPaymentMethod === 'ewallet'
+                      ? 'bg-pine text-black border-pine'
+                      : 'bg-ink text-sage border-gray-800'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" /> eWallet
+                </button>
+              </div>
 
-            <button
-              onClick={() => onMessageSeller(selectedGig.sellerId, selectedGig.seller)}
-              className="w-full h-12 rounded-lg bg-transparent border border-pine text-pine font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="w-5 h-5" strokeWidth={2} />
-              Message Seller
-            </button>
+              {escrowPaymentMethod === 'pay2cell' ? (
+                <div className="bg-orange-950/20 border border-orange-900/30 rounded-xl p-4 flex flex-col gap-3">
+                  <span className="text-orange-400 font-bold text-xs uppercase tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4" /> Admin Instructions
+                  </span>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    Send exactly <strong className="text-white">{escrowGig.price}</strong> via FNB Pay2Cell to the Kampus Admin number below. We hold it until you get your item!
+                  </p>
+                  <div className="bg-black/50 rounded-lg py-3 flex flex-col items-center justify-center border border-gray-800 mt-1 gap-1">
+                    <span className="text-sage text-[10px] uppercase font-bold tracking-wider">FNB Pay2Cell</span>
+                    <span className="text-pine font-black text-xl tracking-widest">77037168</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-orange-950/20 border border-orange-900/30 rounded-xl p-4 flex flex-col gap-3">
+                  <span className="text-orange-400 font-bold text-xs uppercase tracking-wider flex items-center gap-1">
+                    <ShieldCheck className="w-4 h-4" /> Admin Instructions
+                  </span>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    Send an eWallet for exactly <strong className="text-white">{escrowGig.price}</strong> to the Kampus Admin number below. We hold the cash until you're happy!
+                  </p>
+                  <div className="bg-black/50 rounded-lg py-3 flex flex-col items-center justify-center border border-gray-800 mt-1 gap-1">
+                    <span className="text-sage text-[10px] uppercase font-bold tracking-wider">eWallet Number</span>
+                    <span className="text-pine font-black text-xl tracking-widest">71321163</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sage text-xs font-bold uppercase tracking-wider">Your Payment Reference</label>
+                <input
+                  value={escrowRef}
+                  onChange={(e) => setEscrowRef(e.target.value)}
+                  placeholder="e.g. Phone number used or Tx ID"
+                  className="bg-ink rounded-xl w-full h-12 px-4 border border-gray-800 text-white placeholder:text-gray-600 text-sm outline-none focus:border-pine transition-colors text-center font-medium"
+                />
+              </div>
+
+              <button
+                onClick={submitEscrowCheckout}
+                disabled={!escrowRef.trim() || processingEscrow}
+                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg mt-auto"
+              >
+                {processingEscrow ? <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} /> : <Send className="w-4 h-4" strokeWidth={2} />}
+                {processingEscrow ? 'Verifying...' : 'Confirm Payment Sent'}
+              </button>
+            </div>
           </div>
         </div>
       )}
