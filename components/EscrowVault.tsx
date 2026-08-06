@@ -107,6 +107,7 @@ export default function EscrowVault({
         item_name: itemName.trim(),
         amount: Number(amount),
         payment_ref_id: txRef.trim(),
+        escrow_ref_code: referenceCode, // Added the generated ESC-XXXX code here
         status: 'pending',
       });
 
