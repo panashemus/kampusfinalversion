@@ -297,9 +297,15 @@ export default function AdminDashboard({
                           </span>
                         </div>
                         
-                        <div className="bg-ink rounded p-2 text-xs flex justify-between items-center border border-gray-800">
-                          <span className="text-sage">Amount: <strong className="text-white">P {trade.amount}</strong></span>
-                          <span className="text-sage">Ref: <strong className="text-white">{trade.payment_ref_id || 'N/A'}</strong></span>
+                        <div className="bg-ink rounded p-2 text-xs flex flex-col gap-1 border border-gray-800">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sage">Amount: <strong className="text-white">P {trade.amount}</strong></span>
+                            <span className="text-sage">SMS ID: <strong className="text-white">{trade.payment_ref_id || 'N/A'}</strong></span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-gray-800/50">
+                            <span className="text-sage">Escrow Code:</span>
+                            <strong className="text-pine font-mono tracking-wider">{trade.escrow_ref_code || 'N/A'}</strong>
+                          </div>
                         </div>
 
                         {trade.status === 'pending' && (
