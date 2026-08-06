@@ -118,6 +118,40 @@ export default function EscrowVault({
         return;
       }
 
+      // --- NEW NOTIFICATION LOGIC ---
+      
+      // 1. IN-APP NOTIFICATION: Look up the seller's user ID
+      const { data: sellerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', sellerEmail.trim().toLowerCase())
+        .single();
+
+      if (sellerProfile) {
+        // Send to their Kampus Notification Feed
+        await supabase.from('notifications').insert({
+          user_id: sellerProfile.id,
+          title: 'Escrow Funds Locked 🔒',
+          message: `Buyer (${userEmail}) deposited P ${amount} into the Vault for '${itemName}'. Awaiting Admin verification!`,
+          type: 'escrow',
+          is_read: false
+        });
+      }
+
+      // 2. EMAIL NOTIFICATION: Hit our new API route
+      fetch('/api/notify-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sellerEmail: sellerEmail.trim().toLowerCase(),
+          buyerEmail: userEmail,
+          itemName: itemName.trim(),
+          amount: amount,
+        })
+      }).catch(err => console.error("Failed to send email trigger", err));
+
+      // ------------------------------
+
       toast({
         title: 'Escrow Deposit Pending',
         description: `Admin will verify Ref ${txRef}. The seller will be notified once funds are secured!`,
