@@ -23,6 +23,7 @@ export default function AdminDashboard({
   // Data States
   const [premiumUsers, setPremiumUsers] = useState<any[]>([]);
   const [gigs, setGigs] = useState<any[]>([]);
+  const [escrowTrades, setEscrowTrades] = useState<any[]>([]); // New Escrow State
 
   // Security Check: Only musungwa60@gmail.com or marked admins can view this
   const isAdmin = adminProfile?.is_admin || adminProfile?.email === 'musungwa60@gmail.com';
@@ -47,6 +48,14 @@ export default function AdminDashboard({
 
     if (hustlesData) setGigs(hustlesData);
 
+    // 3. Fetch all Escrow Trades for the Vault
+    const { data: vaultData } = await supabase
+      .from('escrow_transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (vaultData) setEscrowTrades(vaultData);
+
     setLoading(false);
   }, []);
 
@@ -64,6 +73,7 @@ export default function AdminDashboard({
         is_premium: false,
         tier: 'free',
         payment_ref_code: null,
+        payment_ref_id: null,
         subscribed_until: null,
       })
       .eq('id', userId);
@@ -107,6 +117,19 @@ export default function AdminDashboard({
     if (!error) {
       setGigs((prev) => prev.filter((g) => g.id !== gigId));
       toast({ title: 'Gig Deleted 🗑️', description: 'Listing permanently removed.' });
+    }
+  };
+
+  // --- ACTIONS FOR ESCROW ---
+  const verifyEscrow = async (tradeId: string) => {
+    const { error } = await supabase
+      .from('escrow_transactions')
+      .update({ status: 'verified' })
+      .eq('id', tradeId);
+
+    if (!error) {
+      setEscrowTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: 'verified' } : t)));
+      toast({ title: 'Escrow Verified! 💰', description: 'Funds secured. Users notified.' });
     }
   };
 
@@ -254,14 +277,39 @@ export default function AdminDashboard({
 
               {/* TAB 3: THE VAULT (ESCROW) */}
               {activeTab === 'escrow' && (
-                <div className="flex flex-col items-center justify-center h-full gap-3 pt-10 text-center">
-                  <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
-                    <Lock className="w-7 h-7 text-orange-500" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="text-white font-black text-lg">The Vault</h3>
-                  <p className="text-sage text-xs max-w-[250px] leading-relaxed">
-                    Escrow trades currently process directly to your phone via FNB/eWallet. To track pending trades here, we will need to create an <strong>escrow_transactions</strong> table in Supabase.
-                  </p>
+                <div className="flex flex-col gap-3">
+                  {escrowTrades.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 gap-2">
+                      <Lock className="w-10 h-10 text-orange-500/50" />
+                      <p className="text-sage text-center text-sm">No pending escrow trades.</p>
+                    </div>
+                  ) : (
+                    escrowTrades.map((trade) => (
+                      <div key={trade.id} className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="text-white font-bold">{trade.item_name}</div>
+                            <div className="text-sage text-[10px] mt-0.5">Buyer: {trade.buyer_email}</div>
+                            <div className="text-sage text-[10px]">Seller: {trade.seller_email}</div>
+                          </div>
+                          <span className={`text-[10px] font-black px-2 py-1 rounded ${trade.status === 'verified' ? 'bg-pine/20 text-pine' : 'bg-orange-500/20 text-orange-400 animate-pulse'}`}>
+                            {trade.status.toUpperCase()}
+                          </span>
+                        </div>
+                        
+                        <div className="bg-ink rounded p-2 text-xs flex justify-between items-center border border-gray-800">
+                          <span className="text-sage">Amount: <strong className="text-white">P {trade.amount}</strong></span>
+                          <span className="text-sage">Ref: <strong className="text-white">{trade.payment_ref_id || 'N/A'}</strong></span>
+                        </div>
+
+                        {trade.status === 'pending' && (
+                          <button onClick={() => verifyEscrow(trade.id)} className="w-full bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform mt-1">
+                            <CheckCircle className="w-3.5 h-3.5" /> Confirm Funds Received
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </>
