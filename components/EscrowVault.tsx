@@ -107,7 +107,7 @@ export default function EscrowVault({
         item_name: itemName.trim(),
         amount: Number(amount),
         payment_ref_id: txRef.trim(),
-        escrow_ref_code: referenceCode, // Added the generated ESC-XXXX code here
+        escrow_ref_code: referenceCode,
         status: 'pending',
       });
 
@@ -118,38 +118,59 @@ export default function EscrowVault({
         return;
       }
 
-      // --- NEW NOTIFICATION LOGIC ---
+      // --- DEBUGGING NOTIFICATION LOGIC ---
+      console.log("🚀 [DEBUG] 1. Starting notification process for:", sellerEmail);
       
-      // 1. IN-APP NOTIFICATION: Look up the seller's user ID
-      const { data: sellerProfile } = await supabase
+      // 1. IN-APP NOTIFICATION
+      const { data: sellerProfile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', sellerEmail.trim().toLowerCase())
         .single();
 
+      if (profileError) {
+        console.error("❌ [DEBUG] Profile lookup error (Check RLS on 'profiles'):", profileError);
+      }
+
       if (sellerProfile) {
-        // Send to their Kampus Notification Feed
-        await supabase.from('notifications').insert({
+        console.log("✅ [DEBUG] 2. Found seller profile ID:", sellerProfile.id);
+        const { error: notifError } = await supabase.from('notifications').insert({
           user_id: sellerProfile.id,
           title: 'Escrow Funds Locked 🔒',
           message: `Buyer (${userEmail}) deposited P ${amount} into the Vault for '${itemName}'. Awaiting Admin verification!`,
           type: 'escrow',
           is_read: false
         });
+        
+        if (notifError) {
+          console.error("❌ [DEBUG] Notification Insert Error (Check RLS on 'notifications'):", notifError);
+        } else {
+          console.log("✅ [DEBUG] 3. In-app notification successfully inserted!");
+        }
+      } else {
+        console.log("⚠️ [DEBUG] 2. No seller profile found. Did you type an email that hasn't signed up yet?");
       }
 
-      // 2. EMAIL NOTIFICATION: Hit our new API route
-      fetch('/api/notify-seller', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sellerEmail: sellerEmail.trim().toLowerCase(),
-          buyerEmail: userEmail,
-          itemName: itemName.trim(),
-          amount: amount,
-        })
-      }).catch(err => console.error("Failed to send email trigger", err));
-
+      // 2. EMAIL NOTIFICATION
+      console.log("🚀 [DEBUG] 4. Firing email API request...");
+      try {
+        const emailRes = await fetch('/api/notify-seller', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sellerEmail: sellerEmail.trim().toLowerCase(),
+            buyerEmail: userEmail,
+            itemName: itemName.trim(),
+            amount: amount,
+          })
+        });
+        
+        const emailData = await emailRes.json();
+        console.log(`📡 [DEBUG] 5. API Response Status: ${emailRes.status}`);
+        console.log("📡 [DEBUG] 6. API Response Data:", emailData);
+      } catch (err) {
+        console.error("❌ [DEBUG] Fetch failed entirely:", err);
+      }
       // ------------------------------
 
       toast({
