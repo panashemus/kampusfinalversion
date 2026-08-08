@@ -194,8 +194,10 @@ export default function ChatRoom({
 
       </div>
 
+      {/* FIXED: Added userId prop to PublicProfileModal */}
       {showProfileModal && (
         <PublicProfileModal
+          userId={peerId}
           username={peerUsername}
           onClose={() => setShowProfileModal(false)}
         />
