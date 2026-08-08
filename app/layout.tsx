@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
+import GlobalNotificationListener from '@/components/GlobalNotificationListener';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -45,6 +46,7 @@ export default function RootLayout({
       <body className={`${inter.className} h-[100dvh] w-full overflow-hidden bg-black text-white antialiased flex flex-col`}>
         {children}
         <Toaster />
+        <GlobalNotificationListener />
       </body>
     </html>
   );
