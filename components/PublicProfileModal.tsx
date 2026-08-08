@@ -4,12 +4,12 @@ import { X, ShieldCheck, User as UserIcon, MessageSquarePlus } from 'lucide-reac
 import ProfileReviews from './ProfileReviews';
 
 export default function PublicProfileModal({
-  userId, // <-- Added this so the database knows who is being reviewed!
+  userId,
   username,
   onClose,
   onMessageUser,
 }: {
-  userId: string; // <-- Required prop for the reviews
+  userId: string;
   username: string;
   onClose: () => void;
   onMessageUser?: (peerId: string, peerUsername: string) => void;
@@ -17,9 +17,9 @@ export default function PublicProfileModal({
   const displayName = username.startsWith('@') ? username.slice(1).replace(/_/g, ' ') : username;
 
   return (
-    <div className="absolute inset-0 z-[2000] flex items-end">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up max-h-[85%] overflow-y-auto no-scrollbar">
+    <div className="absolute inset-0 z-[2000] flex items-end bg-black/60 backdrop-blur-md">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up max-h-[85%] overflow-y-auto no-scrollbar z-10">
         <div className="flex items-center justify-between">
           <span className="text-white font-black text-lg">Student Profile</span>
           <button onClick={onClose} aria-label="Close">
