@@ -72,7 +72,10 @@ export default function HustleHub({
   const [gigs, setGigs] = useState<Gig[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
-  const [profileUser, setProfileUser] = useState<string | null>(null);
+  
+  // FIX: Upgraded profileUser to hold both ID and Username
+  const [profileUser, setProfileUser] = useState<{ id: string; username: string } | null>(null);
+  
   const [reportGig, setReportGig] = useState<Gig | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -160,7 +163,6 @@ export default function HustleHub({
     Number(newPrice) > 0 &&
     newDescription.trim().length >= 10;
 
-  // Handles generating the KMP-XXXX code and moving to payment UI
   const handleProceedToPayment = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!canPostGig) return;
@@ -236,7 +238,6 @@ export default function HustleHub({
     if (!escrowRef.trim() || !escrowGig || !profile) return;
     setProcessingEscrow(true);
     
-    // Simulate payment submission to Kampus Admin
     setTimeout(() => {
       setProcessingEscrow(false);
       setEscrowGig(null);
@@ -399,7 +400,7 @@ export default function HustleHub({
                   </button>
                   <div className="px-3 pb-3">
                     <button
-                      onClick={() => setProfileUser(gig.seller)}
+                      onClick={() => setProfileUser({ id: gig.sellerId, username: gig.seller })}
                       className="text-sage text-[10px] font-bold hover:text-pine transition-colors truncate w-full text-left"
                     >
                       {gig.seller}
@@ -690,7 +691,7 @@ export default function HustleHub({
                 </div>
                 <div className="flex flex-col">
                   <button
-                    onClick={() => setProfileUser(selectedGig.seller)}
+                    onClick={() => setProfileUser({ id: selectedGig.sellerId, username: selectedGig.seller })}
                     className="text-white text-sm font-bold hover:text-pine transition-colors text-left"
                   >
                     {selectedGig.seller}
@@ -860,11 +861,16 @@ export default function HustleHub({
         <Lightbox images={lightboxImages} onClose={() => setLightboxImages(null)} />
       )}
 
+      {/* FIXED: PUBLIC PROFILE MODAL WITH USER ID */}
       {profileUser && (
         <PublicProfileModal
-          username={profileUser}
+          userId={profileUser.id}
+          username={profileUser.username}
           onClose={() => setProfileUser(null)}
-          onMessageUser={onMessageSeller}
+          onMessageUser={() => {
+            onMessageSeller(profileUser.id, profileUser.username);
+            setProfileUser(null);
+          }}
         />
       )}
     </div>
