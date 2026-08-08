@@ -1,18 +1,19 @@
 'use client';
 
-import { useState } from 'react';
 import { X, ShieldCheck, User as UserIcon, MessageSquarePlus } from 'lucide-react';
+import ProfileReviews from './ProfileReviews';
 
 export default function PublicProfileModal({
+  userId, // <-- Added this so the database knows who is being reviewed!
   username,
   onClose,
   onMessageUser,
 }: {
+  userId: string; // <-- Required prop for the reviews
   username: string;
   onClose: () => void;
   onMessageUser?: (peerId: string, peerUsername: string) => void;
 }) {
-  const [showReviewForm] = useState(false);
   const displayName = username.startsWith('@') ? username.slice(1).replace(/_/g, ' ') : username;
 
   return (
@@ -56,15 +57,14 @@ export default function PublicProfileModal({
           <span className="text-sage text-xs font-bold uppercase tracking-wider">About</span>
           <p className="text-sage text-sm leading-relaxed">
             This student is part of the Kampus verified network at UB or BAC.
-            Reviews and ratings will appear here once trades are completed.
           </p>
         </div>
 
-        {!showReviewForm && (
-          <span className="text-sage text-[10px] text-center italic">
-            You can leave a review after completing a trade with this student.
-          </span>
-        )}
+        {/* --- LIVE ANONYMOUS REVIEWS COMPONENT --- */}
+        <div className="border-t border-gray-800 pt-6 mt-2">
+          <ProfileReviews targetUserId={userId} />
+        </div>
+
       </div>
     </div>
   );
