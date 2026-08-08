@@ -22,7 +22,7 @@ import ChatRoom from '@/components/ChatRoom';
 import ChatInbox from '@/components/ChatInbox';
 import AdminQueue from '@/components/AdminQueue';
 import LegalModal from '@/components/LegalModal';
-import AdminDashboard from '@/components/AdminDashboard'; // <-- Added AdminDashboard Import
+import AdminDashboard from '@/components/AdminDashboard';
 
 const RadarMap = dynamic(() => import('@/components/RadarMap'), {
   ssr: false,
@@ -61,14 +61,11 @@ function hasPremiumAccess(p: Profile | null): boolean {
 }
 
 // --- SYSTEM NOTIFICATION HELPER ---
-// Bypasses iOS/Android PWA restrictions by routing through the Service Worker
 const fireSystemNotification = (title: string, body: string) => {
   if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
     try {
-      // Try standard web notification first (Desktop)
       new Notification(title, { body, icon: '/images/ClipSnap_20260723201232.png' });
     } catch (e) {
-      // Fallback for Mobile PWAs which strictly require ServiceWorkerRegistration
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then((registration) => {
           registration.showNotification(title, { body, icon: '/images/ClipSnap_20260723201232.png' });
@@ -89,35 +86,30 @@ export default function Home() {
   const [pendingHazard, setPendingHazard] = useState<Hazard | null>(null);
   const [openHazard, setOpenHazard] = useState<Hazard | null>(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  
+  // FIX: Added the missing profileUserId state
   const [profileUser, setProfileUser] = useState<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string>('');
+  
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatInboxOpen, setChatInboxOpen] = useState(false);
   const [adminQueueOpen, setAdminQueueOpen] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false); // <-- Added state to open Admin Dashboard
+  const [showAdmin, setShowAdmin] = useState(false);
   const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
   const [activeChat, setActiveChat] = useState<{ peerId: string; peerUsername: string } | null>(null);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
   
-  // Notification States
   const [sosNotifications, setSosNotifications] = useState<{ id: string; text: string; time: string }[]>([]);
   const [dbNotifications, setDbNotifications] = useState<AppNotification[]>([]);
 
-  // SOS state
-  const [sosGeoStatus, setSosGeoStatus] = useState<'idle' | 'locating' | 'broadcasting' | 'done' | 'denied'>('idle');
-  const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([]);
-  const [activeHelpCard, setActiveHelpCard] = useState<SosAlert | null>(null);
-
-  // Security Check for Admin
   const isAdminUser = profile?.is_admin || profile?.email === 'musungwa60@gmail.com';
 
-  // Load Database Notifications & Listen for Live Updates
   useEffect(() => {
     if (!profile?.id) return;
 
-    // Fetch existing notifications
     const fetchNotifs = async () => {
       const { data } = await supabase
         .from('notifications')
@@ -129,7 +121,6 @@ export default function Home() {
     };
     fetchNotifs();
 
-    // Subscribe to new notifications (Client-side filtered to guarantee delivery)
     const channel = supabase
       .channel(`user-notifs-${profile.id}`)
       .on(
@@ -143,13 +134,11 @@ export default function Home() {
             
             const title = notif.type === 'message' ? '💬 New Message' : '🔔 New Reply';
             
-            // Pop the in-app UI toast
             toast({
               title,
               description: notif.body,
             });
 
-            // Command the phone OS to buzz/show banner
             fireSystemNotification(title, notif.body);
           }
         }
@@ -168,7 +157,6 @@ export default function Home() {
     await supabase.from('notifications').update({ read: true }).in('id', unreadIds);
   };
 
-  // Load SOS alerts created in the last 24 hours
   useEffect(() => {
     if (activeView !== 'radar') return;
     const fetchAlerts = async () => {
@@ -192,7 +180,6 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [activeView]);
 
-  // Real-time SOS alert push listener for proximity warning
   useEffect(() => {
     const channel = supabase
       .channel('sos_alerts_push')
@@ -215,7 +202,6 @@ export default function Home() {
               
               toast({ title: '🚨 EMERGENCY ALERT', description: text, variant: 'destructive' });
               
-              // Command the phone OS to buzz/show banner for SOS
               fireSystemNotification('🚨 EMERGENCY ALERT', text);
 
               setSosNotifications((prev) => [
@@ -230,7 +216,6 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [userCoords, toast]);
 
-  // Real-time hazards subscription
   useEffect(() => {
     if (activeView !== 'radar') return;
     const channel = supabase
@@ -311,7 +296,6 @@ export default function Home() {
           createHazard(coords);
         },
         () => {
-          // Absolute Francistown Fallback
           const fallbackLat = userCoords ? userCoords[0] : -21.1700;
           const fallbackLng = userCoords ? userCoords[1] : 27.5000;
           const coords: [number, number] = [fallbackLat, fallbackLng];
@@ -359,7 +343,6 @@ export default function Home() {
       setIsSosModalOpen(false);
     };
 
-    // Absolute Francistown Fallback
     const fallbackLat = userCoords ? userCoords[0] : -21.1700;
     const fallbackLng = userCoords ? userCoords[1] : 27.5000;
 
@@ -446,7 +429,6 @@ export default function Home() {
     setActiveView('auth');
   }, []);
 
-  // Restore session on mount.
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -487,7 +469,6 @@ export default function Home() {
     if (data) setProfile(data as Profile);
   }, [profile]);
 
-  // URL sync & back button listener
   useEffect(() => {
     if (activeView !== 'auth') {
       const currentHash = window.location.hash.replace('#', '');
@@ -521,24 +502,20 @@ export default function Home() {
 
   const showSearch = activeView === 'hustle' || activeView === 'community';
   
-  // Calculate unread badge count
   const unreadCount = dbNotifications.filter(n => !n.read).length + sosNotifications.length;
 
   return (
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#0B1611] items-center">
       <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-midnight">
         
-        {/* WELCOME MODAL */}
         <WelcomeModal />
 
-        {/* Global Top Header */}
         <header className="sticky top-0 z-[1000] bg-midnight p-4 flex items-center justify-between">
           <span className="text-white font-black text-xl tracking-tight">
             {HEADER_TITLES[activeView]}
           </span>
           <div className="flex items-center gap-3">
             
-            {/* <-- NEW ADMIN DASHBOARD BUTTON IN HEADER --> */}
             {isAdminUser && (
               <button
                 onClick={() => setShowAdmin(true)}
@@ -584,7 +561,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Search bar */}
         {showSearch && searchOpen && (
           <div className="px-4 pb-3 bg-midnight">
             <input
@@ -598,7 +574,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Notifications Panel */}
         {isNotifOpen && (
           <div className="absolute top-16 left-0 right-0 z-[1500] px-4">
             <div className="bg-surface rounded-2xl border border-gray-800 shadow-xl flex flex-col gap-3 p-4 animate-slide-down">
@@ -616,7 +591,6 @@ export default function Home() {
                   <span className="text-sage text-xs">No new notifications.</span>
                 ) : (
                   <>
-                    {/* Render SOS Proximity Alerts */}
                     {sosNotifications.map((n) => (
                       <div key={n.id} className="flex items-start gap-3 p-2 bg-red-900/10 rounded-lg border border-red-900/20">
                         <div className="w-9 h-9 rounded-full bg-red-900/30 border border-red-700/50 flex items-center justify-center shrink-0">
@@ -631,7 +605,6 @@ export default function Home() {
                       </div>
                     ))}
 
-                    {/* Render Database Feed/Message Alerts */}
                     {dbNotifications.map((n) => (
                       <div 
                         key={n.id} 
@@ -668,7 +641,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Main Content View */}
         <main className="flex-1 relative overflow-y-auto overscroll-y-contain pb-32">
           {activeView === 'radar' && (
             <div className="absolute inset-0">
@@ -695,7 +667,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Floating Action Buttons */}
               <div className="absolute bottom-28 right-4 z-[1001] flex flex-col items-center gap-3">
                 <button
                   onClick={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
@@ -713,7 +684,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Active User SOS Status Card */}
               {activeHelpCard && (
                 <div className="absolute bottom-48 left-4 right-4 z-[1001]">
                   <div className="bg-red-950/90 border border-red-600/60 rounded-2xl p-4 backdrop-blur-sm shadow-xl flex flex-col gap-3 animate-slide-up">
@@ -794,7 +764,6 @@ export default function Home() {
           )}
         </main>
 
-        {/* Hazard Report Modal */}
         {isReportModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -877,7 +846,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* SOS Broadcast Modal */}
         {isSosModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -959,7 +927,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Hazard Detail Modal */}
         {openHazard && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
@@ -1000,7 +967,10 @@ export default function Home() {
                 <CommentThread
                   comments={openHazard.comments}
                   onAdd={addHazardComment}
-                  onAuthorClick={setProfileUser}
+                  onAuthorClick={(username, id) => {
+                    setProfileUser(username);
+                    setProfileUserId(id || ''); 
+                  }}
                   placeholder="e.g. Security arrived at 21:15"
                 />
               </div>
@@ -1008,15 +978,19 @@ export default function Home() {
           </div>
         )}
 
+        {/* FIX: Included the required userId prop for PublicProfileModal */}
         {profileUser && openHazard && (
           <PublicProfileModal
+            userId={profileUserId || ''}
             username={profileUser}
-            onClose={() => setProfileUser(null)}
+            onClose={() => {
+              setProfileUser(null);
+              setProfileUserId('');
+            }}
             onMessageUser={openChat}
           />
         )}
 
-        {/* Legal Footer */}
         <footer className="absolute bottom-[max(72px,calc(72px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-midnight/90 backdrop-blur-md border-t border-gray-900 px-4 py-2.5 flex items-center justify-center gap-4">
           <button
             onClick={() => setLegalModal('terms')}
@@ -1033,7 +1007,6 @@ export default function Home() {
           </button>
         </footer>
 
-        {/* Global Bottom Nav */}
         <BottomNav active={activeView} onChange={setActiveView} />
 
         <SubscriptionModal
@@ -1077,7 +1050,6 @@ export default function Home() {
           />
         )}
 
-        {/* <-- NEW ADMIN DASHBOARD MODAL --> */}
         {showAdmin && (
           <AdminDashboard 
             onClose={() => setShowAdmin(false)} 
