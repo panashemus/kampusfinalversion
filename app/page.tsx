@@ -89,7 +89,11 @@ export default function Home() {
   const [pendingHazard, setPendingHazard] = useState<Hazard | null>(null);
   const [openHazard, setOpenHazard] = useState<Hazard | null>(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  
+  // FIXED: ADDED PROFILE USER ID STATE
   const [profileUser, setProfileUser] = useState<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string>('');
+  
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1000,7 +1004,10 @@ export default function Home() {
                 <CommentThread
                   comments={openHazard.comments}
                   onAdd={addHazardComment}
-                  onAuthorClick={setProfileUser}
+                  onAuthorClick={(username, id) => {
+                    setProfileUser(username);
+                    setProfileUserId(id || ''); 
+                  }}
                   placeholder="e.g. Security arrived at 21:15"
                 />
               </div>
@@ -1008,10 +1015,15 @@ export default function Home() {
           </div>
         )}
 
+        {/* FIXED: PUBLIC PROFILE MODAL WITH USER ID */}
         {profileUser && openHazard && (
           <PublicProfileModal
+            userId={profileUserId}
             username={profileUser}
-            onClose={() => setProfileUser(null)}
+            onClose={() => {
+              setProfileUser(null);
+              setProfileUserId('');
+            }}
             onMessageUser={openChat}
           />
         )}
