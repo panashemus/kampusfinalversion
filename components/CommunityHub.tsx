@@ -421,8 +421,10 @@ export default function CommunityHub({
         <Lightbox images={lightboxImages} onClose={() => setLightboxImages(null)} />
       )}
 
+      {/* FIXED: Added userId prop to PublicProfileModal */}
       {profileUser && (
         <PublicProfileModal
+          userId={profileUser.id}
           username={profileUser.username}
           onClose={() => setProfileUser(null)}
           onMessageUser={() => {
