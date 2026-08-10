@@ -18,29 +18,41 @@ export default function PublicProfileModal({
 }) {
   const displayName = username.startsWith('@') ? username.slice(1).replace(/_/g, ' ') : username;
   
-  // State for the Sentinel Point System
   const [impactScore, setImpactScore] = useState(0);
   const [loadingStats, setLoadingStats] = useState(true);
 
-  // Fetch their contributions to automatically calculate their tier
+  // Calculate their TOTAL Campus Impact (Posts + Hustles + Hazards + Upvotes Received)
   useEffect(() => {
     async function fetchImpact() {
       if (!userId) return;
 
-      // Count their community feed posts
-      const { count: postsCount } = await supabase
+      // 1. Fetch community feed posts AND their upvotes
+      const { data: posts } = await supabase
         .from('feed_posts')
-        .select('*', { count: 'exact', head: true })
+        .select('upvotes')
         .eq('user_id', userId);
+      
+      const postsCount = posts?.length || 0;
+      const postUpvotes = posts?.reduce((sum, p) => sum + (p.upvotes || 0), 0) || 0;
 
-      // Count their hustle listings
+      // 2. Count their hustle listings
       const { count: hustlesCount } = await supabase
         .from('hustles')
         .select('*', { count: 'exact', head: true })
         .eq('seller_id', userId);
 
-      // Total their contributions
-      const total = (postsCount || 0) + (hustlesCount || 0);
+      // 3. Fetch their hazard pins AND the upvotes they've received
+      const { data: hazards } = await supabase
+        .from('hazards')
+        .select('upvotes')
+        .eq('user_id', userId);
+
+      const hazardsCount = hazards?.length || 0;
+      const hazardUpvotes = hazards?.reduce((sum, h) => sum + (h.upvotes || 0), 0) || 0;
+
+      // Master Calculation
+      const total = postsCount + postUpvotes + (hustlesCount || 0) + hazardsCount + hazardUpvotes;
+      
       setImpactScore(total);
       setLoadingStats(false);
     }
@@ -48,7 +60,6 @@ export default function PublicProfileModal({
     fetchImpact();
   }, [userId]);
 
-  // Dynamically assign their rank and styling based on their score
   let tierName = 'Campus Rookie';
   let TierIcon = Activity;
   let tierColor = 'text-sage';
