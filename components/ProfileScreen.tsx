@@ -45,6 +45,8 @@ export default function ProfileScreen({
   const { toast } = useToast();
   const [signingOut, setSigningOut] = useState(false);
   const [ewallet, setEwallet] = useState(profile?.ewallet_number ?? '');
+  const [isSavingEwallet, setIsSavingEwallet] = useState(false);
+  
   const [activeListings, setActiveListings] = useState(0);
   const [safetyAlerts, setSafetyAlerts] = useState(0);
   const [suspendedGigs, setSuspendedGigs] = useState<Array<{ id: string; title: string; reference_code: string | null; payment_ref_id: string | null }>>([]);
@@ -80,7 +82,6 @@ export default function ProfileScreen({
     (!!profile?.subscribed_until &&
       new Date(profile.subscribed_until) > new Date());
 
-  // REMOVED Sentinel Points to keep the UI clean and simple
   const stats = [
     { label: 'Active Listings', value: String(activeListings) },
     { label: 'Safety Alerts', value: String(safetyAlerts) },
@@ -128,6 +129,32 @@ export default function ProfileScreen({
         variant: 'destructive',
       });
       setSigningOut(false);
+    }
+  };
+
+  const handleSaveEwallet = async () => {
+    if (!profile || !ewallet.trim()) return;
+    
+    setIsSavingEwallet(true);
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ewallet_number: ewallet.trim() })
+      .eq('id', profile.id);
+      
+    setIsSavingEwallet(false);
+
+    if (error) {
+      toast({
+        title: 'Error Saving',
+        description: 'Could not update your eWallet number. Try again.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'eWallet Saved',
+        description: 'Your payout number has been securely updated.',
+      });
     }
   };
 
@@ -199,6 +226,7 @@ export default function ProfileScreen({
           Flagged Content Queue
         </button>
       )}
+      
       {/* Avatar */}
       <div className="w-28 h-28 rounded-full bg-surface border-2 border-pine/60 p-1">
         <div className="w-full h-full rounded-full bg-surface border border-pine/40 flex items-center justify-center">
@@ -247,7 +275,7 @@ export default function ProfileScreen({
         )}
       </div>
 
-      {/* Stats grid - CHANGED to grid-cols-2 for perfect centering */}
+      {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3 w-full mt-6">
         {stats.map((stat) => (
           <div
@@ -336,16 +364,12 @@ export default function ProfileScreen({
             Stored securely. Used only for sending your Escrow payouts.
           </p>
           <button
-            onClick={() => {
-              if (!ewallet.trim()) return;
-              toast({
-                title: 'eWallet Saved',
-                description: 'eWallet number securely saved.',
-              });
-            }}
-            className="self-end rounded-lg bg-pine text-black text-xs font-bold px-4 h-9 active:scale-95 transition-transform"
+            onClick={handleSaveEwallet}
+            disabled={isSavingEwallet || !ewallet.trim()}
+            className="self-end flex items-center justify-center gap-2 rounded-lg bg-pine text-black text-xs font-bold px-4 h-9 active:scale-95 transition-transform disabled:opacity-70 disabled:active:scale-100"
           >
-            Save Number
+            {isSavingEwallet && <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.5} />}
+            {isSavingEwallet ? 'Saving...' : 'Save Number'}
           </button>
         </div>
       </div>
