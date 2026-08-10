@@ -278,10 +278,35 @@ export default function Home() {
     []
   );
 
+  // FIXED: Broadcast hazard directly to Supabase table
   const createHazard = useCallback(
-    (coords: [number, number]) => {
+    async (coords: [number, number]) => {
+      setIsReportModalOpen(false);
+      setGeoStatus('idle');
+      setLiveCoords(null);
+
+      const { data, error } = await supabase
+        .from('hazards')
+        .insert({
+          lat: coords[0],
+          lng: coords[1],
+          title: `${hazardCategory} pin`,
+          type: hazardCategory,
+        })
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        toast({ 
+          title: 'Connection Error', 
+          description: 'Failed to broadcast hazard to the campus radar.', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
       const hazard: Hazard = {
-        id: nextHazardId(),
+        id: data?.id || nextHazardId(),
         position: coords,
         label: `${hazardCategory} pin`,
         category: hazardCategory,
@@ -290,9 +315,6 @@ export default function Home() {
         comments: [],
       };
       setPendingHazard(hazard);
-      setIsReportModalOpen(false);
-      setGeoStatus('idle');
-      setLiveCoords(null);
     },
     [hazardCategory]
   );
@@ -802,7 +824,7 @@ export default function Home() {
         {isReportModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
-              className="absolute inset-0 bg-black/60"
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
               onClick={() => setIsReportModalOpen(false)}
             />
             <div className="relative w-full bg-surface rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
@@ -885,7 +907,7 @@ export default function Home() {
         {isSosModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
-              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/75 backdrop-blur-md"
               onClick={() => { if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false); }}
             />
             <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
@@ -967,7 +989,7 @@ export default function Home() {
         {openHazard && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
-              className="absolute inset-0 bg-black/60"
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
               onClick={() => setOpenHazard(null)}
             />
             <div className="relative w-full bg-surface rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
