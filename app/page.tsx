@@ -203,7 +203,6 @@ export default function Home() {
         { event: 'INSERT', schema: 'public', table: 'hazards' },
         (payload) => {
           const row = payload.new as HazardRow;
-          // Don't pop a toast if YOU are the one who dropped it
           if (row.user_id !== profile?.id) {
             toast({
               title: '🚨 PEER GUARD',
@@ -226,7 +225,6 @@ export default function Home() {
     []
   );
 
-  // Directly pushes to Supabase and lets Realtime handle the map rendering
   const createHazard = useCallback(
     async (coords: [number, number]) => {
       setIsReportModalOpen(false);
@@ -236,7 +234,7 @@ export default function Home() {
       const { error } = await supabase
         .from('hazards')
         .insert({
-          user_id: profile?.id, // Passing user ID to prevent RLS failure
+          user_id: profile?.id,
           lat: coords[0],
           lng: coords[1],
           title: `${hazardCategory} pin`,
@@ -277,7 +275,6 @@ export default function Home() {
           createHazard(coords);
         },
         () => {
-          // Absolute Francistown Fallback
           const fallbackLat = userCoords ? userCoords[0] : -21.1700;
           const fallbackLng = userCoords ? userCoords[1] : 27.5000;
           const coords: [number, number] = [fallbackLat, fallbackLng];
@@ -940,6 +937,46 @@ export default function Home() {
                   Locked to live location
                 </div>
               )}
+
+              {/* Upvote / Helpful Button for Hazards */}
+              <div className="flex items-center justify-between bg-ink p-3 rounded-xl border border-gray-800 shrink-0 mt-2">
+                <div className="flex flex-col">
+                  <span className="text-white text-xs font-bold">Was this pin helpful?</span>
+                  <span className="text-sage text-[10px]">Verified students find this useful</span>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!profile || !openHazard) return;
+                    
+                    const newUpvotes = (openHazard.upvotes || 0) + 1;
+                    
+                    // Optimistic update
+                    setOpenHazard({ ...openHazard, upvotes: newUpvotes });
+
+                    const { error } = await supabase
+                      .from('hazard_votes')
+                      .insert({ hazard_id: openHazard.id, user_id: profile.id });
+
+                    if (error) {
+                      // Revert if they already voted or it failed
+                      setOpenHazard({ ...openHazard, upvotes: openHazard.upvotes });
+                      toast({ title: 'Already Voted', description: 'You already marked this pin as helpful.', variant: 'destructive' });
+                      return;
+                    }
+
+                    // Update the main hazard count
+                    await supabase
+                      .from('hazards')
+                      .update({ upvotes: newUpvotes })
+                      .eq('id', openHazard.id);
+
+                    toast({ title: 'Marked Helpful 👍', description: 'Thanks for contributing to campus safety!' });
+                  }}
+                  className="flex items-center gap-1.5 bg-pine/20 border border-pine/50 text-pine px-4 py-2 rounded-lg text-xs font-bold active:scale-95 transition-transform"
+                >
+                  <span>👍</span> Helpful ({openHazard.upvotes || 0})
+                </button>
+              </div>
 
               <div className="pt-2 border-t border-gray-800 shrink-0">
                 <CommentThread
