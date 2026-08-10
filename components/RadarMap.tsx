@@ -121,6 +121,7 @@ export default function RadarMap({
           category: row.type,
           time: timeAgo(row.created_at),
           lockedToLive: true,
+          upvotes: row.upvotes || 0,
           comments: [],
         }));
         setHazards(mapped);
@@ -142,10 +143,10 @@ export default function RadarMap({
             category: row.type,
             time: 'just now',
             lockedToLive: true,
+            upvotes: row.upvotes || 0,
             comments: [],
           };
           setHazards((prev) => {
-            // Prevent duplicates
             if (prev.some(h => h.id === hazard.id)) return prev;
             return [hazard, ...prev];
           });
