@@ -10,7 +10,6 @@ import { ShieldAlert, X, MessageCircle, MapPin as MapPinIcon, Clock, User, Check
 
 import 'leaflet/dist/leaflet.css';
 
-// Default center (Francistown region)
 const DEFAULT_CENTER: [number, number] = [-21.1700, 27.5000];
 
 function createUserPin() {
@@ -43,7 +42,6 @@ function createHazardPin() {
   });
 }
 
-// Red pulse for active alerts, Grey for deactivated/resolved alerts within 24h
 function createSosPin(active: boolean) {
   const bg = active ? '#EF4444' : '#6B7280';
   const shadow = active ? 'rgba(239,68,68,0.55)' : 'rgba(107,114,128,0.25)';
@@ -96,15 +94,11 @@ function LocationTracker({
 }
 
 export default function RadarMap({
-  newHazard,
-  onNewHazardConsumed,
   onOpenHazard,
   sosAlerts,
   onLocate,
   onMessageUser,
 }: {
-  newHazard: Hazard | null;
-  onNewHazardConsumed: () => void;
   onOpenHazard: (h: Hazard) => void;
   sosAlerts: SosAlert[];
   onLocate: (pos: [number, number]) => void;
@@ -113,7 +107,6 @@ export default function RadarMap({
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
 
-  // Load hazards
   useEffect(() => {
     const loadHazards = async () => {
       const { data } = await supabase
@@ -151,20 +144,17 @@ export default function RadarMap({
             lockedToLive: true,
             comments: [],
           };
-          setHazards((prev) => [hazard, ...prev]);
+          setHazards((prev) => {
+            // Prevent duplicates
+            if (prev.some(h => h.id === hazard.id)) return prev;
+            return [hazard, ...prev];
+          });
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, []);
-
-  // Handle locally created hazard
-  useEffect(() => {
-    if (!newHazard) return;
-    setHazards((prev) => [newHazard, ...prev]);
-    onNewHazardConsumed();
-  }, [newHazard, onNewHazardConsumed]);
 
   const handleLocate = useCallback(
     (pos: [number, number]) => onLocate(pos),
