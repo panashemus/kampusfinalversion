@@ -80,9 +80,9 @@ export default function ProfileScreen({
     (!!profile?.subscribed_until &&
       new Date(profile.subscribed_until) > new Date());
 
+  // REMOVED Sentinel Points to keep the UI clean and simple
   const stats = [
     { label: 'Active Listings', value: String(activeListings) },
-    { label: 'Sentinel Points', value: String(profile?.sentinel_points ?? 0) },
     { label: 'Safety Alerts', value: String(safetyAlerts) },
   ];
 
@@ -247,8 +247,8 @@ export default function ProfileScreen({
         )}
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-3 gap-3 w-full mt-6">
+      {/* Stats grid - CHANGED to grid-cols-2 for perfect centering */}
+      <div className="grid grid-cols-2 gap-3 w-full mt-6">
         {stats.map((stat) => (
           <div
             key={stat.label}
