@@ -15,6 +15,7 @@ export type Hazard = {
   category: string;
   time: string;
   lockedToLive: boolean;
+  upvotes: number;
   comments: Comment[];
 };
 
@@ -131,6 +132,7 @@ export type HazardRow = {
   type: string;
   lat: number;
   lng: number;
+  upvotes: number;
   created_at: string;
 };
 
