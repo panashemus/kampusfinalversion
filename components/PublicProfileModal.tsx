@@ -1,7 +1,9 @@
 'use client';
 
-import { X, ShieldCheck, User as UserIcon, MessageSquarePlus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, ShieldCheck, User as UserIcon, MessageSquarePlus, Activity, Award, Crown } from 'lucide-react';
 import ProfileReviews from './ProfileReviews';
+import { supabase } from '@/lib/supabase';
 
 export default function PublicProfileModal({
   userId,
@@ -15,11 +17,60 @@ export default function PublicProfileModal({
   onMessageUser?: (peerId: string, peerUsername: string) => void;
 }) {
   const displayName = username.startsWith('@') ? username.slice(1).replace(/_/g, ' ') : username;
+  
+  // State for the Sentinel Point System
+  const [impactScore, setImpactScore] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  // Fetch their contributions to automatically calculate their tier
+  useEffect(() => {
+    async function fetchImpact() {
+      if (!userId) return;
+
+      // Count their community feed posts
+      const { count: postsCount } = await supabase
+        .from('feed_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      // Count their hustle listings
+      const { count: hustlesCount } = await supabase
+        .from('hustles')
+        .select('*', { count: 'exact', head: true })
+        .eq('seller_id', userId);
+
+      // Total their contributions
+      const total = (postsCount || 0) + (hustlesCount || 0);
+      setImpactScore(total);
+      setLoadingStats(false);
+    }
+    
+    fetchImpact();
+  }, [userId]);
+
+  // Dynamically assign their rank and styling based on their score
+  let tierName = 'Campus Rookie';
+  let TierIcon = Activity;
+  let tierColor = 'text-sage';
+  let tierBg = 'bg-ink border-gray-800';
+
+  if (impactScore >= 20) {
+    tierName = 'Campus Sentinel';
+    TierIcon = Crown;
+    tierColor = 'text-yellow-400';
+    tierBg = 'bg-yellow-400/10 border-yellow-400/30';
+  } else if (impactScore >= 5) {
+    tierName = 'Verified Hustler';
+    TierIcon = Award;
+    tierColor = 'text-pine';
+    tierBg = 'bg-pine/10 border-pine/30';
+  }
 
   return (
     <div className="absolute inset-0 z-[2000] flex items-end bg-black/60 backdrop-blur-md">
       <div className="absolute inset-0" onClick={onClose} />
       <div className="relative w-full bg-surface rounded-t-2xl p-6 flex flex-col gap-5 animate-slide-up max-h-[85%] overflow-y-auto no-scrollbar z-10">
+        
         <div className="flex items-center justify-between">
           <span className="text-white font-black text-lg">Student Profile</span>
           <button onClick={onClose} aria-label="Close">
@@ -29,7 +80,7 @@ export default function PublicProfileModal({
 
         {onMessageUser && (
           <button
-            onClick={() => onMessageUser(username, username)}
+            onClick={() => onMessageUser(userId, username)}
             className="w-full h-12 rounded-lg bg-transparent border border-yellow-400 text-yellow-400 font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
           >
             <MessageSquarePlus className="w-5 h-5" strokeWidth={2} />
@@ -50,6 +101,30 @@ export default function PublicProfileModal({
           <div className="flex items-center gap-1 rounded-full bg-pine/15 border border-pine/50 px-3 py-1">
             <ShieldCheck className="w-3.5 h-3.5 text-pine" strokeWidth={2} />
             <span className="text-pine text-[10px] font-bold">Verified Student</span>
+          </div>
+        </div>
+
+        {/* --- CAMPUS IMPACT SCORE SECTION --- */}
+        <div className="flex flex-col gap-3">
+          <span className="text-sage text-xs font-bold uppercase tracking-wider">Campus Impact</span>
+          
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${tierBg}`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-black/30">
+                <TierIcon className={`w-5 h-5 ${tierColor}`} strokeWidth={2} />
+              </div>
+              <div className="flex flex-col">
+                <span className={`font-black text-sm ${tierColor}`}>{tierName}</span>
+                <span className="text-white text-xs font-medium">
+                  {!loadingStats ? `${impactScore} Contributions` : 'Calculating...'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="text-right flex flex-col items-end">
+              <span className="text-[10px] text-sage font-bold uppercase">Impact Score</span>
+              <span className="text-2xl font-black text-white">{!loadingStats ? impactScore : '-'}</span>
+            </div>
           </div>
         </div>
 
