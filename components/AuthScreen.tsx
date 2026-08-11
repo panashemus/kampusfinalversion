@@ -59,7 +59,7 @@ export default function AuthScreen({
               id: data.user.id,
               email: cleanEmail,
               is_admin: isAdmin,
-              email_verified: false,
+              email_verified: false, // Forces OTP verification for ALL new sign-ups
             })
             .select()
             .single();
@@ -88,9 +88,12 @@ export default function AuthScreen({
             .maybeSingle();
 
           if (profileError) throw profileError;
+          
           if (profileData) {
             onVerified(profileData as Profile);
           } else {
+            // Fallback if profile was deleted during DB wipe: 
+            // Recreate profile but STRICTLY require OTP verification
             const isAdmin = ADMIN_EMAILS.includes(cleanEmail);
             const { data: newProf } = await supabase
               .from('profiles')
@@ -98,7 +101,7 @@ export default function AuthScreen({
                 id: data.user.id,
                 email: cleanEmail,
                 is_admin: isAdmin,
-                email_verified: true,
+                email_verified: false, // <-- CHANGED THIS TO FALSE
               })
               .select()
               .single();
