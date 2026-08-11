@@ -8,7 +8,7 @@ import type { Profile } from '@/lib/types';
 import OtpModal from '@/components/OtpModal';
 
 const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw'];
-const ADMIN_EMAILS = ['musungwa60@gmail.com'];
+const ADMIN_EMAILS = ['musungwa60@gmail.com', 'chrisvandium@gmail.com'];
 const TEST_EMAILS: string[] = ['chrisvandium@gmail.com', 'chris.karter1629@gmail.com', 'yofather63@gmail.com'];
 
 export default function AuthScreen({
