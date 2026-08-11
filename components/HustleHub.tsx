@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon, CreditCard, Wallet, Send, Tag, Lock } from 'lucide-react';
+import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon, CreditCard, Wallet, Send, Tag, Lock, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadImages } from '@/lib/payment';
 import type { Comment, Profile, HustleStatus } from '@/lib/types';
@@ -73,7 +73,6 @@ export default function HustleHub({
   const [loading, setLoading] = useState(true);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
   
-  // FIX: Upgraded profileUser to hold both ID and Username
   const [profileUser, setProfileUser] = useState<{ id: string; username: string } | null>(null);
   
   const [reportGig, setReportGig] = useState<Gig | null>(null);
@@ -272,6 +271,13 @@ export default function HustleHub({
     setMenuOpenId(null);
   };
 
+  const deleteGig = async (gigId: string) => {
+    setMenuOpenId(null);
+    setGigs((prev) => prev.filter((g) => g.id !== gigId));
+    await supabase.from('hustles').delete().eq('id', gigId);
+    toast({ title: 'Gig deleted' });
+  };
+
   const resubmitPayment = async (gig: Gig, newRefId: string) => {
     await supabase
       .from('hustles')
@@ -368,9 +374,17 @@ export default function HustleHub({
                         {isAdmin && gig.status === 'active' && (
                           <button
                             onClick={() => flagAsUnpaid(gig)}
-                            className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5"
+                            className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
                           >
                             <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.5} /> Flag as Unpaid
+                          </button>
+                        )}
+                        {(profile?.id === gig.sellerId || isAdmin) && (
+                          <button
+                            onClick={() => deleteGig(gig.id)}
+                            className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Delete Gig
                           </button>
                         )}
                       </div>
@@ -861,7 +875,6 @@ export default function HustleHub({
         <Lightbox images={lightboxImages} onClose={() => setLightboxImages(null)} />
       )}
 
-      {/* FIXED: PUBLIC PROFILE MODAL WITH USER ID */}
       {profileUser && (
         <PublicProfileModal
           userId={profileUser.id}
