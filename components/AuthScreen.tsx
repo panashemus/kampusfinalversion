@@ -5,14 +5,10 @@ import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
-import OtpModal from '@/components/OtpModal'; // <-- We import the OTP modal here now
+import OtpModal from '@/components/OtpModal';
 
 const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw'];
-
-// Only full admins get admin privileges
 const ADMIN_EMAILS = ['musungwa60@gmail.com'];
-
-// Test accounts allowed to bypass domain locks but do NOT get admin rights
 const TEST_EMAILS: string[] = ['chrisvandium@gmail.com', 'chris.karter1629@gmail.com', 'yofather63@gmail.com'];
 
 export default function AuthScreen({
@@ -23,10 +19,11 @@ export default function AuthScreen({
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(true); 
-  const [loading, setLoading] = useState(false);
   
-  // THE GATEKEEPER: This traps the user if their email is unverified
+  // FIX 1: Default to Sign In (false) instead of Sign Up. 
+  // Better UX for returning users on new devices.
+  const [isSignUp, setIsSignUp] = useState(false); 
+  const [loading, setLoading] = useState(false);
   const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -76,7 +73,6 @@ export default function AuthScreen({
             description: 'Check your email for the verification code.',
           });
           
-          // DO NOT let them into the app. Trap them in the OTP modal.
           if (profileData) {
             setPendingProfile(profileData as Profile);
           }
@@ -100,14 +96,11 @@ export default function AuthScreen({
           
           if (profileData) {
             if (!profileData.email_verified) {
-               // They tried to sign in but haven't verified yet. Trap them.
                setPendingProfile(profileData as Profile);
             } else {
-               // Fully verified, let them in!
                onVerified(profileData as Profile);
             }
           } else {
-            // Re-creating a missing profile
             const isAdmin = ADMIN_EMAILS.includes(cleanEmail);
             const { data: newProf } = await supabase
               .from('profiles')
@@ -127,11 +120,21 @@ export default function AuthScreen({
         }
       }
     } catch (err: any) {
-      toast({
-        title: 'Authentication error',
-        description: err.message || 'Something went wrong.',
-        variant: 'destructive',
-      });
+      // FIX 2: Catch the specific "User already exists" error and guide them to sign in
+      if (err.message?.toLowerCase().includes('already registered') || err.message?.toLowerCase().includes('already exists')) {
+        toast({
+          title: 'Account exists',
+          description: 'This email is already registered. Please switch to Sign In.',
+          variant: 'destructive',
+        });
+        setIsSignUp(false); // Auto-switch them to the sign-in tab
+      } else {
+        toast({
+          title: 'Authentication error',
+          description: err.message || 'Something went wrong.',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -202,19 +205,16 @@ export default function AuthScreen({
         </div>
       </div>
 
-      {/* STRICT OTP GATEKEEPER */}
       {pendingProfile && (
         <div className="absolute inset-0 z-[5000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
           <OtpModal
             userId={pendingProfile.id}
             email={pendingProfile.email}
             onClose={() => {
-              // If they cancel out of the OTP screen, sign them out and kick them back to the login form
               supabase.auth.signOut();
               setPendingProfile(null);
             }}
             onVerified={async () => {
-              // Once verified, fetch the updated profile to guarantee email_verified is true, then pass them to the app
               const { data } = await supabase.from('profiles').select('*').eq('id', pendingProfile.id).single();
               if (data) onVerified(data as Profile);
             }}
