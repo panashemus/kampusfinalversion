@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag } from 'lucide-react';
+import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import { uploadImages } from '@/lib/payment';
@@ -144,6 +144,23 @@ export default function CommunityHub({
     });
   };
 
+  const deletePost = async (postId: string) => {
+    setMenuOpenId(null);
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    await supabase.from('feed_posts').delete().eq('id', postId);
+    toast({ title: 'Post deleted' });
+  };
+
+  const deleteComment = async (postId: string, commentId: string) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, comments: p.comments.filter(c => c.id !== commentId) } : p
+      )
+    );
+    await supabase.from('feed_comments').delete().eq('id', commentId);
+    toast({ title: 'Comment deleted' });
+  };
+
   const submitQuestion = async () => {
     const text = newQuestion.trim();
     if (!text || !profile) return;
@@ -202,6 +219,16 @@ export default function CommunityHub({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col gap-4">
+        
+        {/* MOVED ASK QUESTION BUTTON TO TOP */}
+        <button
+          onClick={() => setShowAskModal(true)}
+          className="w-full mb-1 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shrink-0"
+        >
+          <Plus className="w-5 h-5" strokeWidth={2.5} />
+          <span className="font-bold text-sm">Ask Question</span>
+        </button>
+
         <AdSlot />
 
         {loading ? (
@@ -236,6 +263,14 @@ export default function CommunityHub({
                     >
                       <Flag className="w-3.5 h-3.5" strokeWidth={1.5} /> Report Post
                     </button>
+                    {(profile?.id === post.authorId || profile?.is_admin) && (
+                      <button
+                        onClick={() => deletePost(post.id)}
+                        className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Delete Post
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -247,7 +282,7 @@ export default function CommunityHub({
                 <div className="flex flex-col">
                   <button
                     onClick={() => setProfileUser({ id: post.authorId, username: post.author })}
-                    className="text-white text-xs font-bold hover:text-pine transition-colors text-left"
+                    className="text-white text-xs font-bold hover:text-pine transition-colors text-left pr-6"
                   >
                     {post.author}
                   </button>
@@ -290,6 +325,8 @@ export default function CommunityHub({
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
                   onAuthorClick={(username, authorId) => setProfileUser({ id: authorId || '', username })}
+                  onDelete={(commentId) => deleteComment(post.id, commentId)}
+                  currentUserId={profile?.id}
                   placeholder="Reply to this post..."
                 />
               </div>
@@ -297,14 +334,6 @@ export default function CommunityHub({
           ))
         )}
       </div>
-
-      <button
-        onClick={() => setShowAskModal(true)}
-        className="absolute bottom-[104px] right-4 z-20 flex items-center gap-1.5 px-4 py-3 rounded-full bg-pine shadow-lg active:scale-95 transition-transform"
-      >
-        <Plus className="w-5 h-5 text-black" strokeWidth={2.5} />
-        <span className="text-black font-bold text-sm">Ask Question</span>
-      </button>
 
       {showAskModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -421,7 +450,6 @@ export default function CommunityHub({
         <Lightbox images={lightboxImages} onClose={() => setLightboxImages(null)} />
       )}
 
-      {/* FIXED: Added userId prop to PublicProfileModal */}
       {profileUser && (
         <PublicProfileModal
           userId={profileUser.id}
