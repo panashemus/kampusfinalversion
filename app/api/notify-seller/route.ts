@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         from: 'Kampus Vault <verify@kampusbw.site>',
         to: sellerEmail,
-        subject: `Action Required: P ${amount} Locked in Escrow 🔒`,
+        subject: `P ${amount} Locked in Escrow 🔒`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #334155; border-radius: 16px; overflow: hidden; background-color: #020617; color: #f1f5f9;">
             
