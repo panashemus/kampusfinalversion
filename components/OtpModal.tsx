@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Loader as Loader2, MailCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export default function OtpModal({
   userId,
@@ -20,29 +23,41 @@ export default function OtpModal({
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [sent, setSent] = useState(false);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Removed the useEffect. AuthScreen already triggers the native email on sign up!
+  useEffect(() => {
+    sendCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const callEdge = async (payload: Record<string, unknown>) => {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-verification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Request failed');
+    return json;
+  };
 
   const sendCode = async () => {
     setSending(true);
     try {
-      // The Native Auth Resend
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-      });
-      
-      if (error) throw error;
-      
+      await callEdge({ action: 'send-code', userId, email });
+      setSent(true);
       toast({
-        title: 'Code resent',
-        description: `A new 6-digit code was emailed to ${email}.`,
+        title: 'Code sent',
+        description: `A 6-digit code was emailed to ${email}.`,
       });
-    } catch (err: any) {
+    } catch (err) {
       toast({
-        title: 'Could not resend code',
-        description: err.message,
+        title: 'Could not send code',
+        description: (err as Error).message,
         variant: 'destructive',
       });
     } finally {
@@ -78,26 +93,24 @@ export default function OtpModal({
     const code = digits.join('');
     if (code.length !== 6) return;
     setVerifying(true);
-    
     try {
-      // THE NATIVE FIX: Using Supabase's built-in OTP verifier
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: 'signup',
-      });
-
-      if (error) throw error;
+      await callEdge({ action: 'verify-code', userId, code });
+      
+      // Tell the database they are officially verified
+      await supabase
+        .from('profiles')
+        .update({ email_verified: true })
+        .eq('id', userId);
 
       toast({
         title: 'Email verified',
         description: 'Your student email is now verified.',
       });
       onVerified();
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Verification failed',
-        description: err.message,
+        description: (err as Error).message,
         variant: 'destructive',
       });
     } finally {
