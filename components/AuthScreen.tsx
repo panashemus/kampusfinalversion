@@ -20,7 +20,7 @@ export default function AuthScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
-  // FIX 1: Default to Sign In (false) instead of Sign Up. 
+  // Default to Sign In (false) instead of Sign Up. 
   // Better UX for returning users on new devices.
   const [isSignUp, setIsSignUp] = useState(false); 
   const [loading, setLoading] = useState(false);
@@ -46,6 +46,7 @@ export default function AuthScreen({
 
     try {
       if (isSignUp) {
+        // NATIVE SIGN UP: This automatically sends the email if "Confirm Email" is ON in Supabase
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -120,14 +121,30 @@ export default function AuthScreen({
         }
       }
     } catch (err: any) {
-      // FIX 2: Catch the specific "User already exists" error and guide them to sign in
-      if (err.message?.toLowerCase().includes('already registered') || err.message?.toLowerCase().includes('already exists')) {
+      // FIX 1: Catch Native Auth "Email not confirmed" during sign in
+      if (err.message?.toLowerCase().includes('email not confirmed')) {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', cleanEmail)
+          .single();
+          
+        if (existingProfile) {
+          setPendingProfile(existingProfile as Profile);
+          toast({
+            title: 'Verification required',
+            description: 'Please enter your code to verify your account.',
+          });
+        }
+      } 
+      // Handle User Already Exists
+      else if (err.message?.toLowerCase().includes('already registered') || err.message?.toLowerCase().includes('already exists')) {
         toast({
           title: 'Account exists',
           description: 'This email is already registered. Please switch to Sign In.',
           variant: 'destructive',
         });
-        setIsSignUp(false); // Auto-switch them to the sign-in tab
+        setIsSignUp(false);
       } else {
         toast({
           title: 'Authentication error',
@@ -215,7 +232,14 @@ export default function AuthScreen({
               setPendingProfile(null);
             }}
             onVerified={async () => {
-              const { data } = await supabase.from('profiles').select('*').eq('id', pendingProfile.id).single();
+              // FIX 2: Update the profiles table to verified so they don't get trapped next time
+              const { data } = await supabase
+                .from('profiles')
+                .update({ email_verified: true })
+                .eq('id', pendingProfile.id)
+                .select('*')
+                .single();
+                
               if (data) onVerified(data as Profile);
             }}
           />
