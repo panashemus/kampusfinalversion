@@ -1,18 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, User } from 'lucide-react';
+import { Send, User, Trash2 } from 'lucide-react';
 import type { Comment } from '@/lib/types';
 
 export default function CommentThread({
   comments,
   onAdd,
   onAuthorClick,
+  onDelete,
+  currentUserId,
   placeholder = 'Write a comment...',
 }: {
   comments: Comment[];
   onAdd: (c: Comment) => void;
   onAuthorClick?: (username: string, authorId?: string) => void;
+  onDelete?: (id: string) => void;
+  currentUserId?: string;
   placeholder?: string;
 }) {
   const [text, setText] = useState('');
@@ -35,22 +39,35 @@ export default function CommentThread({
       {comments.length > 0 && (
         <div className="flex flex-col gap-3 max-h-48 overflow-y-auto no-scrollbar">
           {comments.map((c) => (
-            <div key={c.id} className="flex items-start gap-2">
-              <div className="w-6 h-6 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0 mt-0.5">
-                <User className="w-3 h-3 text-sage" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-baseline gap-2">
-                  <button 
-                    onClick={() => onAuthorClick?.(c.author, c.authorId)}
-                    className="text-white text-xs font-bold hover:text-pine transition-colors"
-                  >
-                    {c.author}
-                  </button>
-                  <span className="text-sage text-[10px]">{c.time}</span>
+            <div key={c.id} className="flex items-start justify-between gap-2 group">
+              <div className="flex items-start gap-2">
+                <div className="w-6 h-6 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <User className="w-3 h-3 text-sage" strokeWidth={2} />
                 </div>
-                <p className="text-gray-300 text-xs leading-relaxed">{c.text}</p>
+                <div className="flex flex-col">
+                  <div className="flex items-baseline gap-2">
+                    <button 
+                      onClick={() => onAuthorClick?.(c.author, c.authorId)}
+                      className="text-white text-xs font-bold hover:text-pine transition-colors"
+                    >
+                      {c.author}
+                    </button>
+                    <span className="text-sage text-[10px]">{c.time}</span>
+                  </div>
+                  <p className="text-gray-300 text-xs leading-relaxed">{c.text}</p>
+                </div>
               </div>
+              
+              {/* Delete Button for Comment Author */}
+              {currentUserId && c.authorId === currentUserId && onDelete && (
+                <button 
+                  onClick={() => onDelete(c.id)} 
+                  className="p-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+                  aria-label="Delete comment"
+                >
+                  <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                </button>
+              )}
             </div>
           ))}
         </div>
