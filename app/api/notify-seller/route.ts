@@ -33,12 +33,12 @@ export async function POST(req: Request) {
                 <strong style="color: #ffffff;">${buyerEmail}</strong> has initiated a trade and deposited <strong style="color: #10b981;">P ${amount}</strong> into the Kampus Vault for: <strong style="color: #ffffff;">${itemName}</strong>.
               </p>
               <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">
-                The Admin is currently verifying the funds with the bank. Once verified, the buyer's app will generate a live green <strong>Verified Receipt</strong>.
+                This email serves as a confirmation that the buyer has sent the funds and you are safe to hand over the product.
               </p>
               
               <div style="background-color: #450a0a; border: 1px solid #ef4444; padding: 16px; border-radius: 12px; margin: 32px 0; text-align: center;">
                 <p style="color: #fca5a5; margin: 0; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
-                  ⚠️ DO NOT hand over the item until you see the Verified Green Receipt in person!
+                  stay safe - Panashe Musungwa,
                 </p>
               </div>
               
