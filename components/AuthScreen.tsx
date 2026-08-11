@@ -5,6 +5,7 @@ import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
+import OtpModal from '@/components/OtpModal'; // <-- We import the OTP modal here now
 
 const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw'];
 
@@ -22,8 +23,11 @@ export default function AuthScreen({
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true); 
   const [loading, setLoading] = useState(false);
+  
+  // THE GATEKEEPER: This traps the user if their email is unverified
+  const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +55,7 @@ export default function AuthScreen({
         });
 
         if (error) throw error;
+        
         if (data.user) {
           const isAdmin = ADMIN_EMAILS.includes(cleanEmail);
           const { data: profileData, error: profileError } = await supabase
@@ -59,18 +64,21 @@ export default function AuthScreen({
               id: data.user.id,
               email: cleanEmail,
               is_admin: isAdmin,
-              email_verified: false, // Forces OTP verification for ALL new sign-ups
+              email_verified: false,
             })
             .select()
             .single();
 
           if (profileError) throw profileError;
+          
           toast({
             title: 'Account created',
-            description: 'Please check your email or complete verification.',
+            description: 'Check your email for the verification code.',
           });
+          
+          // DO NOT let them into the app. Trap them in the OTP modal.
           if (profileData) {
-            onVerified(profileData as Profile);
+            setPendingProfile(profileData as Profile);
           }
         }
       } else {
@@ -80,6 +88,7 @@ export default function AuthScreen({
         });
 
         if (error) throw error;
+        
         if (data.user) {
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
@@ -90,10 +99,15 @@ export default function AuthScreen({
           if (profileError) throw profileError;
           
           if (profileData) {
-            onVerified(profileData as Profile);
+            if (!profileData.email_verified) {
+               // They tried to sign in but haven't verified yet. Trap them.
+               setPendingProfile(profileData as Profile);
+            } else {
+               // Fully verified, let them in!
+               onVerified(profileData as Profile);
+            }
           } else {
-            // Fallback if profile was deleted during DB wipe: 
-            // Recreate profile but STRICTLY require OTP verification
+            // Re-creating a missing profile
             const isAdmin = ADMIN_EMAILS.includes(cleanEmail);
             const { data: newProf } = await supabase
               .from('profiles')
@@ -101,11 +115,14 @@ export default function AuthScreen({
                 id: data.user.id,
                 email: cleanEmail,
                 is_admin: isAdmin,
-                email_verified: false, // <-- CHANGED THIS TO FALSE
+                email_verified: false,
               })
               .select()
               .single();
-            if (newProf) onVerified(newProf as Profile);
+              
+            if (newProf) {
+               setPendingProfile(newProf as Profile);
+            }
           }
         }
       }
@@ -121,7 +138,7 @@ export default function AuthScreen({
   };
 
   return (
-    <div className="flex-1 bg-midnight flex flex-col items-center justify-center p-6 w-full h-[100dvh]">
+    <div className="flex-1 bg-midnight flex flex-col items-center justify-center p-6 w-full h-[100dvh] relative">
       <div className="w-full max-w-[380px] bg-surface rounded-3xl border border-gray-800 p-8 flex flex-col gap-6 shadow-2xl">
         <div className="flex flex-col items-center gap-2 text-center">
           <div className="w-14 h-14 rounded-2xl bg-pine/15 border border-pine/40 flex items-center justify-center text-pine">
@@ -184,6 +201,26 @@ export default function AuthScreen({
           </button>
         </div>
       </div>
+
+      {/* STRICT OTP GATEKEEPER */}
+      {pendingProfile && (
+        <div className="absolute inset-0 z-[5000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <OtpModal
+            userId={pendingProfile.id}
+            email={pendingProfile.email}
+            onClose={() => {
+              // If they cancel out of the OTP screen, sign them out and kick them back to the login form
+              supabase.auth.signOut();
+              setPendingProfile(null);
+            }}
+            onVerified={async () => {
+              // Once verified, fetch the updated profile to guarantee email_verified is true, then pass them to the app
+              const { data } = await supabase.from('profiles').select('*').eq('id', pendingProfile.id).single();
+              if (data) onVerified(data as Profile);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
