@@ -97,6 +97,7 @@ export type Profile = {
   id: string;
   email: string;
   username: string | null;
+  avatar_url: string | null; /* <-- Added this right here! */
   university: string | null;
   verified: boolean;
   email_verified: boolean;
