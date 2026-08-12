@@ -117,16 +117,49 @@ export default function CommunityHub({
     return matchesCategory && matchesSearch;
   });
 
+  // --- UPDATED 1-VOTE TOGGLE FUNCTION ---
   const upvote = async (id: string) => {
+    if (!profile?.id) {
+      toast({ title: 'Sign in required', description: 'You must be signed in to upvote posts.' });
+      return;
+    }
+
     const post = posts.find((p) => p.id === id);
     if (!post) return;
-    setPosts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, upvotes: p.upvotes + 1 } : p))
-    );
-    await supabase
-      .from('feed_posts')
-      .update({ upvotes: post.upvotes + 1 })
-      .eq('id', id);
+
+    // Check if user already voted
+    const { data: existingVote } = await supabase
+      .from('feed_post_votes')
+      .select('id')
+      .eq('post_id', id)
+      .eq('user_id', profile.id)
+      .maybeSingle();
+
+    if (existingVote) {
+      // --- UNVOTE ---
+      const newCount = Math.max(0, post.upvotes - 1);
+
+      // Optimistic UI update
+      setPosts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p))
+      );
+
+      // Remove vote record and update post upvote count
+      await supabase.from('feed_post_votes').delete().eq('id', existingVote.id);
+      await supabase.from('feed_posts').update({ upvotes: newCount }).eq('id', id);
+    } else {
+      // --- UPVOTE ---
+      const newCount = post.upvotes + 1;
+
+      // Optimistic UI update
+      setPosts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p))
+      );
+
+      // Add vote record and update post upvote count
+      await supabase.from('feed_post_votes').insert({ post_id: id, user_id: profile.id });
+      await supabase.from('feed_posts').update({ upvotes: newCount }).eq('id', id);
+    }
   };
 
   const addComment = async (postId: string, comment: Comment) => {
@@ -220,7 +253,6 @@ export default function CommunityHub({
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col gap-4">
         
-        {/* MOVED ASK QUESTION BUTTON TO TOP */}
         <button
           onClick={() => setShowAskModal(true)}
           className="w-full mb-1 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shrink-0"
