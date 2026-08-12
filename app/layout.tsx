@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 import GlobalNotificationListener from '@/components/GlobalNotificationListener';
+import Script from 'next/script';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -47,6 +48,11 @@ export default function RootLayout({
         {children}
         <Toaster />
         <GlobalNotificationListener />
+        <Script 
+          src="//gc.zgo.at/count.js" 
+          data-goatcounter="https://kampus.goatcounter.com/count"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
