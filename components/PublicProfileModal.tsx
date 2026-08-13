@@ -20,13 +20,25 @@ export default function PublicProfileModal({
   
   const [impactScore, setImpactScore] = useState(0);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  // Calculate their TOTAL Campus Impact (Posts + Hustles + Hazards + Upvotes Received)
+  // Fetch user profile data and calculate TOTAL Campus Impact
   useEffect(() => {
-    async function fetchImpact() {
+    async function fetchUserData() {
       if (!userId) return;
 
-      // 1. Fetch community feed posts AND their upvotes
+      // 1. Fetch user profile for PFP avatar_url
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profileData?.avatar_url) {
+        setAvatarUrl(profileData.avatar_url);
+      }
+
+      // 2. Fetch community feed posts AND their upvotes
       const { data: posts } = await supabase
         .from('feed_posts')
         .select('upvotes')
@@ -35,13 +47,13 @@ export default function PublicProfileModal({
       const postsCount = posts?.length || 0;
       const postUpvotes = posts?.reduce((sum, p) => sum + (p.upvotes || 0), 0) || 0;
 
-      // 2. Count their hustle listings
+      // 3. Count their hustle listings
       const { count: hustlesCount } = await supabase
         .from('hustles')
         .select('*', { count: 'exact', head: true })
         .eq('seller_id', userId);
 
-      // 3. Fetch their hazard pins AND the upvotes they've received
+      // 4. Fetch their hazard pins AND upvotes they've received
       const { data: hazards } = await supabase
         .from('hazards')
         .select('upvotes')
@@ -57,7 +69,7 @@ export default function PublicProfileModal({
       setLoadingStats(false);
     }
     
-    fetchImpact();
+    fetchUserData();
   }, [userId]);
 
   let tierName = 'Campus Rookie';
@@ -100,9 +112,14 @@ export default function PublicProfileModal({
         )}
 
         <div className="flex flex-col items-center gap-3">
+          {/* UPDATED AVATAR CONTAINER */}
           <div className="w-20 h-20 rounded-full bg-ink border-2 border-pine/60 p-1">
-            <div className="w-full h-full rounded-full bg-surface border border-pine/40 flex items-center justify-center">
-              <UserIcon className="w-10 h-10 text-sage" strokeWidth={1.5} />
+            <div className="w-full h-full rounded-full bg-surface border border-pine/40 flex items-center justify-center overflow-hidden">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={username} className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon className="w-10 h-10 text-sage" strokeWidth={1.5} />
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
