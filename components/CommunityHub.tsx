@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2 } from 'lucide-react';
+import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import { uploadImages } from '@/lib/payment';
-import type { CommunityCategory, CommunityPost, Comment, Profile } from '@/lib/types';
+import type { CommunityCategory, Comment, Profile } from '@/lib/types';
 import CommentThread from '@/components/CommentThread';
 import AdSlot from '@/components/AdSlot';
 import PublicProfileModal from '@/components/PublicProfileModal';
@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 
 const FILTERS: CommunityCategory[] = ['All Questions', 'Academic', 'Housing', 'Tech', 'General', 'Textbooks', 'Beauty'];
 
+// 1. Updated Database Row Type
 type FeedPostRow = {
   id: string;
   user_id: string;
@@ -25,6 +26,9 @@ type FeedPostRow = {
   upvotes: number;
   created_at: string;
   images: string[] | null;
+  is_anonymous?: boolean;
+  is_blasted?: boolean;
+  impact_score?: number;
 };
 
 type FeedCommentRow = {
@@ -34,6 +38,22 @@ type FeedCommentRow = {
   author_name: string | null;
   text: string;
   created_at: string;
+};
+
+// 2. Updated Local Post Type
+type EnhancedCommunityPost = {
+  id: string;
+  authorId: string;
+  author: string;
+  time: string;
+  category: Exclude<CommunityCategory, 'All Questions'>;
+  text: string;
+  upvotes: number;
+  comments: Comment[];
+  images: string[];
+  is_anonymous?: boolean;
+  is_blasted?: boolean;
+  impact_score?: number;
 };
 
 export default function CommunityHub({ 
@@ -46,18 +66,21 @@ export default function CommunityHub({
   onMessageUser: (peerId: string, peerUsername: string) => void;
 }) {
   const { toast } = useToast();
-  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [posts, setPosts] = useState<EnhancedCommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
-  const [showAskModal, setShowAskModal] = useState(false);
+  
+  // 3. UI States for the new flow
+  const [askModalType, setAskModalType] = useState<'standard' | 'anonymous' | null>(null);
+  const [isBlast, setIsBlast] = useState(false);
+  
   const [newQuestion, setNewQuestion] = useState('');
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
   const [newImages, setNewImages] = useState<string[]>([]);
   
   const [profileUser, setProfileUser] = useState<{ id: string; username: string } | null>(null);
-  
   const [posting, setPosting] = useState(false);
-  const [reportPost, setReportPost] = useState<CommunityPost | null>(null);
+  const [reportPost, setReportPost] = useState<EnhancedCommunityPost | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
@@ -77,7 +100,7 @@ export default function CommunityHub({
       .order('created_at', { ascending: true });
     const commentRows = (commentData as FeedCommentRow[]) ?? [];
 
-    const mapped: CommunityPost[] = postRows.map((p) => ({
+    const mapped: EnhancedCommunityPost[] = postRows.map((p) => ({
       id: p.id,
       authorId: p.user_id,
       author: p.author_name ?? p.user_id,
@@ -85,6 +108,9 @@ export default function CommunityHub({
       category: p.category as Exclude<CommunityCategory, 'All Questions'>,
       text: p.text,
       upvotes: p.upvotes,
+      is_anonymous: p.is_anonymous || false,
+      is_blasted: p.is_blasted || false,
+      impact_score: p.impact_score || 0,
       comments: commentRows
         .filter((c) => c.post_id === p.id)
         .map((c) => ({
@@ -117,17 +143,14 @@ export default function CommunityHub({
     return matchesCategory && matchesSearch;
   });
 
-  // --- UPDATED 1-VOTE TOGGLE FUNCTION ---
   const upvote = async (id: string) => {
     if (!profile?.id) {
       toast({ title: 'Sign in required', description: 'You must be signed in to upvote posts.' });
       return;
     }
-
     const post = posts.find((p) => p.id === id);
     if (!post) return;
 
-    // Check if user already voted
     const { data: existingVote } = await supabase
       .from('feed_post_votes')
       .select('id')
@@ -136,38 +159,20 @@ export default function CommunityHub({
       .maybeSingle();
 
     if (existingVote) {
-      // --- UNVOTE ---
       const newCount = Math.max(0, post.upvotes - 1);
-
-      // Optimistic UI update
-      setPosts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p))
-      );
-
-      // Remove vote record and update post upvote count
+      setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p)));
       await supabase.from('feed_post_votes').delete().eq('id', existingVote.id);
       await supabase.from('feed_posts').update({ upvotes: newCount }).eq('id', id);
     } else {
-      // --- UPVOTE ---
       const newCount = post.upvotes + 1;
-
-      // Optimistic UI update
-      setPosts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p))
-      );
-
-      // Add vote record and update post upvote count
+      setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p)));
       await supabase.from('feed_post_votes').insert({ post_id: id, user_id: profile.id });
       await supabase.from('feed_posts').update({ upvotes: newCount }).eq('id', id);
     }
   };
 
   const addComment = async (postId: string, comment: Comment) => {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId ? { ...p, comments: [...p.comments, comment] } : p
-      )
-    );
+    setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...p.comments, comment] } : p));
     if (!profile) return;
     await supabase.from('feed_comments').insert({
       post_id: postId,
@@ -185,20 +190,21 @@ export default function CommunityHub({
   };
 
   const deleteComment = async (postId: string, commentId: string) => {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId ? { ...p, comments: p.comments.filter(c => c.id !== commentId) } : p
-      )
-    );
+    setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: p.comments.filter(c => c.id !== commentId) } : p));
     await supabase.from('feed_comments').delete().eq('id', commentId);
     toast({ title: 'Comment deleted' });
   };
 
+  // 4. Updated Submit Logic
   const submitQuestion = async () => {
     const text = newQuestion.trim();
-    if (!text || !profile) return;
+    if (!text || !profile || !askModalType) return;
     setPosting(true);
-    const { data } = await supabase
+    
+    const isAnonymous = askModalType === 'anonymous';
+    const startingImpact = isBlast ? 15 : 0;
+
+    const { data, error } = await supabase
       .from('feed_posts')
       .insert({
         user_id: profile.id,
@@ -207,12 +213,15 @@ export default function CommunityHub({
         text,
         upvotes: 0,
         images: newImages.length > 0 ? newImages : null,
+        is_anonymous: isAnonymous,
+        is_blasted: isBlast,
+        impact_score: startingImpact
       })
       .select()
       .maybeSingle();
     
     if (data) {
-      const post: CommunityPost = {
+      const post: EnhancedCommunityPost = {
         id: (data as FeedPostRow).id,
         authorId: profile.id,
         author: myName,
@@ -222,13 +231,27 @@ export default function CommunityHub({
         upvotes: 0,
         comments: [],
         images: newImages,
+        is_anonymous: isAnonymous,
+        is_blasted: isBlast,
+        impact_score: startingImpact
       };
       setPosts((prev) => [post, ...prev]);
+
+      // If blasted, trigger the push notification logic
+      if (isBlast) {
+         toast({ title: '⚡ Blast Sent', description: 'Your post was blasted to the campus.' });
+         // Optional: Fire your edge function trigger here if needed
+      }
+    } else {
+      console.error(error);
+      toast({ title: 'Error', description: 'Failed to post.', variant: 'destructive' });
     }
+    
     setNewQuestion('');
     setNewImages([]);
+    setIsBlast(false);
     setPosting(false);
-    setShowAskModal(false);
+    setAskModalType(null);
   };
 
   return (
@@ -240,9 +263,7 @@ export default function CommunityHub({
               key={f}
               onClick={() => setFilter(f)}
               className={`whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
-                filter === f
-                  ? 'bg-pine text-black'
-                  : 'bg-transparent border border-sage text-sage'
+                filter === f ? 'bg-pine text-black' : 'bg-transparent border border-sage text-sage'
               }`}
             >
               {f}
@@ -253,13 +274,23 @@ export default function CommunityHub({
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col gap-4">
         
-        <button
-          onClick={() => setShowAskModal(true)}
-          className="w-full mb-1 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg shrink-0"
-        >
-          <Plus className="w-5 h-5" strokeWidth={2.5} />
-          <span className="font-bold text-sm">Ask Question</span>
-        </button>
+        {/* 5. The Dual Button Layout */}
+        <div className="flex gap-3 mb-1 shrink-0 w-full">
+          <button
+            onClick={() => setAskModalType('standard')}
+            className="flex-1 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg"
+          >
+            <Plus className="w-5 h-5" strokeWidth={2.5} />
+            <span className="font-bold text-sm">Ask Question</span>
+          </button>
+          <button
+            onClick={() => setAskModalType('anonymous')}
+            className="flex-1 h-12 rounded-xl bg-[#161616] border border-zinc-700 text-white flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-[0_0_15px_rgba(255,255,255,0.03)]"
+          >
+            <span className="text-lg">🤫</span>
+            <span className="font-bold text-sm">Confess</span>
+          </button>
+        </div>
 
         <AdSlot />
 
@@ -270,16 +301,12 @@ export default function CommunityHub({
             <div className="w-16 h-16 rounded-full bg-surface border border-gray-800 flex items-center justify-center">
               <MessageCircleQuestion className="w-7 h-7 text-sage" strokeWidth={1.5} />
             </div>
-            <span className="text-white text-sm font-bold text-center">
-              No posts yet
-            </span>
-            <span className="text-sage text-xs text-center max-w-[240px]">
-              Be the first to ask a question or share something with your campus.
-            </span>
+            <span className="text-white text-sm font-bold text-center">No posts yet</span>
+            <span className="text-sage text-xs text-center max-w-[240px]">Be the first to ask a question or drop a confession.</span>
           </div>
         ) : (
           visible.map((post) => (
-            <div key={post.id} className="bg-surface rounded-2xl p-4 flex flex-col gap-3 relative">
+            <div key={post.id} className={`bg-surface rounded-2xl p-4 flex flex-col gap-3 relative ${post.is_blasted ? 'border border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : ''}`}>
               <div className="absolute top-2 right-2 z-10">
                 <button
                   onClick={() => setMenuOpenId(menuOpenId === post.id ? null : post.id)}
@@ -300,26 +327,56 @@ export default function CommunityHub({
                         onClick={() => deletePost(post.id)}
                         className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
                       >
-                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Delete Post
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Delete
                       </button>
                     )}
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
-                  <MessageSquare className="w-4 h-4 text-sage" strokeWidth={1.5} />
+              {/* 6. Dynamic Author Header */}
+              <div className="flex items-center justify-between pr-8">
+                <div className="flex items-center gap-2">
+                  {post.is_anonymous ? (
+                    <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-lg shrink-0 shadow-inner">
+                      🤫
+                    </div>
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
+                      <MessageSquare className="w-4 h-4 text-sage" strokeWidth={1.5} />
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      {post.is_anonymous ? (
+                        <span className="text-zinc-200 text-xs font-bold transition-colors text-left">
+                          Anonymous Kamper
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => setProfileUser({ id: post.authorId, username: post.author })}
+                          className="text-white text-xs font-bold hover:text-pine transition-colors text-left"
+                        >
+                          {post.author}
+                        </button>
+                      )}
+                      {post.is_blasted && (
+                        <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-yellow-400 text-black animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.4)]">
+                          ⚡ Blast
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sage text-[10px]">{post.time} - {post.category}</span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <button
-                    onClick={() => setProfileUser({ id: post.authorId, username: post.author })}
-                    className="text-white text-xs font-bold hover:text-pine transition-colors text-left pr-6"
-                  >
-                    {post.author}
-                  </button>
-                  <span className="text-sage text-[10px]">{post.time} - {post.category}</span>
-                </div>
+
+                {/* Impact Score for Anonymous Posts */}
+                {post.is_anonymous && (
+                  <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded text-[10px] text-yellow-400 font-mono font-bold">
+                    ⚡ {post.impact_score}
+                  </div>
+                )}
               </div>
 
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{post.text}</p>
@@ -338,7 +395,7 @@ export default function CommunityHub({
                 </div>
               )}
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 mt-1">
                 <button
                   onClick={() => upvote(post.id)}
                   className="flex items-center gap-1 active:scale-95 transition-transform"
@@ -356,7 +413,11 @@ export default function CommunityHub({
                 <CommentThread
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
-                  onAuthorClick={(username, authorId) => setProfileUser({ id: authorId || '', username })}
+                  onAuthorClick={(username, authorId) => {
+                    if (username !== 'Anonymous') {
+                       setProfileUser({ id: authorId || '', username });
+                    }
+                  }}
                   onDelete={(commentId) => deleteComment(post.id, commentId)}
                   currentUserId={profile?.id}
                   placeholder="Reply to this post..."
@@ -367,18 +428,21 @@ export default function CommunityHub({
         )}
       </div>
 
-      {showAskModal && (
+      {/* 7. Updated Modal Logic */}
+      {askModalType !== null && (
         <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setShowAskModal(false)}
+            onClick={() => setAskModalType(null)}
           />
           <div className="relative w-full sm:max-w-lg bg-surface rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(80px,calc(80px+env(safe-area-inset-bottom)))]">
             
             <div className="flex items-center justify-between shrink-0">
-              <span className="text-white font-black text-lg">Ask a Campus Question</span>
+              <span className="text-white font-black text-lg">
+                {askModalType === 'anonymous' ? '🤫 Drop a Confession' : 'Ask a Campus Question'}
+              </span>
               <button 
-                onClick={() => setShowAskModal(false)} 
+                onClick={() => setAskModalType(null)} 
                 aria-label="Close"
                 className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors"
               >
@@ -406,7 +470,9 @@ export default function CommunityHub({
             </div>
 
             <div className="flex flex-col gap-1.5 shrink-0">
-              <label className="text-sage text-xs font-bold uppercase tracking-wider">Your Question</label>
+              <label className="text-sage text-xs font-bold uppercase tracking-wider">
+                {askModalType === 'anonymous' ? 'Your Confession (Anonymous)' : 'Your Question'}
+              </label>
               <textarea
                 value={newQuestion}
                 onChange={(e) => setNewQuestion(e.target.value)}
@@ -432,15 +498,38 @@ export default function CommunityHub({
                     }
                   }
                 }}
-                placeholder="e.g. Where is the safest parking after 8pm on campus?"
+                placeholder={askModalType === 'anonymous' ? "Spill the tea. No names allowed..." : "e.g. Where is the safest parking after 8pm on campus?"}
                 rows={3}
                 required
                 minLength={5}
                 className="bg-ink rounded-xl w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors resize-none text-sm"
               />
               {newQuestion.length > 0 && newQuestion.length < 5 && (
-                <span className="text-red-400 text-[10px] font-bold">Question must be at least 5 characters</span>
+                <span className="text-red-400 text-[10px] font-bold">Must be at least 5 characters</span>
               )}
+            </div>
+
+            {/* 8. The Campus Blast Toggle */}
+            <div 
+              onClick={() => setIsBlast(!isBlast)}
+              className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                isBlast ? 'bg-yellow-500/10 border-yellow-500/50' : 'bg-ink border-gray-800 hover:border-gray-700'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isBlast ? 'bg-yellow-400 text-black' : 'bg-gray-800 text-sage'}`}>
+                  <Zap className="w-4 h-4" strokeWidth={2} />
+                </div>
+                <div className="flex flex-col">
+                  <span className={`text-sm font-bold ${isBlast ? 'text-yellow-400' : 'text-white'}`}>
+                    Campus Blast (P15)
+                  </span>
+                  <span className="text-sage text-[10px]">Send push notification to all users</span>
+                </div>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${isBlast ? 'bg-yellow-400' : 'bg-gray-800'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${isBlast ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
             </div>
 
             {profile && (
@@ -457,10 +546,12 @@ export default function CommunityHub({
               <button
                 onClick={submitQuestion}
                 disabled={newQuestion.trim().length < 5 || posting}
-                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg"
+                className={`w-full h-12 rounded-xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg ${
+                  isBlast ? 'bg-yellow-400 text-black' : 'bg-pine text-black'
+                }`}
               >
                 {posting && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
-                {posting ? 'Posting...' : 'Post to Feed'}
+                {posting ? 'Posting...' : (isBlast ? 'Pay P15 & Blast' : 'Post to Feed')}
               </button>
             </div>
             
