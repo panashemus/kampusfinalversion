@@ -98,29 +98,33 @@ export default function CommunityHub({
       .order('created_at', { ascending: true });
     const commentRows = (commentData as FeedCommentRow[]) ?? [];
 
-    const mapped: EnhancedCommunityPost[] = postRows.map((p) => ({
-      id: p.id,
-      authorId: p.user_id,
-      author: p.author_name ?? p.user_id,
-      time: timeAgo(p.created_at),
-      category: p.category as Exclude<CommunityCategory, 'All Questions'>,
-      text: p.text,
-      upvotes: p.upvotes,
-      is_anonymous: p.is_anonymous || false,
-      is_blasted: p.is_blasted || false,
-      impact_score: p.impact_score || 0,
-      comments: commentRows
-        .filter((c) => c.post_id === p.id)
-        .map((c) => ({
-          id: c.id,
-          authorId: c.user_id,
-          author: 'Anonymous', // Forces retroactive anonymity on old comments
-          text: c.text,
-          time: timeAgo(c.created_at),
-          is_anonymous: true,
-        })),
-      images: p.images ?? [],
-    }));
+    const mapped: EnhancedCommunityPost[] = postRows.map((p) => {
+      const isPostAnon = p.is_anonymous || false;
+      return {
+        id: p.id,
+        authorId: p.user_id,
+        author: p.author_name ?? p.user_id,
+        time: timeAgo(p.created_at),
+        category: p.category as Exclude<CommunityCategory, 'All Questions'>,
+        text: p.text,
+        upvotes: p.upvotes,
+        is_anonymous: isPostAnon,
+        is_blasted: p.is_blasted || false,
+        impact_score: p.impact_score || 0,
+        comments: commentRows
+          .filter((c) => c.post_id === p.id)
+          .map((c) => ({
+            id: c.id,
+            authorId: c.user_id,
+            // If the post is anonymous, comments are anonymous. Otherwise, use saved author name.
+            author: isPostAnon ? 'Anonymous' : (c.author_name ?? c.user_id),
+            text: c.text,
+            time: timeAgo(c.created_at),
+            is_anonymous: isPostAnon || c.is_anonymous || false,
+          })),
+        images: p.images ?? [],
+      };
+    });
     setPosts(mapped);
     setLoading(false);
   }, []);
@@ -170,16 +174,19 @@ export default function CommunityHub({
     }
   };
 
-  // Hardcoded to lock all database inserts as Anonymous
+  // Context-aware comment submission: Anonymous on confession posts, named on normal posts
   const addComment = async (postId: string, comment: Comment) => {
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...p.comments, comment] } : p));
     if (!profile) return;
     
+    const targetPost = posts.find((p) => p.id === postId);
+    const isPostAnon = targetPost?.is_anonymous ?? false;
+
     await supabase.from('feed_comments').insert({
       post_id: postId,
-      user_id: profile.id, // Kept so they can delete their own comments, but never shown publicly
-      author_name: 'Anonymous',
-      is_anonymous: true,
+      user_id: profile.id,
+      author_name: isPostAnon ? 'Anonymous' : myName,
+      is_anonymous: isPostAnon,
       text: comment.text,
     });
   };
@@ -411,7 +418,14 @@ export default function CommunityHub({
                   onAdd={(c) => addComment(post.id, c)}
                   onDelete={(commentId) => deleteComment(post.id, commentId)}
                   currentUserId={profile?.id}
-                  placeholder="Reply anonymously..."
+                  isAnonymousPost={post.is_anonymous}
+                  myName={myName}
+                  onAuthorClick={(username, authorId) => {
+                    if (!post.is_anonymous) {
+                      setProfileUser({ id: authorId || '', username });
+                    }
+                  }}
+                  placeholder={post.is_anonymous ? "Reply anonymously..." : "Reply to this post..."}
                 />
               </div>
             </div>
