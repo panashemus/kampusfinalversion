@@ -116,7 +116,6 @@ export default function CommunityHub({
           .map((c) => ({
             id: c.id,
             authorId: c.user_id,
-            // If the post is anonymous, comments are anonymous. Otherwise, use saved author name.
             author: isPostAnon ? 'Anonymous' : (c.author_name ?? c.user_id),
             text: c.text,
             time: timeAgo(c.created_at),
@@ -174,7 +173,6 @@ export default function CommunityHub({
     }
   };
 
-  // Context-aware comment submission: Anonymous on confession posts, named on normal posts
   const addComment = async (postId: string, comment: Comment) => {
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...p.comments, comment] } : p));
     if (!profile) return;
