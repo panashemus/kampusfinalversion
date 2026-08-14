@@ -16,7 +16,6 @@ import { useToast } from '@/hooks/use-toast';
 
 const FILTERS: CommunityCategory[] = ['All Questions', 'Academic', 'Housing', 'Tech', 'General', 'Textbooks', 'Beauty'];
 
-// 1. Updated Database Row Type
 type FeedPostRow = {
   id: string;
   user_id: string;
@@ -38,9 +37,9 @@ type FeedCommentRow = {
   author_name: string | null;
   text: string;
   created_at: string;
+  is_anonymous?: boolean;
 };
 
-// 2. Updated Local Post Type
 type EnhancedCommunityPost = {
   id: string;
   authorId: string;
@@ -70,7 +69,6 @@ export default function CommunityHub({
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
   
-  // 3. UI States for the new flow
   const [askModalType, setAskModalType] = useState<'standard' | 'anonymous' | null>(null);
   const [isBlast, setIsBlast] = useState(false);
   
@@ -116,9 +114,10 @@ export default function CommunityHub({
         .map((c) => ({
           id: c.id,
           authorId: c.user_id,
-          author: c.author_name ?? c.user_id,
+          author: 'Anonymous', // Forces retroactive anonymity on old comments
           text: c.text,
           time: timeAgo(c.created_at),
+          is_anonymous: true,
         })),
       images: p.images ?? [],
     }));
@@ -171,13 +170,16 @@ export default function CommunityHub({
     }
   };
 
+  // Hardcoded to lock all database inserts as Anonymous
   const addComment = async (postId: string, comment: Comment) => {
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...p.comments, comment] } : p));
     if (!profile) return;
+    
     await supabase.from('feed_comments').insert({
       post_id: postId,
-      user_id: profile.id,
-      author_name: myName,
+      user_id: profile.id, // Kept so they can delete their own comments, but never shown publicly
+      author_name: 'Anonymous',
+      is_anonymous: true,
       text: comment.text,
     });
   };
@@ -195,7 +197,6 @@ export default function CommunityHub({
     toast({ title: 'Comment deleted' });
   };
 
-  // 4. Updated Submit Logic
   const submitQuestion = async () => {
     const text = newQuestion.trim();
     if (!text || !profile || !askModalType) return;
@@ -237,10 +238,8 @@ export default function CommunityHub({
       };
       setPosts((prev) => [post, ...prev]);
 
-      // If blasted, trigger the push notification logic
       if (isBlast) {
          toast({ title: '⚡ Blast Sent', description: 'Your post was blasted to the campus.' });
-         // Optional: Fire your edge function trigger here if needed
       }
     } else {
       console.error(error);
@@ -274,7 +273,6 @@ export default function CommunityHub({
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col gap-4">
         
-        {/* 5. The Dual Button Layout */}
         <div className="flex gap-3 mb-1 shrink-0 w-full">
           <button
             onClick={() => setAskModalType('standard')}
@@ -334,7 +332,6 @@ export default function CommunityHub({
                 )}
               </div>
 
-              {/* 6. Dynamic Author Header */}
               <div className="flex items-center justify-between pr-8">
                 <div className="flex items-center gap-2">
                   {post.is_anonymous ? (
@@ -371,7 +368,6 @@ export default function CommunityHub({
                   </div>
                 </div>
 
-                {/* Impact Score for Anonymous Posts */}
                 {post.is_anonymous && (
                   <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded text-[10px] text-yellow-400 font-mono font-bold">
                     ⚡ {post.impact_score}
@@ -413,14 +409,9 @@ export default function CommunityHub({
                 <CommentThread
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
-                  onAuthorClick={(username, authorId) => {
-                    if (username !== 'Anonymous') {
-                       setProfileUser({ id: authorId || '', username });
-                    }
-                  }}
                   onDelete={(commentId) => deleteComment(post.id, commentId)}
                   currentUserId={profile?.id}
-                  placeholder="Reply to this post..."
+                  placeholder="Reply anonymously..."
                 />
               </div>
             </div>
@@ -428,7 +419,6 @@ export default function CommunityHub({
         )}
       </div>
 
-      {/* 7. Updated Modal Logic */}
       {askModalType !== null && (
         <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
@@ -509,7 +499,6 @@ export default function CommunityHub({
               )}
             </div>
 
-            {/* 8. The Campus Blast Toggle */}
             <div 
               onClick={() => setIsBlast(!isBlast)}
               className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
