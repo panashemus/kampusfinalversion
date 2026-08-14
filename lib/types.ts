@@ -6,6 +6,7 @@ export type Comment = {
   author: string;
   text: string;
   time: string;
+  is_anonymous?: boolean;
 };
 
 export type Hazard = {
@@ -31,6 +32,9 @@ export type CommunityPost = {
   upvotes: number;
   comments: Comment[];
   images: string[];
+  is_anonymous?: boolean;
+  is_blasted?: boolean;
+  impact_score?: number;
 };
 
 export type HustleStatus = 'active' | 'unpaid_suspended';
