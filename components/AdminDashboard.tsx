@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldAlert, X, Users, Briefcase, Lock, CheckCircle, XCircle, Trash2, Loader as Loader2, Search } from 'lucide-react';
+import { ShieldAlert, X, Users, Briefcase, Lock, CheckCircle, XCircle, Trash2, Loader as Loader2, Search, MapPin } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 
-type Tab = 'subs' | 'gigs' | 'escrow';
+type Tab = 'subs' | 'gigs' | 'escrow' | 'konnect';
 
 export default function AdminDashboard({
   onClose,
@@ -23,7 +23,8 @@ export default function AdminDashboard({
   // Data States
   const [premiumUsers, setPremiumUsers] = useState<any[]>([]);
   const [gigs, setGigs] = useState<any[]>([]);
-  const [escrowTrades, setEscrowTrades] = useState<any[]>([]); // New Escrow State
+  const [escrowTrades, setEscrowTrades] = useState<any[]>([]); 
+  const [konnectPayments, setKonnectPayments] = useState<any[]>([]); // New Konnect State
 
   // Security Check: Only musungwa60@gmail.com or marked admins can view this
   const isAdmin = adminProfile?.is_admin || adminProfile?.email === 'musungwa60@gmail.com';
@@ -56,6 +57,14 @@ export default function AdminDashboard({
 
     if (vaultData) setEscrowTrades(vaultData);
 
+    // 4. Fetch Konnect Map Payments
+    const { data: konnectData } = await supabase
+      .from('payments')
+      .select('*, profiles(email)')
+      .order('created_at', { ascending: false });
+
+    if (konnectData) setKonnectPayments(konnectData);
+
     setLoading(false);
   }, []);
 
@@ -85,7 +94,6 @@ export default function AdminDashboard({
   };
 
   const verifyPremium = async (userId: string) => {
-    // Clears the ref code so they don't show up as 'pending audit' anymore, but keeps them premium
     const { error } = await supabase
       .from('profiles')
       .update({ payment_ref_code: 'VERIFIED' })
@@ -133,6 +141,30 @@ export default function AdminDashboard({
     }
   };
 
+  // --- ACTIONS FOR KONNECT MAP ---
+  const verifyKonnectPayment = async (paymentId: string) => {
+    const { error } = await supabase
+      .from('payments')
+      .update({ status: 'verified' })
+      .eq('id', paymentId);
+
+    if (!error) {
+      setKonnectPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, status: 'verified' } : p)));
+      toast({ title: 'Map Unlock Verified ✅', description: 'Payment confirmed.' });
+    }
+  };
+
+  const rejectKonnectPayment = async (paymentId: string, userId: string) => {
+    // 1. Mark payment as failed
+    await supabase.from('payments').update({ status: 'failed' }).eq('id', paymentId);
+    
+    // 2. Revoke their tier access on the map
+    await supabase.from('profiles').update({ konnect_tier: 0 }).eq('id', userId);
+
+    setKonnectPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, status: 'failed' } : p)));
+    toast({ title: 'Access Revoked 🚫', description: 'Fake payment rejected. User downgraded.' });
+  };
+
   if (!isAdmin) {
     return (
       <div className="fixed inset-0 z-[8000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
@@ -165,21 +197,27 @@ export default function AdminDashboard({
         <div className="flex bg-ink border-b border-gray-800 shrink-0">
           <button
             onClick={() => setActiveTab('subs')}
-            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${activeTab === 'subs' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'subs' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
           >
-            <Users className="w-4 h-4" /> Subs
+            <Users className="w-3.5 h-3.5" /> Subs
           </button>
           <button
             onClick={() => setActiveTab('gigs')}
-            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${activeTab === 'gigs' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'gigs' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
           >
-            <Briefcase className="w-4 h-4" /> Gigs
+            <Briefcase className="w-3.5 h-3.5" /> Gigs
           </button>
           <button
             onClick={() => setActiveTab('escrow')}
-            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${activeTab === 'escrow' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'escrow' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
           >
-            <Lock className="w-4 h-4" /> Vault
+            <Lock className="w-3.5 h-3.5" /> Vault
+          </button>
+          <button
+            onClick={() => setActiveTab('konnect')}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'konnect' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}
+          >
+            <MapPin className="w-3.5 h-3.5" /> Map
           </button>
         </div>
 
@@ -312,6 +350,64 @@ export default function AdminDashboard({
                           <button onClick={() => verifyEscrow(trade.id)} className="w-full bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform mt-1">
                             <CheckCircle className="w-3.5 h-3.5" /> Confirm Funds Received
                           </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: KONNECT MAP PAYMENTS */}
+              {activeTab === 'konnect' && (
+                <div className="flex flex-col gap-3">
+                  {konnectPayments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 gap-2">
+                      <MapPin className="w-10 h-10 text-orange-500/50" />
+                      <p className="text-sage text-center text-sm">No map unlock requests.</p>
+                    </div>
+                  ) : (
+                    konnectPayments.map((payment) => (
+                      <div key={payment.id} className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="text-white font-bold flex items-center gap-1.5">
+                              {payment.feature === 'konnect_ghost' ? (
+                                <><Ghost className="w-4 h-4 text-gray-400" /> Ghost Mode (P30)</>
+                              ) : (
+                                <><MapPin className="w-4 h-4 text-pine" /> Base Unlock (P20)</>
+                              )}
+                            </div>
+                            <div className="text-sage text-[10px] mt-0.5">User: {payment.profiles?.email || 'Unknown'}</div>
+                          </div>
+                          {payment.status === 'verified' ? (
+                            <span className="bg-pine/20 text-pine text-[10px] font-black px-2 py-1 rounded">VERIFIED</span>
+                          ) : payment.status === 'failed' ? (
+                            <span className="bg-red-950 border border-red-500/50 text-red-400 text-[10px] font-black px-2 py-1 rounded">REJECTED</span>
+                          ) : (
+                            <span className="bg-orange-500/20 text-orange-400 text-[10px] font-black px-2 py-1 rounded animate-pulse">PENDING AUDIT</span>
+                          )}
+                        </div>
+                        
+                        <div className="bg-ink rounded p-2 text-xs flex flex-col gap-1 border border-gray-800">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sage">Amount: <strong className="text-white">P{payment.amount}</strong></span>
+                            <span className="text-sage">SMS ID: <strong className="text-white">{payment.payment_ref_id || 'N/A'}</strong></span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-gray-800/50">
+                            <span className="text-sage">Ref Code:</span>
+                            <strong className="text-pine font-mono tracking-wider">{payment.reference_code || 'N/A'}</strong>
+                          </div>
+                        </div>
+
+                        {payment.status === 'pending' && (
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={() => verifyKonnectPayment(payment.id)} className="flex-1 bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform">
+                              <CheckCircle className="w-3.5 h-3.5" /> Approve
+                            </button>
+                            <button onClick={() => rejectKonnectPayment(payment.id, payment.user_id)} className="flex-1 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform">
+                              <XCircle className="w-3.5 h-3.5" /> Reject
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))
