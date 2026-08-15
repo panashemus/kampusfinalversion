@@ -8,6 +8,7 @@ import { timeAgo } from '@/lib/utils';
 import type { Hazard, SosAlert, HazardRow, Profile } from '@/lib/types';
 import { X, MessageCircle, MapPin as MapPinIcon, Clock, User, CheckCircle2, Ghost, Eye, Send, Lock, Unlock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import PaymentModal from '@/components/PaymentModal';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -112,12 +113,12 @@ export default function RadarMap({
   const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
   
   // Konnect Monetization State
-  // 0 = Locked (Free safety map only)
-  // 1 = P20 Tier (See users, drop status)
-  // 2 = P30 Tier (Access Ghost Mode)
-  // TODO: Replace this with profile?.konnect_tier from your database
   const [userTier, setUserTier] = useState<0 | 1 | 2>(0); 
   const [showUpgradeModal, setShowUpgradeModal] = useState<'base' | 'ghost' | null>(null);
+  
+  // Payment Flow State
+  const [pendingTier, setPendingTier] = useState<1 | 2 | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Konnect Functionality State
   const [isGhostMode, setIsGhostMode] = useState(false);
@@ -137,6 +138,11 @@ export default function RadarMap({
       if (kData) setKonnectUsers(kData as KonnectUser[]);
       
       if (profile) {
+        // Load their tier directly from their profile to persist unlocks
+        if ((profile as any).konnect_tier) {
+           setUserTier((profile as any).konnect_tier as 0 | 1 | 2);
+        }
+
         const { data: myLoc } = await supabase.from('konnect_locations').select('is_ghost_mode, status_text').eq('user_id', profile.id).maybeSingle();
         if (myLoc) {
           setIsGhostMode(myLoc.is_ghost_mode);
@@ -197,11 +203,41 @@ export default function RadarMap({
     }
   };
 
-  const handleMockPayment = (tier: 1 | 2) => {
-    // TODO: Connect this to your real payment gateway / upload logic
-    setUserTier(tier);
+  const handleInitiatePayment = (tier: 1 | 2) => {
+    setPendingTier(tier);
     setShowUpgradeModal(null);
-    toast({ title: 'Payment Successful', description: `Kampus Konnect tier unlocked.` });
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentConfirm = async (referenceCode: string, paymentRefId: string) => {
+    if (!profile || !pendingTier) return;
+
+    // 1. Optimistically unlock the UI instantly
+    setUserTier(pendingTier);
+    setShowPaymentModal(false);
+    
+    // 2. Update their profile in the database
+    await supabase
+      .from('profiles')
+      .update({ konnect_tier: pendingTier })
+      .eq('id', profile.id);
+
+    // 3. Log it to the payments table for admin verification
+    await supabase.from('payments').insert({
+      user_id: profile.id,
+      amount: pendingTier === 2 ? 30 : 20,
+      reference_code: referenceCode,
+      payment_ref_id: paymentRefId,
+      feature: pendingTier === 2 ? 'konnect_ghost' : 'konnect_base',
+      status: 'pending'
+    });
+
+    toast({ 
+      title: 'Kampus Konnect Unlocked 🚀', 
+      description: 'Your map is live! Admin will verify your payment reference shortly.' 
+    });
+    
+    setPendingTier(null);
   };
 
   return (
@@ -275,7 +311,7 @@ export default function RadarMap({
             >
               {userTier < 2 ? <Lock className="w-4 h-4" /> : isGhostMode ? <Ghost className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
-          </  >
+          </>
         )}
       </div>
 
@@ -308,7 +344,7 @@ export default function RadarMap({
             </div>
 
             <button 
-              onClick={() => handleMockPayment(showUpgradeModal === 'ghost' ? 2 : 1)}
+              onClick={() => handleInitiatePayment(showUpgradeModal === 'ghost' ? 2 : 1)}
               className="w-full h-12 rounded-xl bg-pine text-black font-bold active:scale-95 transition-transform"
             >
               Pay Now
@@ -321,7 +357,97 @@ export default function RadarMap({
         </div>
       )}
 
-      {/* ... [Rest of your SOS Detail Modal remains exactly the same] ... */}
+      {/* PAYMENT MODAL BRIDGE */}
+      <PaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onConfirm={handlePaymentConfirm}
+        amount={pendingTier === 2 ? 30 : 20}
+        ctaLabel="Unlock Konnect"
+      />
+
+      {/* SOS Detail Card Modal */}
+      {selectedSos && (
+        <div className="absolute inset-0 z-[2500] flex items-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedSos(null)} />
+          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up shadow-2xl max-h-[85dvh] overflow-y-auto no-scrollbar">
+            
+            <div className="flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                {selectedSos.active ? (
+                  <>
+                    <span className="w-3 h-3 rounded-full bg-red-500 animate-broadcast-pulse inline-block" />
+                    <span className="text-red-400 font-black text-sm tracking-wider uppercase">Active Emergency Broadcast</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-400 font-bold text-sm tracking-wider uppercase">Resolved (Deactivated)</span>
+                  </>
+                )}
+              </div>
+              <button onClick={() => setSelectedSos(null)} className="text-sage hover:text-white">
+                <X className="w-5 h-5" strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 bg-ink rounded-xl p-4 border border-gray-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
+                  <User className="w-4 h-4 text-pine" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Student Handle</span>
+                  <span className="text-white text-sm font-bold">{selectedSos.user_name ?? 'Anonymous Student'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
+                  <MapPinIcon className="w-4 h-4 text-pine" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Broadcast Area</span>
+                  <span className="text-white text-sm font-semibold">{selectedSos.location_name ?? 'Campus Zone'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
+                  <Clock className="w-4 h-4 text-pine" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Triggered</span>
+                  <span className="text-white text-sm">{timeAgo(selectedSos.created_at)}</span>
+                </div>
+              </div>
+            </div>
+
+            {selectedSos.user_id && onMessageUser ? (
+              <button 
+                onClick={() => { 
+                  const uid = selectedSos.user_id; 
+                  const uname = selectedSos.user_name ?? 'Student'; 
+                  setSelectedSos(null); 
+                  if (uid) onMessageUser(uid, uname); 
+                }} 
+                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform shrink-0 mt-2"
+              >
+                <MessageCircle className="w-4 h-4" strokeWidth={2} /> Check Up / Message Student
+              </button>
+            ) : (
+              <p className="text-sage text-xs text-center shrink-0">Broadcasted by an unlinked guest user.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Emergency Disclaimer */}
+      <div className="absolute bottom-2 left-2 right-2 z-[500] pointer-events-none">
+        <div className="bg-surface/85 backdrop-blur-sm rounded-xl border border-gray-800 px-3 py-2">
+          <p className="text-sage text-[9px] leading-snug text-center">
+            <span className="font-bold text-yellow-400">Notice:</span> Kampus is a peer-to-peer student community assistance platform. Kampus is NOT an official emergency response unit or security service.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
