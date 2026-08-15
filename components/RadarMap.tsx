@@ -138,7 +138,6 @@ export default function RadarMap({
       if (kData) setKonnectUsers(kData as KonnectUser[]);
       
       if (profile) {
-        // Load their tier directly from their profile to persist unlocks
         if ((profile as any).konnect_tier) {
            setUserTier((profile as any).konnect_tier as 0 | 1 | 2);
         }
@@ -169,7 +168,6 @@ export default function RadarMap({
   const handleLocate = useCallback(async (pos: [number, number]) => {
     onLocate(pos);
     
-    // Only upload location to map if they have unlocked Konnect AND are not hiding
     if (profile && userTier >= 1) {
       await supabase.from('konnect_locations').upsert({
         user_id: profile.id,
@@ -212,17 +210,11 @@ export default function RadarMap({
   const handlePaymentConfirm = async (referenceCode: string, paymentRefId: string) => {
     if (!profile || !pendingTier) return;
 
-    // 1. Optimistically unlock the UI instantly
     setUserTier(pendingTier);
     setShowPaymentModal(false);
     
-    // 2. Update their profile in the database
-    await supabase
-      .from('profiles')
-      .update({ konnect_tier: pendingTier })
-      .eq('id', profile.id);
+    await supabase.from('profiles').update({ konnect_tier: pendingTier }).eq('id', profile.id);
 
-    // 3. Log it to the payments table for admin verification
     await supabase.from('payments').insert({
       user_id: profile.id,
       amount: pendingTier === 2 ? 30 : 20,
@@ -254,7 +246,6 @@ export default function RadarMap({
           <Marker key={s.id} position={[s.lat, s.lng]} icon={createSosPin(s.active)} eventHandlers={{ click: () => setSelectedSos(s) }} />
         ))}
 
-        {/* Only render other users if the current user has paid for the P20 tier */}
         {userTier >= 1 && konnectUsers.map((user) => (
           user.user_id !== profile?.id && (
             <Marker key={user.user_id} position={[user.lat, user.lng]} icon={createKonnectPin(user)} eventHandlers={{ click: () => onMessageUser && onMessageUser(user.user_id, user.username) }} />
@@ -262,23 +253,33 @@ export default function RadarMap({
         ))}
       </MapContainer>
 
-      {/* KONNECT PAYWALL & UI CONTROLS */}
-      <div className="absolute top-24 right-4 z-[1000] flex flex-col gap-2 items-end pointer-events-none">
+      {/* REPOSITIONED: KONNECT PAYWALL & UI CONTROLS (Bottom-Left) */}
+      <div className="absolute bottom-28 left-4 z-[1000] flex flex-col gap-2 items-start pointer-events-none">
         
         {userTier === 0 ? (
-          // LOCKED STATE (P20 Paywall)
+          // LOCKED STATE (P20 Paywall) - Matches screenshot styling
           <button 
             onClick={() => setShowUpgradeModal('base')}
-            className="bg-pine text-black rounded-xl p-3 flex flex-col items-end pointer-events-auto shadow-2xl active:scale-95 transition-transform"
+            className="bg-[#FFDE4D] text-black rounded-xl p-3 flex flex-col items-start pointer-events-auto shadow-2xl active:scale-95 transition-transform"
           >
             <div className="flex items-center gap-2 font-black text-sm">
-              Unlock Konnect <Lock className="w-4 h-4" />
+              <Lock className="w-4 h-4" /> Unlock Konnect 
             </div>
-            <span className="text-[10px] opacity-80 font-bold">See campus vibes (P20)</span>
+            <span className="text-[10px] opacity-80 font-bold mt-0.5">See campus vibes (P20)</span>
           </button>
         ) : (
           // UNLOCKED STATE
           <>
+            <button 
+              onClick={handleGhostModeToggle}
+              className={`w-12 h-12 rounded-full flex items-center justify-center pointer-events-auto shadow-lg transition-colors border ${
+                userTier < 2 ? 'bg-ink text-gray-500 border-gray-700' :
+                isGhostMode ? 'bg-zinc-800 text-gray-400 border-zinc-700' : 'bg-[#FFDE4D] text-black border-[#FFDE4D]'
+              }`}
+            >
+              {userTier < 2 ? <Lock className="w-4 h-4" /> : isGhostMode ? <Ghost className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+            
             {showStatusInput ? (
               <div className="bg-surface border border-gray-800 rounded-xl p-2 flex items-center gap-2 pointer-events-auto shadow-2xl animate-in fade-in zoom-in">
                 <input 
@@ -301,16 +302,6 @@ export default function RadarMap({
                 {myStatus ? `"${myStatus}"` : "+ Set Map Status"}
               </button>
             )}
-
-            <button 
-              onClick={handleGhostModeToggle}
-              className={`w-12 h-12 rounded-full flex items-center justify-center pointer-events-auto shadow-lg transition-colors border ${
-                userTier < 2 ? 'bg-ink text-gray-500 border-gray-700' :
-                isGhostMode ? 'bg-zinc-800 text-gray-400 border-zinc-700' : 'bg-pine text-black border-emerald-400'
-              }`}
-            >
-              {userTier < 2 ? <Lock className="w-4 h-4" /> : isGhostMode ? <Ghost className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
           </>
         )}
       </div>
@@ -321,7 +312,7 @@ export default function RadarMap({
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowUpgradeModal(null)} />
           <div className="relative w-[320px] bg-surface border border-gray-800 rounded-3xl p-6 flex flex-col gap-5 text-center shadow-2xl animate-in zoom-in-95">
             
-            <div className="w-14 h-14 rounded-full bg-pine/15 text-pine flex items-center justify-center mx-auto border border-pine/30">
+            <div className="w-14 h-14 rounded-full bg-yellow-400/15 text-[#FFDE4D] flex items-center justify-center mx-auto border border-yellow-400/30">
               {showUpgradeModal === 'ghost' ? <Ghost className="w-7 h-7" /> : <Unlock className="w-7 h-7" />}
             </div>
 
@@ -337,7 +328,7 @@ export default function RadarMap({
             </div>
 
             <div className="bg-ink rounded-xl border border-gray-800 p-4">
-              <span className="text-3xl font-black text-pine">
+              <span className="text-3xl font-black text-[#FFDE4D]">
                 P{showUpgradeModal === 'ghost' ? '30' : '20'}
               </span>
               <span className="text-sage text-xs ml-1">/ one-time</span>
@@ -345,7 +336,7 @@ export default function RadarMap({
 
             <button 
               onClick={() => handleInitiatePayment(showUpgradeModal === 'ghost' ? 2 : 1)}
-              className="w-full h-12 rounded-xl bg-pine text-black font-bold active:scale-95 transition-transform"
+              className="w-full h-12 rounded-xl bg-[#FFDE4D] text-black font-bold active:scale-95 transition-transform"
             >
               Pay Now
             </button>
