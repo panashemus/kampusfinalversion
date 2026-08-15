@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldAlert, X, Users, Briefcase, Lock, CheckCircle, XCircle, Trash2, Loader as Loader2, Search, MapPin } from 'lucide-react';
+import { ShieldAlert, X, Users, Briefcase, Lock, CheckCircle, XCircle, Trash2, Loader as Loader2, Search, MapPin, Ghost } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
