@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 import OtpModal from '@/components/OtpModal';
 
-const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw'];
+const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw', 'buan.ac.bw', 'biust.ac.bw'];
 const ADMIN_EMAILS = ['musungwa60@gmail.com', 'chrisvandium@gmail.com'];
 const TEST_EMAILS: string[] = ['chrisvandium@gmail.com', 'chris.karter1629@gmail.com', 'yofather63@gmail.com', 'Makabongwekundai2000@gmail.com'];
 
