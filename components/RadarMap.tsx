@@ -5,71 +5,72 @@ import L from 'leaflet';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
-import type { Hazard, SosAlert, HazardRow } from '@/lib/types';
-import { ShieldAlert, X, MessageCircle, MapPin as MapPinIcon, Clock, User, CheckCircle2 } from 'lucide-react';
+import type { Hazard, SosAlert, HazardRow, Profile } from '@/lib/types';
+import { X, MessageCircle, MapPin as MapPinIcon, Clock, User, CheckCircle2, Ghost, Eye, Send } from 'lucide-react';
 
 import 'leaflet/dist/leaflet.css';
 
+// Centered on Francistown based on your screenshot
 const DEFAULT_CENTER: [number, number] = [-21.1700, 27.5000];
 
+type KonnectUser = {
+  user_id: string;
+  username: string;
+  lat: number;
+  lng: number;
+  status_text: string | null;
+  updated_at: string;
+};
+
+// --- Custom Icons ---
 function createUserPin() {
   const html = `
     <div style="position:relative;width:24px;height:24px;">
       <span style="position:absolute;inset:-4px;border-radius:50%;background:#FFDE4D;opacity:0.35;animation:kampus-pulse 2s ease-out infinite;"></span>
       <span style="position:absolute;inset:0;border-radius:50%;background:#FFDE4D;box-shadow:0 0 0 3px rgba(255,222,77,0.25);"></span>
     </div>`;
-  return L.divIcon({
-    html,
-    className: 'kampus-user-pin',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
+  return L.divIcon({ html, className: 'kampus-user-pin', iconSize: [24, 24], iconAnchor: [12, 12] });
 }
 
 function createHazardPin() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFDE4D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
   const html = `
-    <div style="
-      width:28px;height:28px;border-radius:50%;
-      background:#15241C;border:1px solid #8BA396;
-      display:flex;align-items:center;justify-content:center;
-    ">${svg}</div>`;
-  return L.divIcon({
-    html,
-    className: 'kampus-hazard-pin',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  });
+    <div style="width:28px;height:28px;border-radius:50%;background:#15241C;border:1px solid #8BA396;display:flex;align-items:center;justify-content:center;">
+      ${svg}
+    </div>`;
+  return L.divIcon({ html, className: 'kampus-hazard-pin', iconSize: [28, 28], iconAnchor: [14, 14] });
 }
 
 function createSosPin(active: boolean) {
   const bg = active ? '#EF4444' : '#6B7280';
   const shadow = active ? 'rgba(239,68,68,0.55)' : 'rgba(107,114,128,0.25)';
-  const pulseRings = active ? `
-    <span style="position:absolute;inset:-8px;border-radius:50%;background:${bg};opacity:0.18;animation:sos-pulse-ring 1.4s ease-out infinite;"></span>
-    <span style="position:absolute;inset:-3px;border-radius:50%;background:${bg};opacity:0.28;animation:sos-pulse-ring 1.4s ease-out 0.4s infinite;"></span>
-  ` : '';
-
   const html = `
     <div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
-      ${pulseRings}
       <span style="position:absolute;inset:0;border-radius:50%;background:${bg};box-shadow:0 0 12px 4px ${shadow};display:flex;align-items:center;justify-content:center;">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
       </span>
     </div>`;
-  return L.divIcon({
-    html,
-    className: 'kampus-sos-pin',
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-  });
+  return L.divIcon({ html, className: 'kampus-sos-pin', iconSize: [36, 36], iconAnchor: [18, 18] });
 }
 
-function LocationTracker({
-  onLocate,
-}: {
-  onLocate: (pos: [number, number]) => void;
-}) {
+function createKonnectPin(user: KonnectUser) {
+  const initial = user.username.charAt(0).toUpperCase();
+  const statusHtml = user.status_text 
+    ? `<div style="position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:white; color:black; font-weight:bold; font-size:10px; padding:4px 8px; border-radius:12px; white-space:nowrap; box-shadow:0 4px 6px rgba(0,0,0,0.3); pointer-events:none;">${user.status_text}</div>` 
+    : '';
+
+  const html = `
+    <div style="position:relative; width:30px; height:30px;">
+      ${statusHtml}
+      <div style="width:30px; height:30px; border-radius:50%; background:#10B981; border:2px solid #0B1611; display:flex; align-items:center; justify-content:center; color:#0B1611; font-weight:900; font-size:14px; box-shadow:0 0 10px rgba(16,185,129,0.4);">
+        ${initial}
+      </div>
+    </div>`;
+  return L.divIcon({ html, className: 'kampus-konnect-pin', iconSize: [30, 30], iconAnchor: [15, 15] });
+}
+
+// --- Tracking Component ---
+function LocationTracker({ onLocate }: { onLocate: (pos: [number, number]) => void }) {
   const map = useMap();
   const [pos, setPos] = useState<[number, number] | null>(null);
 
@@ -93,12 +94,15 @@ function LocationTracker({
   return <Marker position={pos} icon={createUserPin()} />;
 }
 
+// --- Main Map Component ---
 export default function RadarMap({
+  profile,
   onOpenHazard,
   sosAlerts,
   onLocate,
   onMessageUser,
 }: {
+  profile: Profile | null;
   onOpenHazard: (h: Hazard) => void;
   sosAlerts: SosAlert[];
   onLocate: (pos: [number, number]) => void;
@@ -106,118 +110,163 @@ export default function RadarMap({
 }) {
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
+  const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
+  
+  // Konnect State
+  const [isGhostMode, setIsGhostMode] = useState(false);
+  const [myStatus, setMyStatus] = useState('');
+  const [showStatusInput, setShowStatusInput] = useState(false);
 
+  // 1. Load Data & Subscriptions
   useEffect(() => {
-    const loadHazards = async () => {
-      const { data } = await supabase
-        .from('hazards')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (data) {
-        const mapped: Hazard[] = (data as HazardRow[]).map((row) => ({
-          id: row.id,
-          position: [row.lat, row.lng],
-          label: row.title,
-          category: row.type,
-          time: timeAgo(row.created_at),
-          lockedToLive: true,
-          upvotes: row.upvotes || 0,
-          comments: [],
-        }));
-        setHazards(mapped);
+    const loadData = async () => {
+      // Load Hazards
+      const { data: hData } = await supabase.from('hazards').select('*').order('created_at', { ascending: false });
+      if (hData) {
+        setHazards((hData as HazardRow[]).map(row => ({
+          id: row.id, position: [row.lat, row.lng], label: row.title, category: row.type, time: timeAgo(row.created_at), lockedToLive: true, upvotes: row.upvotes || 0, comments: []
+        })));
+      }
+
+      // Load Konnect Users
+      const { data: kData } = await supabase.from('konnect_locations').select('*');
+      if (kData) setKonnectUsers(kData as KonnectUser[]);
+      
+      // Check my initial Ghost Mode state
+      if (profile) {
+        const { data: myLoc } = await supabase.from('konnect_locations').select('is_ghost_mode, status_text').eq('user_id', profile.id).maybeSingle();
+        if (myLoc) {
+          setIsGhostMode(myLoc.is_ghost_mode);
+          setMyStatus(myLoc.status_text || '');
+        }
       }
     };
-    loadHazards();
+    loadData();
 
-    const channel = supabase
-      .channel('public:hazards:radar')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'hazards' },
-        (payload) => {
-          const row = payload.new as HazardRow;
-          const hazard: Hazard = {
-            id: row.id,
-            position: [row.lat, row.lng],
-            label: row.title,
-            category: row.type,
-            time: 'just now',
-            lockedToLive: true,
-            upvotes: row.upvotes || 0,
-            comments: [],
-          };
-          setHazards((prev) => {
-            if (prev.some(h => h.id === hazard.id)) return prev;
-            return [hazard, ...prev];
-          });
-        }
-      )
+    const channel = supabase.channel('public:radar_map')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'hazards' }, (payload) => {
+        const row = payload.new as HazardRow;
+        setHazards((prev) => [{ id: row.id, position: [row.lat, row.lng], label: row.title, category: row.type, time: 'just now', lockedToLive: true, upvotes: row.upvotes || 0, comments: [] }, ...prev]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'konnect_locations' }, async () => {
+        const { data } = await supabase.from('konnect_locations').select('*');
+        if (data) setKonnectUsers(data as KonnectUser[]);
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [profile]);
 
-  const handleLocate = useCallback(
-    (pos: [number, number]) => onLocate(pos),
-    [onLocate]
-  );
+  // 2. Handle Location Updates
+  const handleLocate = useCallback(async (pos: [number, number]) => {
+    onLocate(pos);
+    
+    // Automatically push location to Konnect Map if not in ghost mode
+    if (profile) {
+      await supabase.from('konnect_locations').upsert({
+        user_id: profile.id,
+        username: profile.username || profile.email.split('@')[0],
+        lat: pos[0],
+        lng: pos[1],
+        status_text: myStatus || null,
+        is_ghost_mode: isGhostMode,
+        updated_at: new Date().toISOString()
+      });
+    }
+  }, [onLocate, profile, isGhostMode, myStatus]);
+
+  // 3. Handle Ghost Mode Toggle
+  const toggleGhostMode = async () => {
+    const newGhostState = !isGhostMode;
+    setIsGhostMode(newGhostState);
+    if (profile) {
+      await supabase.from('konnect_locations').update({ is_ghost_mode: newGhostState, updated_at: new Date().toISOString() }).eq('user_id', profile.id);
+    }
+  };
+
+  const updateStatus = async () => {
+    setShowStatusInput(false);
+    if (profile) {
+      await supabase.from('konnect_locations').update({ status_text: myStatus, updated_at: new Date().toISOString() }).eq('user_id', profile.id);
+    }
+  };
 
   return (
     <div className="relative w-full h-full">
-      <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={14}
-        zoomControl={false}
-        attributionControl={false}
-        className="w-full h-full"
-        style={{ background: '#0B1611' }}
-      >
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
-        />
+      {/* MAP LAYER */}
+      <MapContainer center={DEFAULT_CENTER} zoom={14} zoomControl={false} attributionControl={false} className="w-full h-full" style={{ background: '#0B1611' }}>
+        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" subdomains="abcd" />
         <LocationTracker onLocate={handleLocate} />
+        
         {hazards.map((h) => (
-          <Marker
-            key={h.id}
-            position={h.position}
-            icon={createHazardPin()}
-            eventHandlers={{ click: () => onOpenHazard(h) }}
-          />
+          <Marker key={h.id} position={h.position} icon={createHazardPin()} eventHandlers={{ click: () => onOpenHazard(h) }} />
         ))}
+        
         {sosAlerts.map((s) => (
-          <Marker
-            key={s.id}
-            position={[s.lat, s.lng]}
-            icon={createSosPin(s.active)}
-            eventHandlers={{ click: () => setSelectedSos(s) }}
-          />
+          <Marker key={s.id} position={[s.lat, s.lng]} icon={createSosPin(s.active)} eventHandlers={{ click: () => setSelectedSos(s) }} />
+        ))}
+
+        {/* Konnect Users Layer */}
+        {konnectUsers.map((user) => (
+          // Don't render ourselves twice (LocationTracker handles our yellow pin)
+          user.user_id !== profile?.id && (
+            <Marker key={user.user_id} position={[user.lat, user.lng]} icon={createKonnectPin(user)} eventHandlers={{ click: () => onMessageUser && onMessageUser(user.user_id, user.username) }} />
+          )
         ))}
       </MapContainer>
 
-      {/* SOS Detail Card Modal when clicked */}
+      {/* KONNECT UI CONTROLS */}
+      <div className="absolute top-24 right-4 z-[1000] flex flex-col gap-2 items-end pointer-events-none">
+        
+        {showStatusInput ? (
+          <div className="bg-surface border border-gray-800 rounded-xl p-2 flex items-center gap-2 pointer-events-auto shadow-2xl animate-in fade-in zoom-in">
+            <input 
+              type="text"
+              value={myStatus}
+              onChange={(e) => setMyStatus(e.target.value)}
+              placeholder="e.g. Vibes at Las Vegas dorms"
+              className="bg-ink border border-gray-700 rounded-lg h-9 px-3 text-xs text-white placeholder-sage outline-none focus:border-pine w-48"
+              maxLength={40}
+            />
+            <button onClick={updateStatus} className="w-9 h-9 rounded-lg bg-pine text-black flex items-center justify-center shrink-0">
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button 
+            onClick={() => setShowStatusInput(true)}
+            className="bg-surface/80 backdrop-blur-md border border-gray-800 rounded-full px-4 py-2 text-xs font-bold text-white pointer-events-auto hover:bg-surface transition-colors shadow-lg"
+          >
+            {myStatus ? `"${myStatus}"` : "+ Set Map Status"}
+          </button>
+        )}
+
+        <button 
+          onClick={toggleGhostMode}
+          className={`w-12 h-12 rounded-full flex items-center justify-center pointer-events-auto shadow-lg transition-colors border ${
+            isGhostMode ? 'bg-zinc-800 text-gray-400 border-zinc-700' : 'bg-pine text-black border-emerald-400'
+          }`}
+        >
+          {isGhostMode ? <Ghost className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* SOS Detail Card Modal */}
       {selectedSos && (
         <div className="absolute inset-0 z-[2500] flex items-end">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
-            onClick={() => setSelectedSos(null)}
-          />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedSos(null)} />
           <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up shadow-2xl max-h-[85dvh] overflow-y-auto no-scrollbar">
+            {/* Same SOS Modal Content as Before */}
             <div className="flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 {selectedSos.active ? (
                   <>
                     <span className="w-3 h-3 rounded-full bg-red-500 animate-broadcast-pulse inline-block" />
-                    <span className="text-red-400 font-black text-sm tracking-wider uppercase">
-                      Active Emergency Broadcast
-                    </span>
+                    <span className="text-red-400 font-black text-sm tracking-wider uppercase">Active Emergency Broadcast</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-400 font-bold text-sm tracking-wider uppercase">
-                      Resolved (Deactivated)
-                    </span>
+                    <span className="text-gray-400 font-bold text-sm tracking-wider uppercase">Resolved (Deactivated)</span>
                   </>
                 )}
               </div>
@@ -228,29 +277,21 @@ export default function RadarMap({
 
             <div className="flex flex-col gap-3 bg-ink rounded-xl p-4 border border-gray-800 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
-                  <User className="w-4 h-4 text-pine" strokeWidth={1.5} />
-                </div>
+                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-pine" strokeWidth={1.5} /></div>
                 <div className="flex flex-col">
                   <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Student Handle</span>
                   <span className="text-white text-sm font-bold">{selectedSos.user_name ?? 'Anonymous Student'}</span>
                 </div>
               </div>
-
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
-                  <MapPinIcon className="w-4 h-4 text-pine" strokeWidth={1.5} />
-                </div>
+                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0"><MapPinIcon className="w-4 h-4 text-pine" strokeWidth={1.5} /></div>
                 <div className="flex flex-col">
                   <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Broadcast Area</span>
                   <span className="text-white text-sm font-semibold">{selectedSos.location_name ?? 'Campus Zone'}</span>
                 </div>
               </div>
-
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0">
-                  <Clock className="w-4 h-4 text-pine" strokeWidth={1.5} />
-                </div>
+                <div className="w-9 h-9 rounded-full bg-surface border border-gray-800 flex items-center justify-center shrink-0"><Clock className="w-4 h-4 text-pine" strokeWidth={1.5} /></div>
                 <div className="flex flex-col">
                   <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Triggered</span>
                   <span className="text-white text-sm">{timeAgo(selectedSos.created_at)}</span>
@@ -259,17 +300,8 @@ export default function RadarMap({
             </div>
 
             {selectedSos.user_id && onMessageUser ? (
-              <button
-                onClick={() => {
-                  const uid = selectedSos.user_id;
-                  const uname = selectedSos.user_name ?? 'Student';
-                  setSelectedSos(null);
-                  if (uid) onMessageUser(uid, uname);
-                }}
-                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform shrink-0 mt-2"
-              >
-                <MessageCircle className="w-4 h-4" strokeWidth={2} />
-                Check Up / Message Student
+              <button onClick={() => { const uid = selectedSos.user_id; const uname = selectedSos.user_name ?? 'Student'; setSelectedSos(null); if (uid) onMessageUser(uid, uname); }} className="w-full h-12 rounded-xl bg-pine text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform shrink-0 mt-2">
+                <MessageCircle className="w-4 h-4" strokeWidth={2} /> Check Up / Message Student
               </button>
             ) : (
               <p className="text-sage text-xs text-center shrink-0">Broadcasted by an unlinked guest user.</p>
@@ -282,7 +314,7 @@ export default function RadarMap({
       <div className="absolute bottom-2 left-2 right-2 z-[500] pointer-events-none">
         <div className="bg-surface/85 backdrop-blur-sm rounded-xl border border-gray-800 px-3 py-2">
           <p className="text-sage text-[9px] leading-snug text-center">
-            <span className="font-bold text-yellow-400">Notice:</span> Kampus is a peer-to-peer student community assistance platform. Kampus is NOT an official emergency response unit or security service. In case of immediate life-threatening danger, contact security or emergency services (999/997) directly.
+            <span className="font-bold text-yellow-400">Notice:</span> Kampus is a peer-to-peer student community assistance platform. Kampus is NOT an official emergency response unit or security service.
           </p>
         </div>
       </div>
