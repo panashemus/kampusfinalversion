@@ -101,7 +101,7 @@ export type Profile = {
   id: string;
   email: string;
   username: string | null;
-  avatar_url: string | null; /* <-- Added this right here! */
+  avatar_url: string | null; 
   university: string | null;
   verified: boolean;
   email_verified: boolean;
@@ -110,6 +110,7 @@ export type Profile = {
   subscribed_until: string | null;
   sentinel_points: number;
   ewallet_number: string;
+  konnect_tier?: number; /* <-- Added the Konnect Tier here! */
 };
 
 export type Conversation = {
