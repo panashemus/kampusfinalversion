@@ -7,9 +7,29 @@ import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 import OtpModal from '@/components/OtpModal';
 
-const WHITELIST_DOMAINS = ['ub.ac.bw', 'thuto.bac.ac.bw', 'bac.ac.bw', 'botho.ac.bw', 'buan.ac.bw', 'biust.ac.bw'];
-const ADMIN_EMAILS = ['musungwa60@gmail.com', 'chrisvandium@gmail.com'];
-const TEST_EMAILS: string[] = ['chrisvandium@gmail.com', 'chris.karter1629@gmail.com', 'yofather63@gmail.com', 'Makabongwekundai2000@gmail.com'];
+const WHITELIST_DOMAINS = [
+  'ub.ac.bw',
+  'thuto.bac.ac.bw',
+  'bac.ac.bw',
+  'botho.ac.bw',
+  'student.botho.ac.bw',
+  'buan.ac.bw',
+  'student.buan.ac.bw',
+  'biust.ac.bw',
+  'student.biust.ac.bw',
+];
+
+const ADMIN_EMAILS = [
+  'musungwa60@gmail.com',
+  'chrisvandium@gmail.com'
+];
+
+const TEST_EMAILS = [
+  'chrisvandium@gmail.com',
+  'chris.karter1629@gmail.com',
+  'yofather63@gmail.com',
+  'makabongwekundai2000@gmail.com'
+];
 
 export default function AuthScreen({
   onVerified,
@@ -20,8 +40,6 @@ export default function AuthScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
-  // Default to Sign In (false) instead of Sign Up. 
-  // Better UX for returning users on new devices.
   const [isSignUp, setIsSignUp] = useState(false); 
   const [loading, setLoading] = useState(false);
   const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
@@ -31,12 +49,19 @@ export default function AuthScreen({
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
 
-    const isWhitelisted = WHITELIST_DOMAINS.some((domain) => cleanEmail.endsWith(domain)) || TEST_EMAILS.includes(cleanEmail);
+    // Normalizing test and admin lists to lowercase
+    const normalizedAdmins = ADMIN_EMAILS.map((a) => a.toLowerCase());
+    const normalizedTests = TEST_EMAILS.map((t) => t.toLowerCase());
 
-    if (!isWhitelisted && !ADMIN_EMAILS.includes(cleanEmail)) {
+    const isWhitelisted =
+      WHITELIST_DOMAINS.some((domain) => cleanEmail.endsWith(domain)) ||
+      normalizedTests.includes(cleanEmail) ||
+      normalizedAdmins.includes(cleanEmail);
+
+    if (!isWhitelisted) {
       toast({
         title: 'Invalid institutional email',
-        description: 'Please use your official university email (@ub.ac.bw, @bac.ac.bw, @botho.ac.bw).',
+        description: 'Please use your official university email (@ub.ac.bw, @bac.ac.bw, @biust.ac.bw, @buan.ac.bw).',
         variant: 'destructive',
       });
       return;
@@ -46,7 +71,6 @@ export default function AuthScreen({
 
     try {
       if (isSignUp) {
-        // NATIVE SIGN UP: This automatically sends the email if "Confirm Email" is ON in Supabase
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -55,7 +79,7 @@ export default function AuthScreen({
         if (error) throw error;
         
         if (data.user) {
-          const isAdmin = ADMIN_EMAILS.includes(cleanEmail);
+          const isAdmin = normalizedAdmins.includes(cleanEmail);
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .upsert({
@@ -102,7 +126,7 @@ export default function AuthScreen({
                onVerified(profileData as Profile);
             }
           } else {
-            const isAdmin = ADMIN_EMAILS.includes(cleanEmail);
+            const isAdmin = normalizedAdmins.includes(cleanEmail);
             const { data: newProf } = await supabase
               .from('profiles')
               .insert({
@@ -121,7 +145,6 @@ export default function AuthScreen({
         }
       }
     } catch (err: any) {
-      // FIX 1: Catch Native Auth "Email not confirmed" during sign in
       if (err.message?.toLowerCase().includes('email not confirmed')) {
         const { data: existingProfile } = await supabase
           .from('profiles')
@@ -136,9 +159,10 @@ export default function AuthScreen({
             description: 'Please enter your code to verify your account.',
           });
         }
-      } 
-      // Handle User Already Exists
-      else if (err.message?.toLowerCase().includes('already registered') || err.message?.toLowerCase().includes('already exists')) {
+      } else if (
+        err.message?.toLowerCase().includes('already registered') || 
+        err.message?.toLowerCase().includes('already exists')
+      ) {
         toast({
           title: 'Account exists',
           description: 'This email is already registered. Please switch to Sign In.',
@@ -232,7 +256,6 @@ export default function AuthScreen({
               setPendingProfile(null);
             }}
             onVerified={async () => {
-              // FIX 2: Update the profiles table to verified so they don't get trapped next time
               const { data } = await supabase
                 .from('profiles')
                 .update({ email_verified: true })
