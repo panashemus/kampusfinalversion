@@ -248,6 +248,17 @@ export default function Home() {
           variant: 'destructive' 
         });
       } else {
+        // 🔥 Push Notification Blast for Hazard
+        await supabase.from('feed_posts').insert({
+          user_id: profile?.id,
+          author_name: '⚠️ KAMPUS RADAR',
+          category: 'General',
+          text: `A new ${hazardCategory} hazard was just reported on campus. Open the map to stay safe.`,
+          is_anonymous: false,
+          is_blasted: true, 
+          impact_score: 50
+        });
+
         toast({ 
           title: 'Pin Dropped', 
           description: 'Hazard broadcasted to campus radar.' 
@@ -314,6 +325,17 @@ export default function Home() {
         setSosGeoStatus('idle');
         return;
       }
+
+      // 🔥 Push Notification Blast for SOS
+      await supabase.from('feed_posts').insert({
+        user_id: profile?.id ?? null,
+        author_name: '🚨 KAMPUS SOS',
+        category: 'General',
+        text: `${userName} just triggered an emergency beacon near ${loc}. Open the map immediately.`,
+        is_anonymous: false,
+        is_blasted: true, 
+        impact_score: 100
+      });
 
       const alert = data as SosAlert;
       setActiveSosAlerts((prev) => [alert, ...prev]);
