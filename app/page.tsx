@@ -622,6 +622,7 @@ export default function Home() {
           {activeView === 'radar' && (
             <div className="absolute inset-0">
               <RadarMap
+                profile={profile}
                 onOpenHazard={setOpenHazard}
                 sosAlerts={activeSosAlerts}
                 onLocate={(pos) => setUserCoords(pos)}
