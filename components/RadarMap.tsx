@@ -20,6 +20,7 @@ type KonnectUser = {
   lat: number;
   lng: number;
   status_text: string | null;
+  is_ghost_mode: boolean;
   updated_at: string;
 };
 
@@ -168,6 +169,7 @@ export default function RadarMap({
   const handleLocate = useCallback(async (pos: [number, number]) => {
     onLocate(pos);
     
+    // Only upload location to map if they have unlocked Konnect AND are not hiding
     if (profile && userTier >= 1) {
       await supabase.from('konnect_locations').upsert({
         user_id: profile.id,
@@ -210,11 +212,12 @@ export default function RadarMap({
   const handlePaymentConfirm = async (referenceCode: string, paymentRefId: string) => {
     if (!profile || !pendingTier) return;
 
+    // Optimistically unlock the UI instantly
     setUserTier(pendingTier);
     setShowPaymentModal(false);
     
-    await supabase.from('profiles').update({ konnect_tier: pendingTier }).eq('id', profile.id);
-
+    // Log it to the payments table for admin verification. 
+    // The new PostgreSQL trigger will handle upgrading the user profile securely.
     await supabase.from('payments').insert({
       user_id: profile.id,
       amount: pendingTier === 2 ? 30 : 20,
@@ -246,18 +249,32 @@ export default function RadarMap({
           <Marker key={s.id} position={[s.lat, s.lng]} icon={createSosPin(s.active)} eventHandlers={{ click: () => setSelectedSos(s) }} />
         ))}
 
-        {userTier >= 1 && konnectUsers.map((user) => (
-          user.user_id !== profile?.id && (
-            <Marker key={user.user_id} position={[user.lat, user.lng]} icon={createKonnectPin(user)} eventHandlers={{ click: () => onMessageUser && onMessageUser(user.user_id, user.username) }} />
-          )
-        ))}
+        {/* SECURE RENDERING: Hide Ghosts and Stale Zombies */}
+        {userTier >= 1 && konnectUsers.map((user) => {
+          if (user.user_id === profile?.id) return null;
+          
+          if (user.is_ghost_mode) return null;
+
+          const lastSeen = new Date(user.updated_at).getTime();
+          const now = new Date().getTime();
+          const isStale = (now - lastSeen) > 15 * 60 * 1000; 
+          if (isStale) return null;
+
+          return (
+            <Marker 
+              key={user.user_id} 
+              position={[user.lat, user.lng]} 
+              icon={createKonnectPin(user)} 
+              eventHandlers={{ click: () => onMessageUser && onMessageUser(user.user_id, user.username) }} 
+            />
+          );
+        })}
       </MapContainer>
 
-      {/* REPOSITIONED: KONNECT PAYWALL & UI CONTROLS (Bottom-Left) */}
+      {/* KONNECT PAYWALL & UI CONTROLS (Bottom-Left) */}
       <div className="absolute bottom-28 left-4 z-[1000] flex flex-col gap-2 items-start pointer-events-none">
         
         {userTier === 0 ? (
-          // LOCKED STATE (P20 Paywall) - Matches screenshot styling
           <button 
             onClick={() => setShowUpgradeModal('base')}
             className="bg-[#FFDE4D] text-black rounded-xl p-3 flex flex-col items-start pointer-events-auto shadow-2xl active:scale-95 transition-transform"
@@ -268,7 +285,6 @@ export default function RadarMap({
             <span className="text-[10px] opacity-80 font-bold mt-0.5">See campus vibes (P20)</span>
           </button>
         ) : (
-          // UNLOCKED STATE
           <>
             <button 
               onClick={handleGhostModeToggle}
