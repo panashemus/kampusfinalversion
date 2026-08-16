@@ -16,6 +16,7 @@ export default function ChatInbox({
   onClose: () => void;
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [peerMap, setPeerMap] = useState<Record<string, string>>({}); // NEW: Dynamic username lookup
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,7 +31,30 @@ export default function ChatInbox({
         .order('last_message_at', { ascending: false });
 
       if (data && mounted) {
-        setConversations(data as Conversation[]);
+        const convos = data as Conversation[];
+        
+        // 1. Find the user IDs of everyone we are talking to
+        const peerIds = [...new Set(convos.map(c => 
+          c.participant_a === myId ? c.participant_b : c.participant_a
+        ))];
+
+        // 2. Fetch their actual, current usernames from the profiles table
+        if (peerIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, username')
+            .in('id', peerIds);
+
+          if (profiles) {
+            const newPeerMap: Record<string, string> = {};
+            profiles.forEach(p => {
+              newPeerMap[p.id] = p.username || 'Student';
+            });
+            setPeerMap(newPeerMap);
+          }
+        }
+        
+        setConversations(convos);
       }
       if (mounted) setLoading(false);
     };
@@ -90,9 +114,12 @@ export default function ChatInbox({
             </div>
           ) : (
             conversations.map((c) => {
+              // 3. Dynamically assign the correct peer details
               const isUserA = c.participant_a === myId;
               const peerId = isUserA ? c.participant_b : c.participant_a;
-              const displayUsername = c.peer_username || 'Student';
+              
+              // Ignore the database peer_username completely. Look it up dynamically.
+              const displayUsername = peerMap[peerId] || 'Student';
 
               return (
                 <button
@@ -102,7 +129,7 @@ export default function ChatInbox({
                 >
                   <div className="flex flex-col gap-1 overflow-hidden pr-4">
                     <span className="text-white font-bold text-base truncate group-hover:text-pine transition-colors">
-                      {displayUsername}
+                      @{displayUsername}
                     </span>
                     <span className={`text-sm truncate ${!c.last_message ? 'text-gray-600 italic' : 'text-sage'}`}>
                       {c.last_message || 'No messages yet'}
