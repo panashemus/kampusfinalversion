@@ -33,10 +33,10 @@ export default function ChatInbox({
       if (data && mounted) {
         const convos = data as Conversation[];
         
-        // 1. Find the user IDs of everyone we are talking to
-        const peerIds = [...new Set(convos.map(c => 
+        // 1. Find the user IDs of everyone we are talking to using Array.from for TS compatibility
+        const peerIds = Array.from(new Set(convos.map(c => 
           c.participant_a === myId ? c.participant_b : c.participant_a
-        ))];
+        )));
 
         // 2. Fetch their actual, current usernames from the profiles table
         if (peerIds.length > 0) {
