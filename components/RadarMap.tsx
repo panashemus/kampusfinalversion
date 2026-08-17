@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import type { Hazard, SosAlert, HazardRow, Profile } from '@/lib/types';
-import { X, MessageCircle, MapPin as MapPinIcon, Clock, User, CheckCircle2, Ghost, Eye, Send, Lock, Unlock } from 'lucide-react';
+import { X, MessageCircle, MapPin as MapPinIcon, Clock, User, CheckCircle2, Ghost, Eye, Send, Lock, Unlock, Sparkles, Navigation } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PaymentModal from '@/components/PaymentModal';
 
@@ -22,6 +22,18 @@ type KonnectUser = {
   status_text: string | null;
   is_ghost_mode: boolean;
   updated_at: string;
+};
+
+// NEW: Promoted Location Type
+type PromotedLocation = {
+  id: string;
+  title: string;
+  vibe_tag: string;
+  lat: number;
+  lng: number;
+  display_time: string;
+  landmark_anchor: string;
+  category: string;
 };
 
 // --- Custom Icons ---
@@ -55,20 +67,33 @@ function createSosPin(active: boolean) {
   return L.divIcon({ html, className: 'kampus-sos-pin', iconSize: [36, 36], iconAnchor: [18, 18] });
 }
 
+// FIXED: Changed to Yellow (#FFDE4D) to match user requests
 function createKonnectPin(user: KonnectUser) {
   const initial = user.username.charAt(0).toUpperCase();
   const statusHtml = user.status_text 
-    ? `<div style="position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:white; color:black; font-weight:bold; font-size:10px; padding:4px 8px; border-radius:12px; white-space:nowrap; box-shadow:0 4px 6px rgba(0,0,0,0.3); pointer-events:none;">${user.status_text}</div>` 
+    ? `<div style="position:absolute; top:-30px; left:50%; transform:translateX(-50%); background:white; color:black; font-weight:bold; font-size:10px; padding:4px 8px; border-radius:12px; white-space:nowrap; box-shadow:0 4px 6px rgba(0,0,0,0.3); pointer-events:none; z-index: 1000;">${user.status_text}</div>` 
     : '';
 
   const html = `
     <div style="position:relative; width:30px; height:30px;">
       ${statusHtml}
-      <div style="width:30px; height:30px; border-radius:50%; background:#10B981; border:2px solid #0B1611; display:flex; align-items:center; justify-content:center; color:#0B1611; font-weight:900; font-size:14px; box-shadow:0 0 10px rgba(16,185,129,0.4);">
+      <div style="width:30px; height:30px; border-radius:50%; background:#FFDE4D; border:2px solid #0B1611; display:flex; align-items:center; justify-content:center; color:#0B1611; font-weight:900; font-size:14px; box-shadow:0 0 10px rgba(255,222,77,0.4);">
         ${initial}
       </div>
     </div>`;
   return L.divIcon({ html, className: 'kampus-konnect-pin', iconSize: [30, 30], iconAnchor: [15, 15] });
+}
+
+// NEW: Pure White Event/Hotspot Pin with a subtle glow
+function createLocationPin() {
+  const html = `
+    <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+      <span style="position:absolute;inset:-3px;border-radius:50%;background:#FFFFFF;opacity:0.2;animation:kampus-pulse 2s ease-out infinite;"></span>
+      <div style="width:22px;height:22px;border-radius:50%;background:#FFFFFF; border:2px solid #0B1611; display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(255,255,255,0.8);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0B1611" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </div>
+    </div>`;
+  return L.divIcon({ html, className: 'kampus-event-pin', iconSize: [28, 28], iconAnchor: [14, 14] });
 }
 
 function LocationTracker({ onLocate }: { onLocate: (pos: [number, number]) => void }) {
@@ -113,6 +138,10 @@ export default function RadarMap({
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
   const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
   
+  // NEW: State for Promoted Locations
+  const [promotedLocations, setPromotedLocations] = useState<PromotedLocation[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<PromotedLocation | null>(null);
+  
   // Konnect Monetization State
   const [userTier, setUserTier] = useState<0 | 1 | 2>(0); 
   const [showUpgradeModal, setShowUpgradeModal] = useState<'base' | 'ghost' | null>(null);
@@ -128,6 +157,7 @@ export default function RadarMap({
 
   useEffect(() => {
     const loadData = async () => {
+      // Load Hazards
       const { data: hData } = await supabase.from('hazards').select('*').order('created_at', { ascending: false });
       if (hData) {
         setHazards((hData as HazardRow[]).map(row => ({
@@ -135,8 +165,13 @@ export default function RadarMap({
         })));
       }
 
+      // Load Users
       const { data: kData } = await supabase.from('konnect_locations').select('*');
       if (kData) setKonnectUsers(kData as KonnectUser[]);
+
+      // NEW: Load Promoted Locations
+      const { data: pData } = await supabase.from('promoted_locations').select('*');
+      if (pData) setPromotedLocations(pData as PromotedLocation[]);
       
       if (profile) {
         if ((profile as any).konnect_tier) {
@@ -161,6 +196,10 @@ export default function RadarMap({
         const { data } = await supabase.from('konnect_locations').select('*');
         if (data) setKonnectUsers(data as KonnectUser[]);
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'promoted_locations' }, async () => {
+        const { data } = await supabase.from('promoted_locations').select('*');
+        if (data) setPromotedLocations(data as PromotedLocation[]);
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -169,7 +208,6 @@ export default function RadarMap({
   const handleLocate = useCallback(async (pos: [number, number]) => {
     onLocate(pos);
     
-    // Only upload location to map if they have unlocked Konnect AND are not hiding
     if (profile && userTier >= 1) {
       await supabase.from('konnect_locations').upsert({
         user_id: profile.id,
@@ -212,12 +250,9 @@ export default function RadarMap({
   const handlePaymentConfirm = async (referenceCode: string, paymentRefId: string) => {
     if (!profile || !pendingTier) return;
 
-    // Optimistically unlock the UI instantly
     setUserTier(pendingTier);
     setShowPaymentModal(false);
     
-    // Log it to the payments table for admin verification. 
-    // The new PostgreSQL trigger will handle upgrading the user profile securely.
     await supabase.from('payments').insert({
       user_id: profile.id,
       amount: pendingTier === 2 ? 30 : 20,
@@ -252,7 +287,6 @@ export default function RadarMap({
         {/* SECURE RENDERING: Hide Ghosts and Stale Zombies */}
         {userTier >= 1 && konnectUsers.map((user) => {
           if (user.user_id === profile?.id) return null;
-          
           if (user.is_ghost_mode) return null;
 
           const lastSeen = new Date(user.updated_at).getTime();
@@ -269,6 +303,16 @@ export default function RadarMap({
             />
           );
         })}
+
+        {/* NEW: Render Promoted Locations (Only for P20+ Users) */}
+        {userTier >= 1 && promotedLocations.map((loc) => (
+          <Marker 
+            key={loc.id} 
+            position={[loc.lat, loc.lng]} 
+            icon={createLocationPin()} 
+            eventHandlers={{ click: () => setSelectedLocation(loc) }} 
+          />
+        ))}
       </MapContainer>
 
       {/* KONNECT PAYWALL & UI CONTROLS (Bottom-Left) */}
@@ -373,6 +417,55 @@ export default function RadarMap({
         ctaLabel="Unlock Konnect"
       />
 
+      {/* NEW: Event / Hotspot Details Bottom Sheet */}
+      {selectedLocation && (
+        <div className="absolute inset-0 z-[2500] flex items-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedLocation(null)} />
+          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up shadow-2xl">
+            
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-1 pr-4">
+                <span className="text-[#FFDE4D] text-[10px] uppercase font-black tracking-widest">{selectedLocation.category}</span>
+                <h3 className="text-white text-2xl font-black leading-tight">{selectedLocation.title}</h3>
+              </div>
+              <button onClick={() => setSelectedLocation(null)} className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white shrink-0">
+                <X className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </div>
+
+            <p className="text-sage text-sm italic">"{selectedLocation.vibe_tag}"</p>
+
+            <div className="flex flex-col gap-3 bg-ink rounded-2xl p-4 border border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5 text-pine" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sage text-[10px] uppercase font-bold tracking-wider">When</span>
+                  <span className="text-white font-semibold">{selectedLocation.display_time}</span>
+                </div>
+              </div>
+              
+              <div className="h-[1px] w-full bg-gray-800/50 my-1" />
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center shrink-0">
+                  <MapPinIcon className="w-5 h-5 text-pine" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sage text-[10px] uppercase font-bold tracking-wider">Where</span>
+                  <span className="text-white font-semibold">{selectedLocation.landmark_anchor}</span>
+                </div>
+              </div>
+            </div>
+
+            <button className="w-full h-12 rounded-xl bg-white text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform mt-2">
+              <Navigation className="w-4 h-4" /> Get Directions
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* SOS Detail Card Modal */}
       {selectedSos && (
         <div className="absolute inset-0 z-[2500] flex items-end">
@@ -388,8 +481,8 @@ export default function RadarMap({
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-400 font-bold text-sm tracking-wider uppercase">Resolved (Deactivated)</span>
+                    <span className="w-3 h-3 rounded-full bg-gray-500" />
+                    <span className="text-gray-400 font-black text-sm tracking-wider uppercase">Resolved (Deactivated)</span>
                   </>
                 )}
               </div>
