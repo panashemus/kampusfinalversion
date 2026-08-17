@@ -24,7 +24,7 @@ type KonnectUser = {
   updated_at: string;
 };
 
-// NEW: Promoted Location Type
+// NEW: Promoted Location Type with image_url
 type PromotedLocation = {
   id: string;
   title: string;
@@ -34,6 +34,7 @@ type PromotedLocation = {
   display_time: string;
   landmark_anchor: string;
   category: string;
+  image_url?: string | null;
 };
 
 // --- Custom Icons ---
@@ -67,7 +68,6 @@ function createSosPin(active: boolean) {
   return L.divIcon({ html, className: 'kampus-sos-pin', iconSize: [36, 36], iconAnchor: [18, 18] });
 }
 
-// FIXED: Changed to Yellow (#FFDE4D) to match user requests
 function createKonnectPin(user: KonnectUser) {
   const initial = user.username.charAt(0).toUpperCase();
   const statusHtml = user.status_text 
@@ -84,7 +84,6 @@ function createKonnectPin(user: KonnectUser) {
   return L.divIcon({ html, className: 'kampus-konnect-pin', iconSize: [30, 30], iconAnchor: [15, 15] });
 }
 
-// NEW: Pure White Event/Hotspot Pin with a subtle glow
 function createLocationPin() {
   const html = `
     <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
@@ -138,26 +137,21 @@ export default function RadarMap({
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
   const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
   
-  // NEW: State for Promoted Locations
   const [promotedLocations, setPromotedLocations] = useState<PromotedLocation[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<PromotedLocation | null>(null);
   
-  // Konnect Monetization State
   const [userTier, setUserTier] = useState<0 | 1 | 2>(0); 
   const [showUpgradeModal, setShowUpgradeModal] = useState<'base' | 'ghost' | null>(null);
   
-  // Payment Flow State
   const [pendingTier, setPendingTier] = useState<1 | 2 | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Konnect Functionality State
   const [isGhostMode, setIsGhostMode] = useState(false);
   const [myStatus, setMyStatus] = useState('');
   const [showStatusInput, setShowStatusInput] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-      // Load Hazards
       const { data: hData } = await supabase.from('hazards').select('*').order('created_at', { ascending: false });
       if (hData) {
         setHazards((hData as HazardRow[]).map(row => ({
@@ -165,11 +159,9 @@ export default function RadarMap({
         })));
       }
 
-      // Load Users
       const { data: kData } = await supabase.from('konnect_locations').select('*');
       if (kData) setKonnectUsers(kData as KonnectUser[]);
 
-      // NEW: Load Promoted Locations
       const { data: pData } = await supabase.from('promoted_locations').select('*');
       if (pData) setPromotedLocations(pData as PromotedLocation[]);
       
@@ -284,7 +276,6 @@ export default function RadarMap({
           <Marker key={s.id} position={[s.lat, s.lng]} icon={createSosPin(s.active)} eventHandlers={{ click: () => setSelectedSos(s) }} />
         ))}
 
-        {/* SECURE RENDERING: Hide Ghosts and Stale Zombies */}
         {userTier >= 1 && konnectUsers.map((user) => {
           if (user.user_id === profile?.id) return null;
           if (user.is_ghost_mode) return null;
@@ -304,7 +295,6 @@ export default function RadarMap({
           );
         })}
 
-        {/* NEW: Render Promoted Locations (Only for P20+ Users) */}
         {userTier >= 1 && promotedLocations.map((loc) => (
           <Marker 
             key={loc.id} 
@@ -315,9 +305,7 @@ export default function RadarMap({
         ))}
       </MapContainer>
 
-      {/* KONNECT PAYWALL & UI CONTROLS (Bottom-Left) */}
       <div className="absolute bottom-28 left-4 z-[1000] flex flex-col gap-2 items-start pointer-events-none">
-        
         {userTier === 0 ? (
           <button 
             onClick={() => setShowUpgradeModal('base')}
@@ -366,7 +354,6 @@ export default function RadarMap({
         )}
       </div>
 
-      {/* UPGRADE MODAL */}
       {showUpgradeModal && (
         <div className="absolute inset-0 z-[3000] flex items-center justify-center pointer-events-auto">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowUpgradeModal(null)} />
@@ -408,7 +395,6 @@ export default function RadarMap({
         </div>
       )}
 
-      {/* PAYMENT MODAL BRIDGE */}
       <PaymentModal
         open={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
@@ -417,12 +403,23 @@ export default function RadarMap({
         ctaLabel="Unlock Konnect"
       />
 
-      {/* NEW: Event / Hotspot Details Bottom Sheet */}
+      {/* NEW: Event / Hotspot Details Bottom Sheet with Image & Working Directions */}
       {selectedLocation && (
         <div className="absolute inset-0 z-[2500] flex items-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedLocation(null)} />
-          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up shadow-2xl">
+          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up shadow-2xl max-h-[85dvh] overflow-y-auto no-scrollbar">
             
+            {/* Event Poster / Flyer if available */}
+            {selectedLocation.image_url && (
+              <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-gray-800 shrink-0 bg-ink">
+                <img 
+                  src={selectedLocation.image_url} 
+                  alt={selectedLocation.title} 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
             <div className="flex items-start justify-between">
               <div className="flex flex-col gap-1 pr-4">
                 <span className="text-[#FFDE4D] text-[10px] uppercase font-black tracking-widest">{selectedLocation.category}</span>
@@ -459,14 +456,19 @@ export default function RadarMap({
               </div>
             </div>
 
-            <button className="w-full h-12 rounded-xl bg-white text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform mt-2">
+            {/* Functional Google Maps Navigation Link */}
+            <a 
+              href={`https://www.google.com/maps/dir/?api=1&destination=${selectedLocation.lat},${selectedLocation.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full h-12 rounded-xl bg-white text-black font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform mt-1"
+            >
               <Navigation className="w-4 h-4" /> Get Directions
-            </button>
+            </a>
           </div>
         </div>
       )}
 
-      {/* SOS Detail Card Modal */}
       {selectedSos && (
         <div className="absolute inset-0 z-[2500] flex items-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSelectedSos(null)} />
@@ -540,7 +542,6 @@ export default function RadarMap({
         </div>
       )}
 
-      {/* Emergency Disclaimer */}
       <div className="absolute bottom-2 left-2 right-2 z-[500] pointer-events-none">
         <div className="bg-surface/85 backdrop-blur-sm rounded-xl border border-gray-800 px-3 py-2">
           <p className="text-sage text-[9px] leading-snug text-center">
