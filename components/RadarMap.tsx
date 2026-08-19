@@ -242,8 +242,15 @@ export default function RadarMap({
     }
   };
 
-  const handleInitiatePayment = (tier: 1 | 2) => {
+  const handleInitiatePayment = async (tier: 1 | 2) => {
+    // 🔥 FREE WEEKEND BYPASS: Skip payment gateway entirely and update DB instantly!
     if (isFreeWeekend && tier === 1) {
+      if (!profile) return;
+      
+      // Update DB to Tier 1
+      await supabase.from('profiles').update({ konnect_tier: 1 }).eq('id', profile.id);
+
+      // Update UI
       setUserTier(1);
       setShowUpgradeModal(null);
       toast({ 
@@ -252,6 +259,7 @@ export default function RadarMap({
       });
       return;
     }
+
     setPendingTier(tier);
     setShowUpgradeModal(null);
     setShowPaymentModal(true);
