@@ -71,10 +71,15 @@ export default function AdminDashboard({
     const newVal = !isFreeWeekend;
     setIsFreeWeekend(newVal); // Optimistic update for UI speed
     
-    const { error } = await supabase.from('platform_settings').upsert({ id: 1, is_free_weekend: newVal });
+    const { error } = await supabase
+      .from('platform_settings')
+      .update({ is_free_weekend: newVal })
+      .eq('id', 1);
+
     if (error) {
+      console.error("🔥 SUPABASE ERROR:", error); // Logs exact error to browser console
       setIsFreeWeekend(!newVal);
-      toast({ title: 'Error', description: 'Failed to update system settings.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Check console for details.', variant: 'destructive' });
     } else {
       toast({ title: newVal ? 'Free Weekend LIVE 🚀' : 'Paywall RESTORED 🔒' });
     }
