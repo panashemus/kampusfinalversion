@@ -5,7 +5,6 @@ import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
-import OtpModal from '@/components/OtpModal';
 
 const WHITELIST_DOMAINS = [
   'ub.ac.bw',
@@ -42,14 +41,24 @@ export default function AuthScreen({
   
   const [isSignUp, setIsSignUp] = useState(false); 
   const [loading, setLoading] = useState(false);
-  const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = email.trim().toLowerCase();
+    let cleanEmail = email.trim().toLowerCase();
+
+    // 🔥 SILENT AUTO-CORRECT FOR COMMON STUDENT TYPOS
+    if (cleanEmail.endsWith('@ac.ub.bw')) {
+      cleanEmail = cleanEmail.replace('@ac.ub.bw', '@ub.ac.bw');
+      setEmail(cleanEmail);
+    }
+    if (cleanEmail.endsWith('@ac.bac.bw')) {
+      cleanEmail = cleanEmail.replace('@ac.bac.bw', '@bac.ac.bw');
+      setEmail(cleanEmail);
+    }
+
     if (!cleanEmail) return;
 
-    // Normalizing test and admin lists to lowercase
+    // 🔥 SECURITY GATE: Only allow university emails
     const normalizedAdmins = ADMIN_EMAILS.map((a) => a.toLowerCase());
     const normalizedTests = TEST_EMAILS.map((t) => t.toLowerCase());
 
@@ -71,6 +80,7 @@ export default function AuthScreen({
 
     try {
       if (isSignUp) {
+        // 🔥 Instant Sign Up (No OTP Required)
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -80,13 +90,15 @@ export default function AuthScreen({
         
         if (data.user) {
           const isAdmin = normalizedAdmins.includes(cleanEmail);
+          
+          // Instantly create their profile and forcefully verify them
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .upsert({
               id: data.user.id,
               email: cleanEmail,
               is_admin: isAdmin,
-              email_verified: false,
+              email_verified: true, // 🔥 Bypasses all app locks
             })
             .select()
             .single();
@@ -94,15 +106,16 @@ export default function AuthScreen({
           if (profileError) throw profileError;
           
           toast({
-            title: 'Account created',
-            description: 'Check your email for the verification code.',
+            title: 'Welcome to Kampus! 🚀',
+            description: 'You are officially on the radar.',
           });
           
           if (profileData) {
-            setPendingProfile(profileData as Profile);
+            onVerified(profileData as Profile);
           }
         }
       } else {
+        // 🔥 Instant Sign In
         const { data, error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password,
@@ -120,12 +133,21 @@ export default function AuthScreen({
           if (profileError) throw profileError;
           
           if (profileData) {
+            // If they are an old user who got stuck on verification earlier, force verify them now
             if (!profileData.email_verified) {
-               setPendingProfile(profileData as Profile);
+               const { data: updatedProfile } = await supabase
+                 .from('profiles')
+                 .update({ email_verified: true })
+                 .eq('id', data.user.id)
+                 .select()
+                 .single();
+                 
+               if (updatedProfile) onVerified(updatedProfile as Profile);
             } else {
                onVerified(profileData as Profile);
             }
           } else {
+            // Failsafe: if profile got deleted but auth exists
             const isAdmin = normalizedAdmins.includes(cleanEmail);
             const { data: newProf } = await supabase
               .from('profiles')
@@ -133,33 +155,19 @@ export default function AuthScreen({
                 id: data.user.id,
                 email: cleanEmail,
                 is_admin: isAdmin,
-                email_verified: false,
+                email_verified: true,
               })
               .select()
               .single();
               
             if (newProf) {
-               setPendingProfile(newProf as Profile);
+               onVerified(newProf as Profile);
             }
           }
         }
       }
     } catch (err: any) {
-      if (err.message?.toLowerCase().includes('email not confirmed')) {
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('email', cleanEmail)
-          .single();
-          
-        if (existingProfile) {
-          setPendingProfile(existingProfile as Profile);
-          toast({
-            title: 'Verification required',
-            description: 'Please enter your code to verify your account.',
-          });
-        }
-      } else if (
+      if (
         err.message?.toLowerCase().includes('already registered') || 
         err.message?.toLowerCase().includes('already exists')
       ) {
@@ -172,7 +180,7 @@ export default function AuthScreen({
       } else {
         toast({
           title: 'Authentication error',
-          description: err.message || 'Something went wrong.',
+          description: err.message || 'Check your credentials and try again.',
           variant: 'destructive',
         });
       }
@@ -194,7 +202,9 @@ export default function AuthScreen({
 
         <form onSubmit={handleAuth} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sage text-[10px] font-bold uppercase tracking-wider">Student Email</label>
+            <label className="text-sage text-[10px] font-bold uppercase tracking-wider">
+              Student Email
+            </label>
             <div className="relative flex items-center">
               <Mail className="absolute left-3.5 w-4 h-4 text-sage" strokeWidth={1.5} />
               <input
@@ -209,7 +219,9 @@ export default function AuthScreen({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sage text-[10px] font-bold uppercase tracking-wider">Password</label>
+            <label className="text-sage text-[10px] font-bold uppercase tracking-wider">
+              Password
+            </label>
             <div className="relative flex items-center">
               <Lock className="absolute left-3.5 w-4 h-4 text-sage" strokeWidth={1.5} />
               <input
@@ -230,7 +242,7 @@ export default function AuthScreen({
             className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg mt-2"
           >
             {loading && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
-            {isSignUp ? 'Create Account' : 'Sign In'}
+            {isSignUp ? 'Enter Kampus' : 'Sign In'}
             {!loading && <ArrowRight className="w-4 h-4" strokeWidth={2} />}
           </button>
         </form>
@@ -245,29 +257,6 @@ export default function AuthScreen({
           </button>
         </div>
       </div>
-
-      {pendingProfile && (
-        <div className="absolute inset-0 z-[5000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <OtpModal
-            userId={pendingProfile.id}
-            email={pendingProfile.email}
-            onClose={() => {
-              supabase.auth.signOut();
-              setPendingProfile(null);
-            }}
-            onVerified={async () => {
-              const { data } = await supabase
-                .from('profiles')
-                .update({ email_verified: true })
-                .eq('id', pendingProfile.id)
-                .select('*')
-                .single();
-                
-              if (data) onVerified(data as Profile);
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 }
