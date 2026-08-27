@@ -103,6 +103,9 @@ export default function HustleHub({
 
   const myName = profile ? (profile.username ? `@${profile.username}` : profile.email.split('@')[0]) : 'student';
   const isAdmin = !!profile?.is_admin;
+  
+  // 🔥 Super Admin Override for image manipulation
+  const isSuperAdmin = profile?.email === 'musungwa60@gmail.com';
 
   const loadGigs = useCallback(async () => {
     const { data } = await supabase
@@ -289,6 +292,28 @@ export default function HustleHub({
       )
     );
     toast({ title: 'Payment re-submitted', description: 'Your listing is back online.' });
+  };
+
+  // 🔥 Super Admin Image Handlers
+  const updateGigImages = async (gigId: string, updatedImages: string[]) => {
+    const { error } = await supabase
+      .from('hustles')
+      .update({ images: updatedImages.length > 0 ? updatedImages : null })
+      .eq('id', gigId);
+
+    if (!error) {
+      setGigs((prev) => prev.map((g) => (g.id === gigId ? { ...g, images: updatedImages } : g)));
+      setSelectedGig((prev) => prev && prev.id === gigId ? { ...prev, images: updatedImages } : prev);
+      toast({ title: 'Images synchronized successfully 🚀' });
+    } else {
+      toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const removeImageFromGig = async (gigId: string, indexToRemove: number) => {
+    if (!selectedGig) return;
+    const updatedImages = selectedGig.images.filter((_, i) => i !== indexToRemove);
+    await updateGigImages(gigId, updatedImages);
   };
 
   return (
@@ -736,6 +761,42 @@ export default function HustleHub({
                       <AlertTriangle className="w-3.5 h-3.5" strokeWidth={2} /> Flag as Unpaid
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* 🔥 Super Admin Exclusive: Quick Edit Images */}
+              {isSuperAdmin && profile && (
+                <div className="bg-[#111] rounded-xl border border-yellow-500/30 p-4 flex flex-col gap-3 shadow-[0_0_15px_rgba(234,179,8,0.05)]">
+                  <span className="text-yellow-500 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5" /> Super Admin: Manage Images
+                  </span>
+                  
+                  {selectedGig.images.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {selectedGig.images.map((img, i) => (
+                        <div key={i} className="relative w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-gray-800">
+                          <img src={img} alt="thumb" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => removeImageFromGig(selectedGig.id, i)}
+                            className="absolute top-1 right-1 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-1">
+                    <ImageUploader
+                      userId={profile.id}
+                      onUploaded={(urls) => {
+                        const newArray = [...selectedGig.images, ...urls];
+                        updateGigImages(selectedGig.id, newArray);
+                      }}
+                      onError={(msg) => toast({ title: 'Upload failed', description: msg, variant: 'destructive' })}
+                    />
+                  </div>
                 </div>
               )}
 
