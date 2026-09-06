@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import type { Hazard, SosAlert, HazardRow, Profile } from '@/lib/types';
-import { X, MessageCircle, MapPin as MapPinIcon, Clock, User, CheckCircle2, Ghost, Eye, Send, Lock, Unlock, Sparkles, Navigation, GraduationCap, ChevronRight } from 'lucide-react';
+import { X, MessageCircle, MapPin as MapPinIcon, Clock, User, Ghost, Eye, Send, Lock, Unlock, Navigation, GraduationCap, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PaymentModal from '@/components/PaymentModal';
 
@@ -159,6 +159,7 @@ export default function RadarMap({
   onMessageUser?: (userId: string, username: string) => void;
 }) {
   const { toast } = useToast();
+  const [isMounted, setIsMounted] = useState(false);
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
   const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
@@ -181,6 +182,10 @@ export default function RadarMap({
   const [nearbyCampus, setNearbyCampus] = useState<string | null>(null);
   const [inCampusMode, setInCampusMode] = useState<string | null>(null);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -249,7 +254,7 @@ export default function RadarMap({
         status_text: myStatus || null,
         is_ghost_mode: isGhostMode,
         updated_at: new Date().toISOString(),
-        is_free_trial_pin: isFreeWeekend // 🔥 Captures if they dropped this pin during the free weekend
+        is_free_trial_pin: isFreeWeekend
       } as any);
     }
   }, [onLocate, profile, isGhostMode, myStatus, userTier, isFreeWeekend]);
@@ -274,14 +279,11 @@ export default function RadarMap({
   };
 
   const handleInitiatePayment = async (tier: 1 | 2) => {
-    // 🔥 FREE WEEKEND BYPASS: Skip payment gateway entirely and update DB instantly!
     if (isFreeWeekend && tier === 1) {
       if (!profile) return;
       
-      // Update DB to Tier 1
       await supabase.from('profiles').update({ konnect_tier: 1 }).eq('id', profile.id);
 
-      // Update UI
       setUserTier(1);
       setShowUpgradeModal(null);
       toast({ 
@@ -318,7 +320,6 @@ export default function RadarMap({
     if (!nearbyCampus || !mapInstance) return;
     const campusData = CAMPUSES[nearbyCampus as keyof typeof CAMPUSES];
     
-    // Zoom exactly into the campus
     mapInstance.flyTo([campusData.lat, campusData.lng], campusData.zoom, { animate: true, duration: 1.5 });
     setInCampusMode(nearbyCampus);
     
@@ -328,13 +329,10 @@ export default function RadarMap({
     });
   };
 
+  if (!isMounted) return null;
+
   return (
     <div className="relative w-full h-full">
-
-      {/* 
-        Contextual Campus Button: 
-        Only shows up when the user pans the map close to UB or BAC 
-      */}
       {nearbyCampus && inCampusMode !== nearbyCampus && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto animate-in slide-in-from-top-4 fade-in">
           <button 
@@ -348,7 +346,6 @@ export default function RadarMap({
         </div>
       )}
 
-      {/* Active Campus Indicator */}
       {inCampusMode && (
          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
            <div className="bg-pine/20 border border-pine backdrop-blur-md text-[#FFDE4D] px-4 py-1.5 rounded-full font-bold text-xs flex items-center gap-2 shadow-lg">
@@ -359,7 +356,6 @@ export default function RadarMap({
          </div>
       )}
 
-      {/* Adding Global CSS to invert standard OSM tiles into Dark Mode without API keys */}
       <style dangerouslySetInnerHTML={{__html: `
         .dark-osm-tiles { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
       `}} />
