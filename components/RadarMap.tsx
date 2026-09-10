@@ -2,7 +2,7 @@
 
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import type { Hazard, SosAlert, HazardRow, Profile } from '@/lib/types';
@@ -104,6 +104,7 @@ function createLocationPin() {
 function LocationTracker({ onLocate }: { onLocate: (pos: [number, number]) => void }) {
   const map = useMap();
   const [pos, setPos] = useState<[number, number] | null>(null);
+  const hasCentered = useRef(false);
 
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
@@ -113,7 +114,12 @@ function LocationTracker({ onLocate }: { onLocate: (pos: [number, number]) => vo
         const next: [number, number] = [latitude, longitude];
         setPos(next);
         onLocate(next);
-        map.setView(next, map.getZoom(), { animate: true });
+
+        // Center map view only on the initial GPS fix
+        if (!hasCentered.current) {
+          map.setView(next, map.getZoom(), { animate: true });
+          hasCentered.current = true;
+        }
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
@@ -348,11 +354,11 @@ export default function RadarMap({
 
       {inCampusMode && (
          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
-           <div className="bg-pine/20 border border-pine backdrop-blur-md text-[#FFDE4D] px-4 py-1.5 rounded-full font-bold text-xs flex items-center gap-2 shadow-lg">
-             <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-             {CAMPUSES[inCampusMode as keyof typeof CAMPUSES].name} Active
-             <button onClick={() => setInCampusMode(null)} className="ml-2 bg-ink/50 rounded-full p-1"><X className="w-3 h-3 text-white" /></button>
-           </div>
+            <div className="bg-pine/20 border border-pine backdrop-blur-md text-[#FFDE4D] px-4 py-1.5 rounded-full font-bold text-xs flex items-center gap-2 shadow-lg">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              {CAMPUSES[inCampusMode as keyof typeof CAMPUSES].name} Active
+              <button onClick={() => setInCampusMode(null)} className="ml-2 bg-ink/50 rounded-full p-1"><X className="w-3 h-3 text-white" /></button>
+            </div>
          </div>
       )}
 
