@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, Loader2, ArrowRight, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
@@ -41,12 +41,37 @@ export default function AuthScreen({
   
   const [isSignUp, setIsSignUp] = useState(false); 
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
+
+  // 🔥 GUEST MODE HANDLER (Bypasses verification & domain restrictions)
+  const handleGuestLogin = () => {
+    setGuestLoading(true);
+
+    const guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+    const guestProfile: Profile = {
+      id: guestId,
+      email: 'guest@kampus.demo',
+      email_verified: true,
+      is_admin: false,
+      // Fallbacks if your Profile type requires these fields:
+      ...( { username: 'Anonymous Guest', is_guest: true } as any ),
+    };
+
+    setTimeout(() => {
+      toast({
+        title: 'Guest Mode Activated 👁️',
+        description: 'You are exploring in read-only demo mode.',
+      });
+      onVerified(guestProfile);
+      setGuestLoading(false);
+    }, 600);
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     let cleanEmail = email.trim().toLowerCase();
 
-    // 🔥 SILENT AUTO-CORRECT FOR COMMON STUDENT TYPOS
+    // SILENT AUTO-CORRECT FOR COMMON STUDENT TYPOS
     if (cleanEmail.endsWith('@ac.ub.bw')) {
       cleanEmail = cleanEmail.replace('@ac.ub.bw', '@ub.ac.bw');
       setEmail(cleanEmail);
@@ -58,7 +83,7 @@ export default function AuthScreen({
 
     if (!cleanEmail) return;
 
-    // 🔥 SECURITY GATE: Only allow university emails
+    // SECURITY GATE: Only allow university emails
     const normalizedAdmins = ADMIN_EMAILS.map((a) => a.toLowerCase());
     const normalizedTests = TEST_EMAILS.map((t) => t.toLowerCase());
 
@@ -80,7 +105,7 @@ export default function AuthScreen({
 
     try {
       if (isSignUp) {
-        // 🔥 Instant Sign Up (No OTP Required)
+        // Instant Sign Up (No OTP Required)
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -98,7 +123,7 @@ export default function AuthScreen({
               id: data.user.id,
               email: cleanEmail,
               is_admin: isAdmin,
-              email_verified: true, // 🔥 Bypasses all app locks
+              email_verified: true, // Bypasses all app locks
             })
             .select()
             .single();
@@ -115,7 +140,7 @@ export default function AuthScreen({
           }
         }
       } else {
-        // 🔥 Instant Sign In
+        // Instant Sign In
         const { data, error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password,
@@ -133,7 +158,6 @@ export default function AuthScreen({
           if (profileError) throw profileError;
           
           if (profileData) {
-            // If they are an old user who got stuck on verification earlier, force verify them now
             if (!profileData.email_verified) {
                const { data: updatedProfile } = await supabase
                  .from('profiles')
@@ -147,7 +171,6 @@ export default function AuthScreen({
                onVerified(profileData as Profile);
             }
           } else {
-            // Failsafe: if profile got deleted but auth exists
             const isAdmin = normalizedAdmins.includes(cleanEmail);
             const { data: newProf } = await supabase
               .from('profiles')
@@ -238,7 +261,7 @@ export default function AuthScreen({
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || guestLoading}
             className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg mt-2"
           >
             {loading && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
@@ -247,13 +270,28 @@ export default function AuthScreen({
           </button>
         </form>
 
-        <div className="flex items-center justify-center pt-2 border-t border-gray-800">
+        <div className="flex flex-col gap-3 pt-2 border-t border-gray-800">
           <button
             type="button"
             onClick={() => setIsSignUp(!isSignUp)}
-            className="text-sage text-xs hover:text-white transition-colors font-medium"
+            className="text-sage text-xs hover:text-white transition-colors font-medium text-center"
           >
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Create one"}
+          </button>
+
+          {/* 🔥 GUEST MODE DEMO BUTTON */}
+          <button
+            type="button"
+            onClick={handleGuestLogin}
+            disabled={loading || guestLoading}
+            className="w-full h-11 rounded-xl bg-gray-900 border border-gray-700 hover:border-pine/50 text-sage hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 mt-1"
+          >
+            {guestLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-pine" />
+            ) : (
+              <Eye className="w-4 h-4 text-pine" />
+            )}
+            Explore in Guest Mode (Recruiter Preview)
           </button>
         </div>
       </div>
