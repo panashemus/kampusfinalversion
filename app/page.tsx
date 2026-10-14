@@ -1,11 +1,33 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { Bell, Plus, Search, X, MapPin, Lock, MessageSquare, ShieldCheck, ShieldAlert, Phone, Loader as Loader2, Crown, MessageCircle, ShieldAlert as SosIcon } from 'lucide-react';
+import {
+  Bell,
+  Plus,
+  Search,
+  X,
+  MapPin,
+  Lock,
+  MessageSquare,
+  ShieldCheck,
+  ShieldAlert,
+  Phone,
+  Loader as Loader2,
+  MessageCircle,
+  ThumbsUp,
+} from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
-import type { View, Hazard, Comment, SosAlert, Profile, HazardRow, AppNotification } from '@/lib/types';
+import type {
+  View,
+  Hazard,
+  Comment,
+  SosAlert,
+  Profile,
+  HazardRow,
+  AppNotification,
+} from '@/lib/types';
 import { haversineMeters, locationLabel, timeAgo } from '@/lib/utils';
 import WelcomeModal from '@/components/WelcomeModal';
 import AuthScreen from '@/components/AuthScreen';
@@ -22,23 +44,23 @@ import ChatRoom from '@/components/ChatRoom';
 import ChatInbox from '@/components/ChatInbox';
 import AdminQueue from '@/components/AdminQueue';
 import LegalModal from '@/components/LegalModal';
-import AdminDashboard from '@/components/AdminDashboard'; 
+import AdminDashboard from '@/components/AdminDashboard';
 
 const RadarMap = dynamic(() => import('@/components/RadarMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-midnight flex items-center justify-center">
-      <span className="text-sage text-sm">Loading radar…</span>
+    <div className="w-full h-full bg-[#0B0F0E] flex items-center justify-center">
+      <span className="text-zinc-500 text-xs font-medium">Loading radar…</span>
     </div>
   ),
 });
 
 const HEADER_TITLES: Record<Exclude<View, 'auth'>, string> = {
-  radar: 'KAMPUS RADAR',
-  hustle: 'HUSTLE HUB',
-  community: 'CAMPUS FEED',
-  escrow: 'ESCROW & PAYMENTS',
-  profile: 'STUDENT ID',
+  radar: 'Kampus Radar',
+  hustle: 'Hustle Hub',
+  community: 'Campus Feed',
+  escrow: 'Escrow & Payments',
+  profile: 'Student ID',
 };
 
 const HAZARD_CATEGORIES = [
@@ -55,13 +77,23 @@ function hasPremiumAccess(p: Profile | null): boolean {
 }
 
 const fireSystemNotification = (title: string, body: string) => {
-  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+  if (
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    Notification.permission === 'granted'
+  ) {
     try {
-      new Notification(title, { body, icon: '/images/ClipSnap_20260723201232.png' });
-    } catch (e) {
+      new Notification(title, {
+        body,
+        icon: '/images/ClipSnap_20260723201232.png',
+      });
+    } catch {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then((registration) => {
-          registration.showNotification(title, { body, icon: '/images/ClipSnap_20260723201232.png' });
+          registration.showNotification(title, {
+            body,
+            icon: '/images/ClipSnap_20260723201232.png',
+          });
         });
       }
     }
@@ -74,33 +106,45 @@ export default function Home() {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
   const [hazardCategory, setHazardCategory] = useState(HAZARD_CATEGORIES[0]);
-  const [geoStatus, setGeoStatus] = useState<'idle' | 'locating' | 'locked' | 'denied'>('idle');
+  const [geoStatus, setGeoStatus] = useState<
+    'idle' | 'locating' | 'locked' | 'denied'
+  >('idle');
   const [liveCoords, setLiveCoords] = useState<[number, number] | null>(null);
   const [openHazard, setOpenHazard] = useState<Hazard | null>(null);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  
+
   const [profileUser, setProfileUser] = useState<string | null>(null);
   const [profileUserId, setProfileUserId] = useState<string>('');
-  
+
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatInboxOpen, setChatInboxOpen] = useState(false);
   const [adminQueueOpen, setAdminQueueOpen] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false); 
-  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
-  const [activeChat, setActiveChat] = useState<{ peerId: string; peerUsername: string } | null>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(
+    null
+  );
+  const [activeChat, setActiveChat] = useState<{
+    peerId: string;
+    peerUsername: string;
+  } | null>(null);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
-  
-  const [sosNotifications, setSosNotifications] = useState<{ id: string; text: string; time: string }[]>([]);
+
+  const [sosNotifications, setSosNotifications] = useState<
+    { id: string; text: string; time: string }[]
+  >([]);
   const [dbNotifications, setDbNotifications] = useState<AppNotification[]>([]);
 
-  const [sosGeoStatus, setSosGeoStatus] = useState<'idle' | 'locating' | 'broadcasting' | 'done' | 'denied'>('idle');
+  const [sosGeoStatus, setSosGeoStatus] = useState<
+    'idle' | 'locating' | 'broadcasting' | 'done' | 'denied'
+  >('idle');
   const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([]);
   const [activeHelpCard, setActiveHelpCard] = useState<SosAlert | null>(null);
 
-  const isAdminUser = profile?.is_admin || profile?.email === 'musungwa60@gmail.com';
+  const isAdminUser =
+    profile?.is_admin || profile?.email === 'musungwa60@gmail.com';
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -125,7 +169,8 @@ export default function Home() {
           const notif = payload.new as AppNotification;
           if (notif.user_id === profile.id) {
             setDbNotifications((prev) => [notif, ...prev]);
-            const title = notif.type === 'message' ? '💬 New Message' : '🔔 New Reply';
+            const title =
+              notif.type === 'message' ? '💬 New Message' : '🔔 New Reply';
             toast({ title, description: notif.body });
             fireSystemNotification(title, notif.body);
           }
@@ -133,8 +178,10 @@ export default function Home() {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [profile?.id, toast]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id]);
 
   const markNotificationsAsRead = async () => {
     if (!profile) return;
@@ -142,13 +189,18 @@ export default function Home() {
     if (unreadIds.length === 0) return;
 
     setDbNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    await supabase.from('notifications').update({ read: true }).in('id', unreadIds);
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .in('id', unreadIds);
   };
 
   useEffect(() => {
     if (activeView !== 'radar') return;
     const fetchAlerts = async () => {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const twentyFourHoursAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
       const { data } = await supabase
         .from('sos_alerts')
         .select('*')
@@ -160,12 +212,18 @@ export default function Home() {
 
     const channel = supabase
       .channel('sos_alerts_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sos_alerts' }, () => {
-        fetchAlerts();
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sos_alerts' },
+        () => {
+          fetchAlerts();
+        }
+      )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [activeView]);
 
   useEffect(() => {
@@ -177,23 +235,37 @@ export default function Home() {
         (payload) => {
           const alert = payload.new as SosAlert;
           if (userCoords) {
-            const dist = haversineMeters(userCoords[0], userCoords[1], alert.lat, alert.lng);
+            const dist = haversineMeters(
+              userCoords[0],
+              userCoords[1],
+              alert.lat,
+              alert.lng
+            );
             if (dist <= 1000) {
               const userName = alert.user_name ?? 'A student';
-              const loc = alert.location_name ?? locationLabel(alert.lat, alert.lng);
-              const text = `EMERGENCY: ${userName} has triggered an assistance alert near ${loc}.`;
-              toast({ title: '🚨 EMERGENCY ALERT', description: text, variant: 'destructive' });
-              fireSystemNotification('🚨 EMERGENCY ALERT', text);
-              setSosNotifications((prev) => [{ id: alert.id, text, time: 'just now' }, ...prev]);
+              const loc =
+                alert.location_name ?? locationLabel(alert.lat, alert.lng);
+              const text = `EMERGENCY: ${userName} triggered an assistance alert near ${loc}.`;
+              toast({
+                title: '🚨 Emergency Alert',
+                description: text,
+                variant: 'destructive',
+              });
+              fireSystemNotification('🚨 Emergency Alert', text);
+              setSosNotifications((prev) => [
+                { id: alert.id, text, time: 'just now' },
+                ...prev,
+              ]);
             }
           }
         }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [userCoords, toast]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userCoords]);
 
-  // Toast-only listener for hazards dropped by OTHERS
   useEffect(() => {
     if (activeView !== 'radar') return;
     const channel = supabase
@@ -205,25 +277,24 @@ export default function Home() {
           const row = payload.new as HazardRow;
           if (row.user_id !== profile?.id) {
             toast({
-              title: '🚨 PEER GUARD',
-              description: 'Active Hazard Pin Dropped Nearby!',
+              title: 'Peer Guard Alert',
+              description: 'Active hazard pin dropped nearby.',
             });
           }
         }
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [activeView, profile?.id, toast]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeView, profile?.id]);
 
-  const addHazardComment = useCallback(
-    (comment: Comment) => {
-      setOpenHazard((prev) =>
-        prev ? { ...prev, comments: [...prev.comments, comment] } : prev
-      );
-    },
-    []
-  );
+  const addHazardComment = useCallback((comment: Comment) => {
+    setOpenHazard((prev) =>
+      prev ? { ...prev, comments: [...prev.comments, comment] } : prev
+    );
+  }, []);
 
   const createHazard = useCallback(
     async (coords: [number, number]) => {
@@ -231,41 +302,38 @@ export default function Home() {
       setGeoStatus('idle');
       setLiveCoords(null);
 
-      const { error } = await supabase
-        .from('hazards')
-        .insert({
-          user_id: profile?.id,
-          lat: coords[0],
-          lng: coords[1],
-          title: `${hazardCategory} pin`,
-          type: hazardCategory,
-        });
+      const { error } = await supabase.from('hazards').insert({
+        user_id: profile?.id,
+        lat: coords[0],
+        lng: coords[1],
+        title: `${hazardCategory} pin`,
+        type: hazardCategory,
+      });
 
       if (error) {
-        toast({ 
-          title: 'Connection Error', 
-          description: 'Failed to broadcast hazard to the campus radar.', 
-          variant: 'destructive' 
+        toast({
+          title: 'Connection Error',
+          description: 'Failed to broadcast hazard to the campus radar.',
+          variant: 'destructive',
         });
       } else {
-        // 🔥 Push Notification Blast for Hazard
         await supabase.from('feed_posts').insert({
           user_id: profile?.id,
-          author_name: '⚠️ KAMPUS RADAR',
+          author_name: '⚠️ Kampus Radar',
           category: 'General',
-          text: `A new ${hazardCategory} hazard was just reported on campus. Open the map to stay safe.`,
+          text: `A new ${hazardCategory} hazard was reported on campus. Check the radar map to stay safe.`,
           is_anonymous: false,
-          is_blasted: true, 
-          impact_score: 50
+          is_blasted: true,
+          impact_score: 50,
         });
 
-        toast({ 
-          title: 'Pin Dropped', 
-          description: 'Hazard broadcasted to campus radar.' 
+        toast({
+          title: 'Pin Dropped',
+          description: 'Hazard broadcasted to campus radar.',
         });
       }
     },
-    [hazardCategory, profile?.id, toast]
+    [hazardCategory, profile?.id]
   );
 
   const handleDropPin = useCallback(() => {
@@ -286,10 +354,10 @@ export default function Home() {
           createHazard(coords);
         },
         () => {
-          const fallbackLat = userCoords ? userCoords[0] : -21.1700;
-          const fallbackLng = userCoords ? userCoords[1] : 27.5000;
+          const fallbackLat = userCoords ? userCoords[0] : -21.17;
+          const fallbackLng = userCoords ? userCoords[1] : 27.5;
           const coords: [number, number] = [fallbackLat, fallbackLng];
-          
+
           setLiveCoords(coords);
           setGeoStatus('locked');
           createHazard(coords);
@@ -326,15 +394,14 @@ export default function Home() {
         return;
       }
 
-      // 🔥 Push Notification Blast for SOS
       await supabase.from('feed_posts').insert({
         user_id: profile?.id ?? null,
-        author_name: '🚨 KAMPUS SOS',
+        author_name: '🚨 Kampus SOS',
         category: 'General',
-        text: `${userName} just triggered an emergency beacon near ${loc}. Open the map immediately.`,
+        text: `${userName} triggered an emergency beacon near ${loc}. Open the radar map immediately.`,
         is_anonymous: false,
-        is_blasted: true, 
-        impact_score: 100
+        is_blasted: true,
+        impact_score: 100,
       });
 
       const alert = data as SosAlert;
@@ -344,8 +411,8 @@ export default function Home() {
       setIsSosModalOpen(false);
     };
 
-    const fallbackLat = userCoords ? userCoords[0] : -21.1700;
-    const fallbackLng = userCoords ? userCoords[1] : 27.5000;
+    const fallbackLat = userCoords ? userCoords[0] : -21.17;
+    const fallbackLng = userCoords ? userCoords[1] : 27.5;
 
     if (!('geolocation' in navigator)) {
       await executeBroadcast(fallbackLat, fallbackLng);
@@ -373,9 +440,11 @@ export default function Home() {
       .from('sos_alerts')
       .update({ active: false })
       .eq('id', activeHelpCard.id);
-    
+
     setActiveSosAlerts((prev) =>
-      prev.map((a) => (a.id === activeHelpCard.id ? { ...a, active: false } : a))
+      prev.map((a) =>
+        a.id === activeHelpCard.id ? { ...a, active: false } : a
+      )
     );
     setActiveHelpCard(null);
     setSosGeoStatus('idle');
@@ -394,7 +463,7 @@ export default function Home() {
       }
       action();
     },
-    [profile, toast]
+    [profile]
   );
 
   const requirePremium = useCallback(
@@ -414,7 +483,7 @@ export default function Home() {
       }
       action();
     },
-    [profile, toast]
+    [profile]
   );
 
   const openChat = useCallback(
@@ -444,9 +513,13 @@ export default function Home() {
         .maybeSingle();
       if (data && mounted) {
         setProfile(data as Profile);
-        
+
         const initialHash = window.location.hash.replace('#', '') as View;
-        if (['radar', 'hustle', 'community', 'escrow', 'profile'].includes(initialHash)) {
+        if (
+          ['radar', 'hustle', 'community', 'escrow', 'profile'].includes(
+            initialHash
+          )
+        ) {
           setActiveView(initialHash);
         } else {
           setActiveView('radar');
@@ -457,7 +530,9 @@ export default function Home() {
         }
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -482,7 +557,9 @@ export default function Home() {
   useEffect(() => {
     const handlePopState = () => {
       const hash = window.location.hash.replace('#', '') as View;
-      if (['radar', 'hustle', 'community', 'escrow', 'profile'].includes(hash)) {
+      if (
+        ['radar', 'hustle', 'community', 'escrow', 'profile'].includes(hash)
+      ) {
         setActiveView(hash);
       }
     };
@@ -502,23 +579,24 @@ export default function Home() {
   }
 
   const showSearch = activeView === 'hustle' || activeView === 'community';
-  const unreadCount = dbNotifications.filter(n => !n.read).length + sosNotifications.length;
+  const unreadCount =
+    dbNotifications.filter((n) => !n.read).length + sosNotifications.length;
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#0B1611] items-center">
-      <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-midnight">
-        
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#070A09] items-center">
+      <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-[#0B0F0E] ring-1 ring-white/[0.04]">
         <WelcomeModal />
 
-        <header className="sticky top-0 z-[1000] bg-midnight p-4 flex items-center justify-between">
-          <span className="text-white font-black text-xl tracking-tight">
+        {/* Sticky Matte Header */}
+        <header className="sticky top-0 z-[1000] bg-[#0B0F0E]/85 backdrop-blur-xl border-b border-white/[0.05] px-4 py-3.5 flex items-center justify-between">
+          <span className="text-white font-semibold text-lg tracking-tight">
             {HEADER_TITLES[activeView]}
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {isAdminUser && (
               <button
                 onClick={() => setShowAdmin(true)}
-                className="bg-orange-600 border border-orange-400 text-black font-black text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full active:scale-95 transition-transform shadow-lg shadow-orange-900/50"
+                className="bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 font-medium text-[11px] tracking-tight px-3 py-1 rounded-full active:scale-[0.97] transition-all"
               >
                 Admin
               </button>
@@ -527,18 +605,22 @@ export default function Home() {
             {showSearch && (
               <button
                 onClick={() => setSearchOpen((v) => !v)}
-                aria-label="Search gigs"
-                className={searchOpen ? 'text-pine' : 'text-sage'}
+                aria-label="Search"
+                className={`p-1.5 rounded-full transition-colors ${
+                  searchOpen
+                    ? 'text-amber-300 bg-zinc-900 ring-1 ring-white/[0.08]'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
               >
-                <Search className="w-6 h-6" strokeWidth={1.5} />
+                <Search className="w-5 h-5" strokeWidth={1.75} />
               </button>
             )}
             <button
               onClick={() => setChatInboxOpen(true)}
               aria-label="Messages"
-              className="relative"
+              className="relative p-1.5 text-zinc-400 hover:text-white transition-colors"
             >
-              <MessageCircle className="w-6 h-6 text-sage" strokeWidth={1.5} />
+              <MessageCircle className="w-5 h-5" strokeWidth={1.75} />
             </button>
             <button
               onClick={() => {
@@ -548,11 +630,11 @@ export default function Home() {
                 });
               }}
               aria-label="Toggle notifications"
-              className="relative"
+              className="relative p-1.5 text-zinc-400 hover:text-white transition-colors"
             >
-              <Bell className="w-6 h-6 text-sage" strokeWidth={1.5} />
+              <Bell className="w-5 h-5" strokeWidth={1.75} />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[9px] text-white font-bold animate-pulse">
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-amber-400 text-zinc-950 rounded-full flex items-center justify-center text-[9px] font-bold">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -560,54 +642,79 @@ export default function Home() {
           </div>
         </header>
 
+        {/* Expandable Search Bar */}
         {showSearch && searchOpen && (
-          <div className="px-4 pb-3 bg-midnight">
+          <div className="px-4 py-2.5 bg-[#0B0F0E] border-b border-white/[0.05]">
             <input
               autoFocus
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={activeView === 'hustle' ? 'Search gigs by title or seller...' : 'Search posts by keyword...'}
-              className="w-full h-10 rounded-lg bg-surface border border-gray-800 px-3 text-white placeholder:text-sage text-sm outline-none focus:border-pine transition-colors"
+              placeholder={
+                activeView === 'hustle'
+                  ? 'Search gigs by title or seller...'
+                  : 'Search posts by keyword...'
+              }
+              className="w-full h-10 rounded-xl bg-zinc-900/80 ring-1 ring-white/[0.07] px-3.5 text-white placeholder:text-zinc-500 text-xs outline-none focus:ring-emerald-700/50 transition-all"
             />
           </div>
         )}
 
+        {/* Notifications Popover */}
         {isNotifOpen && (
           <div className="absolute top-16 left-0 right-0 z-[1500] px-4">
-            <div className="bg-surface rounded-2xl border border-gray-800 shadow-xl flex flex-col gap-3 p-4 animate-slide-down">
-              <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-                <span className="text-white font-black text-sm tracking-wider">
-                  NOTIFICATIONS
+            <div className="bg-[#121816]/95 backdrop-blur-xl rounded-2xl ring-1 ring-white/[0.08] shadow-2xl flex flex-col gap-3 p-4 animate-slide-down">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
+                <span className="text-white font-semibold text-xs tracking-tight">
+                  Notifications
                 </span>
-                <button onClick={() => setIsNotifOpen(false)} aria-label="Close">
-                  <X className="w-4 h-4 text-sage hover:text-white transition-colors" strokeWidth={1.5} />
+                <button
+                  onClick={() => setIsNotifOpen(false)}
+                  aria-label="Close"
+                  className="text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
-              
-              <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto no-scrollbar">
-                {sosNotifications.length === 0 && dbNotifications.length === 0 ? (
-                  <span className="text-sage text-xs">No new notifications.</span>
+
+              <div className="flex flex-col gap-2.5 max-h-[60vh] overflow-y-auto no-scrollbar">
+                {sosNotifications.length === 0 &&
+                dbNotifications.length === 0 ? (
+                  <span className="text-zinc-500 text-xs py-4 text-center">
+                    You&apos;re all caught up.
+                  </span>
                 ) : (
                   <>
                     {sosNotifications.map((n) => (
-                      <div key={n.id} className="flex items-start gap-3 p-2 bg-red-900/10 rounded-lg border border-red-900/20">
-                        <div className="w-9 h-9 rounded-full bg-red-900/30 border border-red-700/50 flex items-center justify-center shrink-0">
-                          <ShieldAlert className="w-4 h-4 text-red-400" strokeWidth={1.5} />
+                      <div
+                        key={n.id}
+                        className="flex items-start gap-3 p-3 bg-rose-950/30 rounded-xl ring-1 ring-rose-500/30"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
+                          <ShieldAlert
+                            className="w-4 h-4 text-rose-400"
+                            strokeWidth={1.75}
+                          />
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-red-100 text-sm font-bold leading-snug">
+                          <span className="text-rose-100 text-xs font-semibold leading-snug">
                             {n.text}
                           </span>
-                          <span className="text-red-400/60 text-[10px]">{n.time}</span>
+                          <span className="text-rose-400/70 text-[10px]">
+                            {n.time}
+                          </span>
                         </div>
                       </div>
                     ))}
 
                     {dbNotifications.map((n) => (
-                      <div 
-                        key={n.id} 
-                        className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${!n.read ? 'bg-pine/5 border border-pine/10' : ''}`}
+                      <div
+                        key={n.id}
+                        className={`flex items-start gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${
+                          !n.read
+                            ? 'bg-emerald-950/30 ring-1 ring-emerald-800/30'
+                            : 'hover:bg-white/[0.03]'
+                        }`}
                         onClick={() => {
                           if (n.type === 'message') {
                             setChatInboxOpen(true);
@@ -618,18 +725,29 @@ export default function Home() {
                           }
                         }}
                       >
-                        <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
-                          {n.type === 'message' 
-                            ? <MessageCircle className="w-4 h-4 text-pine" strokeWidth={1.5} /> 
-                            : <MessageSquare className="w-4 h-4 text-sage" strokeWidth={1.5} />
-                          }
+                        <div className="w-8 h-8 rounded-full bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center shrink-0">
+                          {n.type === 'message' ? (
+                            <MessageCircle
+                              className="w-4 h-4 text-amber-300"
+                              strokeWidth={1.75}
+                            />
+                          ) : (
+                            <MessageSquare
+                              className="w-4 h-4 text-emerald-400"
+                              strokeWidth={1.75}
+                            />
+                          )}
                         </div>
-                        <div className="flex flex-col gap-0.5 cursor-pointer">
-                          <span className="text-white text-sm font-bold leading-snug">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-zinc-100 text-xs font-semibold leading-snug">
                             {n.title}
                           </span>
-                          <span className="text-sage text-xs leading-snug">{n.body}</span>
-                          <span className="text-gray-500 text-[10px]">{timeAgo(n.created_at)}</span>
+                          <span className="text-zinc-400 text-xs leading-snug">
+                            {n.body}
+                          </span>
+                          <span className="text-zinc-500 text-[10px]">
+                            {timeAgo(n.created_at)}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -640,6 +758,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* Main Viewport */}
         <main className="flex-1 relative overflow-y-auto overscroll-y-contain pb-32">
           {activeView === 'radar' && (
             <div className="absolute inset-0">
@@ -652,14 +771,21 @@ export default function Home() {
               />
 
               {activeSosAlerts.filter((a) => a.active).length === 0 && (
-                <div className="absolute top-20 left-4 right-4 z-[500] pointer-events-none">
-                  <div className="bg-surface/80 backdrop-blur-sm rounded-2xl border border-gray-800 p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-pine/15 border border-pine/40 flex items-center justify-center shrink-0">
-                      <ShieldCheck className="w-5 h-5 text-pine" strokeWidth={1.5} />
+                <div className="absolute top-4 left-4 right-4 z-[500] pointer-events-none">
+                  <div className="bg-zinc-900/75 backdrop-blur-md rounded-2xl ring-1 ring-white/[0.07] p-3.5 flex items-center gap-3 shadow-lg">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center shrink-0">
+                      <ShieldCheck
+                        className="w-4 h-4 text-emerald-400"
+                        strokeWidth={1.75}
+                      />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-white text-sm font-bold">No active emergencies reported nearby</span>
-                      <span className="text-sage text-xs">Campus is clear!</span>
+                      <span className="text-zinc-100 text-xs font-semibold tracking-tight">
+                        No active emergencies reported nearby
+                      </span>
+                      <span className="text-zinc-400 text-[11px]">
+                        Campus radar is clear
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -667,65 +793,68 @@ export default function Home() {
 
               <div className="absolute bottom-28 right-4 z-[1001] flex flex-col items-center gap-3">
                 <button
-                  onClick={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
+                  onClick={() => {
+                    setSosGeoStatus('idle');
+                    setIsSosModalOpen(true);
+                  }}
                   aria-label="Campus SOS — request help"
-                  className="sos-fab-glow h-14 w-14 rounded-full bg-red-600 flex items-center justify-center active:scale-95 transition-transform"
+                  className="h-13 w-13 p-3.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg ring-4 ring-rose-500/20 flex items-center justify-center active:scale-[0.96] transition-all"
                 >
-                  <ShieldAlert className="w-6 h-6 text-white" strokeWidth={2} />
+                  <ShieldAlert className="w-5 h-5" strokeWidth={2} />
                 </button>
                 <button
                   onClick={() => setIsReportModalOpen(true)}
-                  className="h-14 w-14 rounded-full bg-pine flex items-center justify-center active:scale-95 transition-transform shadow-lg"
+                  className="h-13 w-13 p-3.5 rounded-full bg-amber-400 hover:bg-amber-300 text-zinc-950 flex items-center justify-center active:scale-[0.96] transition-all shadow-lg"
                   aria-label="Drop new hazard pin"
                 >
-                  <Plus className="w-6 h-6 text-black" strokeWidth={2.5} />
+                  <Plus className="w-5 h-5" strokeWidth={2.5} />
                 </button>
               </div>
 
               {activeHelpCard && (
                 <div className="absolute bottom-48 left-4 right-4 z-[1001]">
-                  <div className="bg-red-950/90 border border-red-600/60 rounded-2xl p-4 backdrop-blur-sm shadow-xl flex flex-col gap-3 animate-slide-up">
+                  <div className="bg-rose-950/90 ring-1 ring-rose-500/40 rounded-2xl p-4 backdrop-blur-md shadow-xl flex flex-col gap-3 animate-slide-up">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-broadcast-pulse inline-block" />
-                        <span className="text-red-400 font-black text-xs tracking-widest uppercase">
-                          Active Help Request
+                        <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping inline-block" />
+                        <span className="text-rose-200 font-semibold text-xs tracking-tight">
+                          Active SOS Beacon
                         </span>
                       </div>
                       <button
                         onClick={handleDismissHelpCard}
-                        className="text-red-400 hover:text-white transition-colors"
+                        className="text-rose-300 hover:text-white transition-colors"
                       >
-                        <X className="w-4 h-4" strokeWidth={2} />
+                        <X className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                     </div>
 
-                    <p className="text-white text-sm leading-relaxed">
+                    <p className="text-zinc-100 text-xs leading-relaxed">
                       Your SOS beacon is live. Verified students within{' '}
-                      <span className="text-red-300 font-bold">1km</span> have been
-                      alerted. Help is on the way.
+                      <span className="text-rose-200 font-semibold">1km</span>{' '}
+                      have been alerted.
                     </p>
 
-                    <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <a
                         href="tel:+26735523962"
-                        className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-red-700/60 text-white text-xs font-bold active:scale-95 transition-transform"
+                        className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-rose-900/60 ring-1 ring-rose-500/30 text-white text-xs font-medium active:scale-[0.98] transition-transform"
                       >
-                        <Phone className="w-4 h-4" strokeWidth={2} />
-                        UB Protection (355 2396)
+                        <Phone className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        UB Protection
                       </a>
                       <a
                         href="tel:+26739530622"
-                        className="w-full flex items-center justify-center gap-2 h-10 rounded-lg bg-red-700/60 text-white text-xs font-bold active:scale-95 transition-transform"
+                        className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-rose-900/60 ring-1 ring-rose-500/30 text-white text-xs font-medium active:scale-[0.98] transition-transform"
                       >
-                        <Phone className="w-4 h-4" strokeWidth={2} />
-                        BAC Security (395 3062)
+                        <Phone className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        BAC Security
                       </a>
                     </div>
 
                     <button
                       onClick={handleDismissHelpCard}
-                      className="w-full h-9 rounded-lg border border-red-600/50 text-red-400 text-xs font-bold active:scale-95 transition-transform"
+                      className="w-full h-9 rounded-xl bg-zinc-950/50 ring-1 ring-white/10 text-rose-200 text-xs font-medium active:scale-[0.98] transition-transform"
                     >
                       I&apos;m Safe — Deactivate Beacon
                     </button>
@@ -734,6 +863,7 @@ export default function Home() {
               )}
             </div>
           )}
+
           {activeView === 'hustle' && (
             <HustleHub
               searchQuery={searchQuery}
@@ -742,16 +872,19 @@ export default function Home() {
               profile={profile}
             />
           )}
+
           {activeView === 'community' && (
-            <CommunityHub 
-              profile={profile} 
-              searchQuery={searchQuery} 
-              onMessageUser={openChat} 
+            <CommunityHub
+              profile={profile}
+              searchQuery={searchQuery}
+              onMessageUser={openChat}
             />
           )}
+
           {activeView === 'escrow' && (
             <EscrowVault requireVerified={requirePremium} />
           )}
+
           {activeView === 'profile' && (
             <ProfileScreen
               profile={profile}
@@ -762,35 +895,39 @@ export default function Home() {
           )}
         </main>
 
+        {/* Report Campus Hazard Modal */}
         {isReportModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setIsReportModalOpen(false)}
             />
-            <div className="relative w-full bg-surface rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="relative w-full bg-[#121816] ring-1 ring-white/[0.08] rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between shrink-0">
-                <span className="text-white font-bold text-lg">
+                <span className="text-white font-semibold tracking-tight text-base">
                   Report Campus Hazard
                 </span>
-                <button onClick={() => setIsReportModalOpen(false)}>
-                  <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
+                <button
+                  onClick={() => setIsReportModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
 
               <div className="flex flex-col gap-2 shrink-0">
-                <span className="text-sage text-xs font-bold uppercase tracking-wider">
-                  Category
+                <span className="text-zinc-400 text-xs font-medium">
+                  Hazard Type
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {HAZARD_CATEGORIES.map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setHazardCategory(cat)}
-                      className={`rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                      className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
                         hazardCategory === cat
-                          ? 'bg-pine text-black'
-                          : 'bg-transparent border border-sage text-sage'
+                          ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-700/50 font-semibold'
+                          : 'bg-zinc-900/80 ring-1 ring-white/[0.06] text-zinc-400'
                       }`}
                     >
                       {cat}
@@ -801,41 +938,43 @@ export default function Home() {
 
               <div className="flex items-center gap-2 shrink-0">
                 <div
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold ${
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium ${
                     geoStatus === 'locked'
-                      ? 'bg-pine/15 text-pine border border-pine/50'
+                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
                       : geoStatus === 'denied'
-                      ? 'bg-red-500/15 text-red-400 border border-red-500/40'
-                      : 'bg-ink text-sage border border-gray-800'
+                      ? 'bg-rose-950/60 text-rose-300 border border-rose-800/40'
+                      : 'bg-zinc-900 text-zinc-400 ring-1 ring-white/[0.06]'
                   }`}
                 >
-                  <Lock className="w-3 h-3" strokeWidth={2} />
+                  <Lock className="w-3 h-3" strokeWidth={1.75} />
                   {geoStatus === 'locating'
                     ? 'Acquiring live GPS...'
                     : geoStatus === 'locked'
                     ? 'Locked to live location'
                     : geoStatus === 'denied'
                     ? 'GPS access denied'
-                    : 'Will lock to live GPS'}
+                    : 'Locks to live GPS'}
                 </div>
                 {liveCoords && geoStatus === 'locked' && (
-                  <span className="text-sage text-[10px]">
+                  <span className="text-zinc-500 text-[11px] font-mono">
                     {liveCoords[0].toFixed(4)}, {liveCoords[1].toFixed(4)}
                   </span>
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 mt-1 shrink-0">
+              <div className="flex flex-col gap-2.5 mt-1 shrink-0">
                 <button
                   onClick={handleDropPin}
                   disabled={geoStatus === 'locating'}
-                  className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-60 disabled:active:scale-100"
+                  className="w-full h-11 rounded-xl bg-amber-400 text-zinc-950 hover:bg-amber-300 font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50"
                 >
-                  {geoStatus === 'locating' ? 'Locking GPS...' : 'Drop Alert Pin'}
+                  {geoStatus === 'locating'
+                    ? 'Locking GPS...'
+                    : 'Drop Alert Pin'}
                 </button>
                 <button
                   onClick={() => setIsReportModalOpen(false)}
-                  className="w-full h-10 text-red-500 font-bold text-sm active:scale-95 transition-transform"
+                  className="w-full h-10 text-zinc-400 hover:text-white font-medium text-xs transition-colors"
                 >
                   Cancel
                 </button>
@@ -844,80 +983,95 @@ export default function Home() {
           </div>
         )}
 
+        {/* Emergency SOS Broadcast Modal */}
         {isSosModalOpen && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
-              className="absolute inset-0 bg-black/75 backdrop-blur-md"
-              onClick={() => { if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false); }}
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => {
+                if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false);
+              }}
             />
-            <div className="relative w-full bg-[#170909] border-t-2 border-red-700/70 rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="relative w-full bg-[#140C0E] ring-1 ring-rose-500/30 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-red-600/20 border border-red-600/50 flex items-center justify-center">
-                    <ShieldAlert className="w-5 h-5 text-red-500" strokeWidth={2} />
+                  <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+                    <ShieldAlert
+                      className="w-5 h-5 text-rose-400"
+                      strokeWidth={1.75}
+                    />
                   </div>
-                  <span className="text-red-500 font-black text-xl tracking-tight">
-                    EMERGENCY BROADCAST
+                  <span className="text-white font-semibold text-base tracking-tight">
+                    Emergency Broadcast
                   </span>
                 </div>
                 {sosGeoStatus !== 'broadcasting' && (
                   <button
                     onClick={() => setIsSosModalOpen(false)}
-                    className="text-red-400 hover:text-white transition-colors"
+                    className="text-zinc-400 hover:text-white transition-colors"
                   >
-                    <X className="w-5 h-5" strokeWidth={2} />
+                    <X className="w-5 h-5" strokeWidth={1.75} />
                   </button>
                 )}
               </div>
 
-              <p className="text-gray-300 text-sm leading-relaxed shrink-0">
-                This will alert all verified students within{' '}
-                <span className="text-red-400 font-bold">1km</span> of your exact
-                location and display an active help pin on the campus radar.
+              <p className="text-zinc-300 text-xs leading-relaxed shrink-0">
+                This alerts verified students within{' '}
+                <span className="text-rose-300 font-semibold">1km</span> of your
+                live coordinates and places an active SOS beacon on the radar.
               </p>
 
               <div className="flex flex-col gap-2 shrink-0">
-                <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">
-                  Direct Hotlines
+                <span className="text-zinc-400 text-xs font-medium">
+                  Campus Security Direct Lines
                 </span>
                 <div className="flex flex-col gap-2">
                   <a
                     href="tel:+26735523962"
-                    className="w-full flex items-center justify-between px-4 h-12 rounded-xl bg-red-900/40 border border-red-700/50 text-white text-sm font-bold active:scale-95 transition-transform"
+                    className="w-full flex items-center justify-between px-4 h-11 rounded-xl bg-zinc-900/80 ring-1 ring-white/[0.07] text-white text-xs font-medium active:scale-[0.98] transition-transform"
                   >
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-red-400" strokeWidth={2} />
-                      UB Protection
+                    <div className="flex items-center gap-2.5">
+                      <Phone
+                        className="w-4 h-4 text-rose-400"
+                        strokeWidth={1.75}
+                      />
+                      <span>UB Protection</span>
                     </div>
-                    <span className="text-red-400 tracking-wider">355 2396</span>
+                    <span className="text-zinc-300 font-mono">355 2396</span>
                   </a>
                   <a
                     href="tel:+26739530622"
-                    className="w-full flex items-center justify-between px-4 h-12 rounded-xl bg-red-900/40 border border-red-700/50 text-white text-sm font-bold active:scale-95 transition-transform"
+                    className="w-full flex items-center justify-between px-4 h-11 rounded-xl bg-zinc-900/80 ring-1 ring-white/[0.07] text-white text-xs font-medium active:scale-[0.98] transition-transform"
                   >
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-red-400" strokeWidth={2} />
-                      BAC Security
+                    <div className="flex items-center gap-2.5">
+                      <Phone
+                        className="w-4 h-4 text-rose-400"
+                        strokeWidth={1.75}
+                      />
+                      <span>BAC Security</span>
                     </div>
-                    <span className="text-red-400 tracking-wider">395 3062</span>
+                    <span className="text-zinc-300 font-mono">395 3062</span>
                   </a>
                 </div>
               </div>
 
               <button
                 onClick={handleBroadcastSos}
-                disabled={sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting'}
-                className="w-full h-14 rounded-xl bg-red-600 text-white font-black text-base tracking-wide animate-broadcast-pulse active:scale-95 transition-transform disabled:opacity-70 disabled:active:scale-100 flex items-center justify-center gap-2 shrink-0 mt-2"
+                disabled={
+                  sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting'
+                }
+                className="w-full h-12 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 shrink-0"
               >
-                {(sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting') && (
-                  <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />
+                {(sosGeoStatus === 'locating' ||
+                  sosGeoStatus === 'broadcasting') && (
+                  <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
                 )}
                 {sosGeoStatus === 'locating' && 'Acquiring GPS...'}
                 {sosGeoStatus === 'broadcasting' && 'Broadcasting...'}
                 {(sosGeoStatus === 'idle' || sosGeoStatus === 'denied') && (
                   <>
-                    <ShieldAlert className="w-5 h-5" strokeWidth={2} />
-                    BROADCAST SOS ALERT
+                    <ShieldAlert className="w-4 h-4" strokeWidth={2} />
+                    <span>Broadcast SOS Alert</span>
                   </>
                 )}
               </button>
@@ -925,89 +1079,108 @@ export default function Home() {
           </div>
         )}
 
+        {/* Open Hazard Detail Sheet */}
         {openHazard && (
           <div className="absolute inset-0 z-[2000] flex items-end">
             <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setOpenHazard(null)}
             />
-            <div className="relative w-full bg-surface rounded-t-2xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="relative w-full bg-[#121816] ring-1 ring-white/[0.08] rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between shrink-0">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-white font-bold text-lg">
+                  <span className="text-white font-semibold tracking-tight text-base">
                     {openHazard.category}
                   </span>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-pine" strokeWidth={1.5} />
-                    <span className="text-sage text-xs">{openHazard.label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <MapPin
+                      className="w-3.5 h-3.5 text-amber-300"
+                      strokeWidth={1.75}
+                    />
+                    <span className="text-zinc-400 text-xs">
+                      {openHazard.label}
+                    </span>
                   </div>
                 </div>
-                <button onClick={() => setOpenHazard(null)}>
-                  <X className="w-5 h-5 text-sage" strokeWidth={1.5} />
+                <button
+                  onClick={() => setOpenHazard(null)}
+                  className="w-8 h-8 rounded-full bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
 
-              <div className="flex flex-col gap-1 shrink-0">
-                <span className="text-sage text-xs font-bold uppercase tracking-wider">
-                  Time Reported
+              <div className="flex items-center justify-between shrink-0">
+                <span className="text-zinc-400 text-xs">
+                  Reported {openHazard.time}
                 </span>
-                <span className="text-white text-sm">{openHazard.time}</span>
+                {openHazard.lockedToLive && (
+                  <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
+                    <Lock className="w-3 h-3" strokeWidth={1.75} />
+                    Live GPS Verified
+                  </div>
+                )}
               </div>
 
-              {openHazard.lockedToLive && (
-                <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold bg-pine/15 text-pine border border-pine/50 w-fit shrink-0">
-                  <Lock className="w-3 h-3" strokeWidth={2} />
-                  Locked to live location
-                </div>
-              )}
-
-              {/* Upvote / Helpful Button for Hazards */}
-              <div className="flex items-center justify-between bg-ink p-3 rounded-xl border border-gray-800 shrink-0 mt-2">
+              <div className="flex items-center justify-between bg-zinc-950/70 p-3.5 rounded-2xl ring-1 ring-white/[0.06] shrink-0">
                 <div className="flex flex-col">
-                  <span className="text-white text-xs font-bold">Was this pin helpful?</span>
-                  <span className="text-sage text-[10px]">Verified students find this useful</span>
+                  <span className="text-zinc-100 text-xs font-semibold">
+                    Was this pin helpful?
+                  </span>
+                  <span className="text-zinc-500 text-[11px]">
+                    Confirm accuracy for other students
+                  </span>
                 </div>
                 <button
                   onClick={async () => {
                     if (!profile || !openHazard) return;
-                    
                     const newUpvotes = (openHazard.upvotes || 0) + 1;
-                    
-                    // Optimistic update
                     setOpenHazard({ ...openHazard, upvotes: newUpvotes });
 
                     const { error } = await supabase
                       .from('hazard_votes')
-                      .insert({ hazard_id: openHazard.id, user_id: profile.id });
+                      .insert({
+                        hazard_id: openHazard.id,
+                        user_id: profile.id,
+                      });
 
                     if (error) {
-                      // Revert if they already voted or it failed
-                      setOpenHazard({ ...openHazard, upvotes: openHazard.upvotes });
-                      toast({ title: 'Already Voted', description: 'You already marked this pin as helpful.', variant: 'destructive' });
+                      setOpenHazard({
+                        ...openHazard,
+                        upvotes: openHazard.upvotes,
+                      });
+                      toast({
+                        title: 'Already Voted',
+                        description: 'You already marked this pin as helpful.',
+                        variant: 'destructive',
+                      });
                       return;
                     }
 
-                    // Update the main hazard count
                     await supabase
                       .from('hazards')
                       .update({ upvotes: newUpvotes })
                       .eq('id', openHazard.id);
 
-                    toast({ title: 'Marked Helpful 👍', description: 'Thanks for contributing to campus safety!' });
+                    toast({
+                      title: 'Marked Helpful',
+                      description: 'Thanks for keeping campus informed.',
+                    });
                   }}
-                  className="flex items-center gap-1.5 bg-pine/20 border border-pine/50 text-pine px-4 py-2 rounded-lg text-xs font-bold active:scale-95 transition-transform"
+                  className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 px-3.5 py-2 rounded-xl text-xs font-medium active:scale-[0.97] transition-all"
                 >
-                  <span>👍</span> Helpful ({openHazard.upvotes || 0})
+                  <ThumbsUp className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <span>Helpful ({openHazard.upvotes || 0})</span>
                 </button>
               </div>
 
-              <div className="pt-2 border-t border-gray-800 shrink-0">
+              <div className="pt-2 border-t border-white/[0.06] shrink-0">
                 <CommentThread
                   comments={openHazard.comments}
                   onAdd={addHazardComment}
                   onAuthorClick={(username, id) => {
                     setProfileUser(username);
-                    setProfileUserId(id || ''); 
+                    setProfileUserId(id || '');
                   }}
                   placeholder="e.g. Security arrived at 21:15"
                 />
@@ -1028,17 +1201,18 @@ export default function Home() {
           />
         )}
 
-        <footer className="absolute bottom-[max(72px,calc(72px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-midnight/90 backdrop-blur-md border-t border-gray-900 px-4 py-2.5 flex items-center justify-center gap-4">
+        {/* Subtle Legal Footer Bar */}
+        <footer className="absolute bottom-[max(68px,calc(68px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-[#0B0F0E]/80 backdrop-blur-md border-t border-white/[0.04] px-4 py-2 flex items-center justify-center gap-4">
           <button
             onClick={() => setLegalModal('terms')}
-            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
+            className="text-zinc-500 text-[10px] font-medium hover:text-zinc-300 transition-colors"
           >
             Terms of Service
           </button>
-          <span className="text-gray-700 text-[10px]">|</span>
+          <span className="text-zinc-800 text-[10px]">·</span>
           <button
             onClick={() => setLegalModal('privacy')}
-            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
+            className="text-zinc-500 text-[10px] font-medium hover:text-zinc-300 transition-colors"
           >
             Privacy Policy
           </button>
@@ -1046,8 +1220,14 @@ export default function Home() {
 
         <BottomNav active={activeView} onChange={setActiveView} />
 
-        <SubscriptionModal open={isSubscriptionOpen} onClose={() => setIsSubscriptionOpen(false)} />
-        <AdminQueue open={adminQueueOpen} onClose={() => setAdminQueueOpen(false)} />
+        <SubscriptionModal
+          open={isSubscriptionOpen}
+          onClose={() => setIsSubscriptionOpen(false)}
+        />
+        <AdminQueue
+          open={adminQueueOpen}
+          onClose={() => setAdminQueueOpen(false)}
+        />
         <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
 
         {showOtp && profile && (
@@ -1082,8 +1262,12 @@ export default function Home() {
           />
         )}
 
-        {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} adminProfile={profile} />}
-
+        {showAdmin && (
+          <AdminDashboard
+            onClose={() => setShowAdmin(false)}
+            adminProfile={profile}
+          />
+        )}
       </div>
     </div>
   );
