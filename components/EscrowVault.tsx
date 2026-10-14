@@ -1,7 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ReceiptText, BadgeCheck, Copy, Check, ShieldCheck, Loader as Loader2, PackageOpen, CreditCard, Wallet, Clock } from 'lucide-react';
+import {
+  ReceiptText,
+  BadgeCheck,
+  Copy,
+  Check,
+  ShieldCheck,
+  Loader as Loader2,
+  PackageOpen,
+  CreditCard,
+  Wallet,
+  Clock,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,19 +28,16 @@ export default function EscrowVault({
   requireVerified: (action: () => void) => void;
 }) {
   const { toast } = useToast();
-  
-  // User & DB State
+
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [trades, setTrades] = useState<any[]>([]);
-  
-  // UI State
+
   const [verifying, setVerifying] = useState(false);
   const [copiedRef, setCopiedRef] = useState(false);
   const [copiedNum, setCopiedNum] = useState(false);
   const [method, setMethod] = useState<'fnb' | 'ewallet'>('fnb');
-  
-  // Form State
+
   const [referenceCode, setReferenceCode] = useState('');
   const [itemName, setItemName] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
@@ -37,12 +45,12 @@ export default function EscrowVault({
   const [txRef, setTxRef] = useState('');
 
   useEffect(() => {
-    // Generate a unique Escrow code on mount
     setReferenceCode(`ESC-${Math.floor(1000 + Math.random() * 9000)}`);
 
-    // Fetch user and load their past trades
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
         setUserEmail(user.email ?? '');
@@ -61,31 +69,41 @@ export default function EscrowVault({
     if (data) setTrades(data);
   };
 
-  // Listen for Admin Approvals in Real-Time
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
       .channel('escrow_realtime')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'escrow_transactions', filter: `buyer_id=eq.${userId}` },
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrow_transactions',
+          filter: `buyer_id=eq.${userId}`,
+        },
         (payload) => {
           fetchTrades(userId);
           if (payload.new.status === 'verified') {
             toast({
-              title: 'Escrow Verified! 💰',
-              description: 'Your payment was confirmed by Admin. Receipt is ready!',
+              title: 'Escrow Verified',
+              description:
+                'Your payment was confirmed by Admin. Funds are locked.',
             });
           }
         }
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId, toast]);
 
-  // Validation
-  const canVerify = txRef.trim().length >= 6 && itemName.trim().length > 0 && sellerEmail.trim().length > 0 && amount.trim().length > 0;
+  const canVerify =
+    txRef.trim().length >= 6 &&
+    itemName.trim().length > 0 &&
+    sellerEmail.trim().length > 0 &&
+    amount.trim().length > 0;
 
   const fnbNumber = '77037168';
   const ewalletNumber = '71321163';
@@ -93,13 +111,12 @@ export default function EscrowVault({
 
   const handleVerify = () => {
     if (!canVerify) return;
-    
+
     requireVerified(async () => {
       if (!userId || !userEmail) return;
-      
+
       setVerifying(true);
 
-      // INSERT INTO SUPABASE
       const { error } = await supabase.from('escrow_transactions').insert({
         buyer_id: userId,
         buyer_email: userEmail,
@@ -114,47 +131,32 @@ export default function EscrowVault({
       setVerifying(false);
 
       if (error) {
-        toast({ title: 'Error processing trade', description: error.message, variant: 'destructive' });
+        toast({
+          title: 'Error processing trade',
+          description: error.message,
+          variant: 'destructive',
+        });
         return;
       }
 
-      // --- DEBUGGING NOTIFICATION LOGIC ---
-      console.log("🚀 [DEBUG] 1. Starting notification process for:", sellerEmail);
-      
-      // 1. IN-APP NOTIFICATION
-      const { data: sellerProfile, error: profileError } = await supabase
+      const { data: sellerProfile } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', sellerEmail.trim().toLowerCase())
         .single();
 
-      if (profileError) {
-        console.error("❌ [DEBUG] Profile lookup error (Check RLS on 'profiles'):", profileError);
-      }
-
       if (sellerProfile) {
-        console.log("✅ [DEBUG] 2. Found seller profile ID:", sellerProfile.id);
-        const { error: notifError } = await supabase.from('notifications').insert({
+        await supabase.from('notifications').insert({
           user_id: sellerProfile.id,
           title: 'Escrow Funds Locked 🔒',
-          message: `Buyer (${userEmail}) deposited P ${amount} into the Vault for '${itemName}'. Awaiting Admin verification!`,
-          type: 'escrow',
-          is_read: false
+          body: `Buyer (${userEmail}) deposited P ${amount} into the Vault for '${itemName}'. Awaiting Admin verification.`,
+          type: 'comment',
+          read: false,
         });
-        
-        if (notifError) {
-          console.error("❌ [DEBUG] Notification Insert Error (Check RLS on 'notifications'):", notifError);
-        } else {
-          console.log("✅ [DEBUG] 3. In-app notification successfully inserted!");
-        }
-      } else {
-        console.log("⚠️ [DEBUG] 2. No seller profile found. Did you type an email that hasn't signed up yet?");
       }
 
-      // 2. EMAIL NOTIFICATION
-      console.log("🚀 [DEBUG] 4. Firing email API request...");
       try {
-        const emailRes = await fetch('/api/notify-seller', {
+        await fetch('/api/notify-seller', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -162,23 +164,17 @@ export default function EscrowVault({
             buyerEmail: userEmail,
             itemName: itemName.trim(),
             amount: amount,
-          })
+          }),
         });
-        
-        const emailData = await emailRes.json();
-        console.log(`📡 [DEBUG] 5. API Response Status: ${emailRes.status}`);
-        console.log("📡 [DEBUG] 6. API Response Data:", emailData);
-      } catch (err) {
-        console.error("❌ [DEBUG] Fetch failed entirely:", err);
+      } catch {
+        // Non-blocking notification fallback
       }
-      // ------------------------------
 
       toast({
-        title: 'Escrow Deposit Pending',
-        description: `Admin will verify Ref ${txRef}. The seller will be notified once funds are secured!`,
+        title: 'Escrow Deposit Logged',
+        description: `Admin will verify Ref ${txRef}. Seller will be notified once confirmed.`,
       });
-      
-      // Clear form and refresh history
+
       setTxRef('');
       setItemName('');
       setSellerEmail('');
@@ -199,21 +195,24 @@ export default function EscrowVault({
   };
 
   return (
-    <div className="flex-1 bg-midnight flex flex-col overflow-y-auto px-4 pb-24 pt-2">
+    <div className="flex-1 bg-[#0B0F0E] flex flex-col overflow-y-auto px-4 pb-28 pt-3">
       {/* SECTION A — How Escrow Works */}
-      <section className="mt-2">
-        <span className="text-sage text-xs font-bold uppercase tracking-wider">
-          How Escrow Works
+      <section className="bg-zinc-900/40 ring-1 ring-white/[0.05] rounded-2xl p-4">
+        <span className="text-zinc-400 text-xs font-medium">
+          How Campus Escrow Works
         </span>
-        <div className="mt-3 flex items-start justify-between">
+        <div className="mt-3.5 flex items-start justify-between">
           {STEPS.map((step, i) => {
             const Icon = step.icon;
             return (
               <div key={i} className="flex flex-col items-center gap-2 flex-1">
-                <div className="w-12 h-12 rounded-full bg-surface border border-gray-800 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-pine" strokeWidth={1.5} />
+                <div className="w-10 h-10 rounded-xl bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center">
+                  <Icon
+                    className="w-4 h-4 text-emerald-400"
+                    strokeWidth={1.75}
+                  />
                 </div>
-                <span className="text-sage text-[10px] text-center leading-tight">
+                <span className="text-zinc-300 text-[11px] font-medium text-center leading-tight">
                   {step.label}
                 </span>
               </div>
@@ -223,176 +222,262 @@ export default function EscrowVault({
       </section>
 
       {/* SECTION B — Payment Activation Card */}
-      <section className="mt-6 bg-surface rounded-2xl p-5 flex flex-col gap-4 border border-gray-800">
+      <section className="mt-4 bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] shadow-sm rounded-2xl p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <span className="text-white font-bold text-sm">Secure a Trade</span>
-          <ShieldCheck className="w-5 h-5 text-pine" strokeWidth={2} />
+          <div className="flex flex-col">
+            <span className="text-white font-semibold tracking-tight text-sm">
+              Secure a Trade
+            </span>
+            <span className="text-zinc-500 text-[11px]">
+              Funds stay locked until you confirm delivery
+            </span>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center">
+            <ShieldCheck
+              className="w-4 h-4 text-emerald-400"
+              strokeWidth={1.75}
+            />
+          </div>
         </div>
 
         {/* Reference Code Box */}
-        <div className="bg-ink border border-pine/30 rounded-xl p-4 flex items-center justify-between mt-1">
+        <div className="bg-zinc-950/80 ring-1 ring-white/[0.07] rounded-2xl p-4 flex items-center justify-between">
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-sage font-bold">Escrow Ref Code</div>
-            <div className="text-xl font-extrabold text-pine tracking-wider mt-1">{referenceCode}</div>
+            <div className="text-[11px] text-zinc-400 font-medium">
+              Escrow Ref Code
+            </div>
+            <div className="text-xl font-bold text-amber-300 font-mono tracking-wider mt-0.5">
+              {referenceCode}
+            </div>
           </div>
           <button
             onClick={() => copyToClipboard(referenceCode, true)}
-            className="flex items-center gap-1.5 bg-pine/10 border border-pine/30 text-pine px-3 py-2 rounded-lg text-xs font-semibold hover:bg-pine/20 transition-colors"
+            className="flex items-center gap-1.5 bg-zinc-900 ring-1 ring-white/[0.08] text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium hover:bg-zinc-800 active:scale-[0.97] transition-all"
           >
-            {copiedRef ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copiedRef ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
             {copiedRef ? 'Copied' : 'Copy Code'}
           </button>
         </div>
 
         {/* Payment Method Tabs */}
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2.5">
           <button
             onClick={() => setMethod('fnb')}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${
-              method === 'fnb' ? 'bg-pine text-black border-pine' : 'bg-ink border border-gray-800 text-sage'
+            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+              method === 'fnb'
+                ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-700/50'
+                : 'bg-zinc-950/60 ring-1 ring-white/[0.06] text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <CreditCard className="w-4 h-4" strokeWidth={2} />
+            <CreditCard className="w-4 h-4" strokeWidth={1.75} />
             FNB Pay2Cell
           </button>
           <button
             onClick={() => setMethod('ewallet')}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all ${
-              method === 'ewallet' ? 'bg-pine text-black border-pine' : 'bg-ink border border-gray-800 text-sage'
+            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+              method === 'ewallet'
+                ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-700/50'
+                : 'bg-zinc-950/60 ring-1 ring-white/[0.06] text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Wallet className="w-4 h-4" strokeWidth={2} />
+            <Wallet className="w-4 h-4" strokeWidth={1.75} />
             eWallet
           </button>
         </div>
 
         {/* Instructions */}
-        <div className="bg-ink border border-gray-800 rounded-xl p-4 space-y-3">
+        <div className="bg-zinc-950/80 ring-1 ring-white/[0.06] rounded-2xl p-4 space-y-2.5">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[10px] uppercase font-bold text-sage">
+              <div className="text-[11px] font-medium text-zinc-400">
                 {method === 'fnb' ? 'FNB Pay2Cell Number' : 'eWallet Number'}
               </div>
-              <div className="text-lg font-extrabold text-white">{currentNumber}</div>
+              <div className="text-base font-bold text-white font-mono mt-0.5">
+                {currentNumber}
+              </div>
             </div>
             <button
               onClick={() => copyToClipboard(currentNumber, false)}
-              className="flex items-center gap-1 text-pine text-xs font-bold active:scale-95 transition-transform"
+              className="flex items-center gap-1 text-emerald-400 text-xs font-medium active:scale-[0.96] transition-transform"
             >
-              {copiedNum ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copiedNum ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
               {copiedNum ? 'Copied' : 'Copy'}
             </button>
           </div>
-          
-          <p className="text-sage text-[11px] leading-relaxed bg-black/50 p-3 rounded-lg">
+
+          <p className="text-zinc-400 text-xs leading-relaxed bg-black/40 p-3 rounded-xl">
             {method === 'fnb' ? (
-              <>Send the agreed amount to <strong className="text-white">77037168</strong> via FNB. Use your code <strong className="text-pine">{referenceCode}</strong> as the reference. We will notify the seller once funds are locked.</>
+              <>
+                Send the agreed amount to{' '}
+                <strong className="text-white font-mono">77037168</strong> via
+                FNB. Use{' '}
+                <strong className="text-amber-300 font-mono">
+                  {referenceCode}
+                </strong>{' '}
+                as the reference.
+              </>
             ) : (
-              <>Send the agreed eWallet to <strong className="text-white">71321163</strong>. Keep your transaction reference handy. We will notify the seller once funds are locked.</>
+              <>
+                Send the agreed eWallet to{' '}
+                <strong className="text-white font-mono">71321163</strong>. Keep
+                your transaction reference handy.
+              </>
             )}
           </p>
         </div>
 
         {/* Verification Inputs */}
-        <div className="flex flex-col gap-3 mt-2">
-          
+        <div className="flex flex-col gap-3 pt-1">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] uppercase font-bold text-sage">Item / Service</label>
-            <input type="text" value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder="e.g. Graphic Design Logo" disabled={verifying} required className="bg-ink rounded-lg h-10 w-full px-4 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-sm" />
+            <label className="text-xs font-medium text-zinc-400">
+              Item or Service
+            </label>
+            <input
+              type="text"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              placeholder="e.g. Calculus Textbook / Graphic Design"
+              disabled={verifying}
+              required
+              className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 text-xs transition-all"
+            />
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-[10px] uppercase font-bold text-sage">Amount (Pula)</label>
-              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" disabled={verifying} required className="bg-ink rounded-lg h-10 w-full px-4 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-sm" />
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-zinc-400">
+                Amount (Pula)
+              </label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                disabled={verifying}
+                required
+                className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 text-xs font-mono transition-all"
+              />
             </div>
-            <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-[10px] uppercase font-bold text-sage">Seller's Email</label>
-              <input type="email" value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} placeholder="@ub.ac.bw" disabled={verifying} required className="bg-ink rounded-lg h-10 w-full px-4 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-sm" />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-zinc-400">
+                Seller&apos;s Student Email
+              </label>
+              <input
+                type="email"
+                value={sellerEmail}
+                onChange={(e) => setSellerEmail(e.target.value)}
+                placeholder="seller@ub.ac.bw"
+                disabled={verifying}
+                required
+                className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 text-xs transition-all"
+              />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 pt-2 border-t border-gray-800">
-            <label className="text-[10px] uppercase font-bold text-sage">Enter Transaction Reference ID</label>
+          <div className="flex flex-col gap-1.5 pt-2 border-t border-white/[0.05]">
+            <label className="text-xs font-medium text-zinc-400">
+              Transaction Reference ID
+            </label>
             <input
               type="text"
               value={txRef}
               onChange={(e) => setTxRef(e.target.value)}
-              placeholder="e.g. FNB InContact ID"
+              placeholder="Paste FNB inContact or SMS Ref ID"
               disabled={verifying}
               required
               minLength={6}
-              className="bg-ink rounded-lg h-12 w-full px-4 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors disabled:opacity-50 text-sm"
+              className="bg-zinc-950/90 rounded-xl h-11 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 transition-all disabled:opacity-50 text-xs font-mono"
             />
             {txRef.length > 0 && txRef.length < 6 && (
-              <span className="text-red-400 text-[10px] font-bold">Transaction ID must be at least 6 characters</span>
+              <span className="text-rose-400 text-[11px] font-medium">
+                Transaction ID must be at least 6 characters
+              </span>
             )}
           </div>
-
         </div>
 
         <button
           onClick={handleVerify}
           disabled={verifying || !canVerify}
-          className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:active:scale-100 disabled:opacity-70 flex items-center justify-center gap-2 mt-1"
+          className="w-full h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-xs tracking-tight active:scale-[0.98] transition-all duration-150 ease-out disabled:opacity-40 flex items-center justify-center gap-2 shadow-sm"
         >
-          {verifying && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
-          {verifying ? 'Verifying...' : 'Lock Funds in Escrow'}
+          {verifying && (
+            <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+          )}
+          <span>{verifying ? 'Verifying...' : 'Lock Funds in Escrow'}</span>
         </button>
       </section>
 
       {/* SECTION C — Protected Trades History */}
       <section className="mt-6">
-        <span className="text-sage text-xs font-bold uppercase tracking-wider">
+        <span className="text-zinc-400 text-xs font-medium px-1">
           Protected Trades History
         </span>
-        
+
         {trades.length === 0 ? (
-          <div className="mt-3 flex flex-col items-center justify-center gap-3 py-12">
-            <div className="w-16 h-16 rounded-full bg-surface border border-gray-800 flex items-center justify-center">
-              <PackageOpen className="w-7 h-7 text-sage" strokeWidth={1.5} />
+          <div className="mt-3 bg-zinc-900/40 ring-1 ring-white/[0.05] rounded-2xl flex flex-col items-center justify-center gap-2.5 py-10 px-4">
+            <div className="w-12 h-12 rounded-2xl bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center">
+              <PackageOpen
+                className="w-5 h-5 text-zinc-400"
+                strokeWidth={1.5}
+              />
             </div>
-            <span className="text-white text-sm font-bold text-center">
+            <span className="text-zinc-200 text-xs font-semibold">
               No protected trades yet
             </span>
-            <span className="text-sage text-xs text-center max-w-[240px]">
-              Your escrow-protected trades will appear here once you secure a deposit.
+            <span className="text-zinc-500 text-[11px] text-center max-w-[230px]">
+              Your escrow-protected transactions will appear here once you lock
+              a deposit.
             </span>
           </div>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {trades.map((trade) => (
-              <div key={trade.id} className={`relative overflow-hidden rounded-2xl border p-5 flex flex-col gap-3 shadow-xl ${trade.status === 'verified' ? 'bg-pine/10 border-pine shadow-pine/20' : 'bg-surface border-gray-800'}`}>
-                
-                <div className="flex items-center justify-between border-b border-gray-800/50 pb-3">
-                  <span className="text-white font-black text-lg">{trade.item_name}</span>
+              <div
+                key={trade.id}
+                className={`relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3 transition-all ${
+                  trade.status === 'verified'
+                    ? 'bg-emerald-950/25 ring-1 ring-emerald-700/40'
+                    : 'bg-zinc-900/60 ring-1 ring-white/[0.06]'
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-white/[0.05] pb-2.5">
+                  <span className="text-zinc-100 font-semibold text-sm tracking-tight">
+                    {trade.item_name}
+                  </span>
                   {trade.status === 'verified' ? (
-                    <div className="flex items-center gap-1.5 bg-pine text-black px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider">
-                      <Check className="w-3.5 h-3.5" /> Verified
+                    <div className="flex items-center gap-1 bg-emerald-950/80 border border-emerald-700/40 text-emerald-300 px-2.5 py-0.5 rounded-full text-[10px] font-medium">
+                      <Check className="w-3 h-3" /> Verified
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wider animate-pulse">
-                      <Clock className="w-3.5 h-3.5" /> Pending Admin
+                    <div className="flex items-center gap-1 bg-amber-400/10 border border-amber-400/25 text-amber-300 px-2.5 py-0.5 rounded-full text-[10px] font-medium">
+                      <Clock className="w-3 h-3" /> Pending Audit
                     </div>
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-sage">Amount Secured:</span>
-                    <strong className={`font-black text-base ${trade.status === 'verified' ? 'text-pine' : 'text-white'}`}>P {trade.amount}</strong>
+                <div className="flex flex-col gap-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Amount Secured</span>
+                    <span className="font-mono font-semibold text-amber-300">
+                      P {trade.amount}
+                    </span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-sage">Seller:</span>
-                    <strong className="text-white">{trade.seller_email}</strong>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Seller</span>
+                    <span className="text-zinc-200 font-medium">
+                      {trade.seller_email}
+                    </span>
                   </div>
                 </div>
-
-                {trade.status === 'verified' && (
-                  <div className="absolute -bottom-6 -right-6 opacity-5 pointer-events-none">
-                    <ShieldCheck className="w-32 h-32 text-pine" />
-                  </div>
-                )}
               </div>
             ))}
           </div>
