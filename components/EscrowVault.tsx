@@ -167,7 +167,7 @@ export default function EscrowVault({
           }),
         });
       } catch {
-        // Non-blocking notification fallback
+        // Non-blocking fallback
       }
 
       toast({
@@ -195,10 +195,10 @@ export default function EscrowVault({
   };
 
   return (
-    <div className="flex-1 bg-[#0B0F0E] flex flex-col overflow-y-auto px-4 pb-28 pt-3">
+    <div className="flex-1 bg-midnight flex flex-col overflow-y-auto px-4 pb-28 pt-3">
       {/* SECTION A — How Escrow Works */}
-      <section className="bg-zinc-900/40 ring-1 ring-white/[0.05] rounded-2xl p-4">
-        <span className="text-zinc-400 text-xs font-medium">
+      <section className="bg-surface border border-gray-800 rounded-2xl p-4 shadow-md">
+        <span className="text-sage text-xs font-bold uppercase tracking-wider">
           How Campus Escrow Works
         </span>
         <div className="mt-3.5 flex items-start justify-between">
@@ -206,13 +206,10 @@ export default function EscrowVault({
             const Icon = step.icon;
             return (
               <div key={i} className="flex flex-col items-center gap-2 flex-1">
-                <div className="w-10 h-10 rounded-xl bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center">
-                  <Icon
-                    className="w-4 h-4 text-emerald-400"
-                    strokeWidth={1.75}
-                  />
+                <div className="w-10 h-10 rounded-xl bg-ink border border-pine/30 flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-pine" strokeWidth={1.75} />
                 </div>
-                <span className="text-zinc-300 text-[11px] font-medium text-center leading-tight">
+                <span className="text-white text-[11px] font-bold text-center leading-tight">
                   {step.label}
                 </span>
               </div>
@@ -222,40 +219,37 @@ export default function EscrowVault({
       </section>
 
       {/* SECTION B — Payment Activation Card */}
-      <section className="mt-4 bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+      <section className="mt-4 bg-surface border border-gray-800 shadow-lg rounded-2xl p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-white font-semibold tracking-tight text-sm">
+            <span className="text-white font-black text-base">
               Secure a Trade
             </span>
-            <span className="text-zinc-500 text-[11px]">
+            <span className="text-sage text-xs">
               Funds stay locked until you confirm delivery
             </span>
           </div>
-          <div className="w-8 h-8 rounded-full bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center">
-            <ShieldCheck
-              className="w-4 h-4 text-emerald-400"
-              strokeWidth={1.75}
-            />
+          <div className="w-9 h-9 rounded-full bg-ink border border-pine/30 flex items-center justify-center">
+            <ShieldCheck className="w-4 h-4 text-pine" strokeWidth={2} />
           </div>
         </div>
 
         {/* Reference Code Box */}
-        <div className="bg-zinc-950/80 ring-1 ring-white/[0.07] rounded-2xl p-4 flex items-center justify-between">
+        <div className="bg-ink border border-pine/30 rounded-xl p-4 flex items-center justify-between">
           <div>
-            <div className="text-[11px] text-zinc-400 font-medium">
+            <div className="text-[10px] uppercase tracking-wider text-sage font-bold">
               Escrow Ref Code
             </div>
-            <div className="text-xl font-bold text-amber-300 font-mono tracking-wider mt-0.5">
+            <div className="text-2xl font-black text-pine tracking-wider mt-0.5">
               {referenceCode}
             </div>
           </div>
           <button
             onClick={() => copyToClipboard(referenceCode, true)}
-            className="flex items-center gap-1.5 bg-zinc-900 ring-1 ring-white/[0.08] text-zinc-200 px-3 py-2 rounded-xl text-xs font-medium hover:bg-zinc-800 active:scale-[0.97] transition-all"
+            className="flex items-center gap-1.5 bg-pine/10 border border-pine/30 text-pine px-3 py-2 rounded-lg text-xs font-bold hover:bg-pine/20 active:scale-95 transition-all"
           >
             {copiedRef ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <Check className="w-3.5 h-3.5" />
             ) : (
               <Copy className="w-3.5 h-3.5" />
             )}
@@ -264,71 +258,68 @@ export default function EscrowVault({
         </div>
 
         {/* Payment Method Tabs */}
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => setMethod('fnb')}
-            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold border transition-all active:scale-95 ${
               method === 'fnb'
-                ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-700/50'
-                : 'bg-zinc-950/60 ring-1 ring-white/[0.06] text-zinc-400 hover:text-zinc-200'
+                ? 'bg-pine text-black border-pine shadow-md'
+                : 'bg-ink border-gray-800 text-sage hover:text-white'
             }`}
           >
-            <CreditCard className="w-4 h-4" strokeWidth={1.75} />
+            <CreditCard className="w-4 h-4" strokeWidth={2} />
             FNB Pay2Cell
           </button>
           <button
             onClick={() => setMethod('ewallet')}
-            className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold border transition-all active:scale-95 ${
               method === 'ewallet'
-                ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-700/50'
-                : 'bg-zinc-950/60 ring-1 ring-white/[0.06] text-zinc-400 hover:text-zinc-200'
+                ? 'bg-pine text-black border-pine shadow-md'
+                : 'bg-ink border-gray-800 text-sage hover:text-white'
             }`}
           >
-            <Wallet className="w-4 h-4" strokeWidth={1.75} />
+            <Wallet className="w-4 h-4" strokeWidth={2} />
             eWallet
           </button>
         </div>
 
         {/* Instructions */}
-        <div className="bg-zinc-950/80 ring-1 ring-white/[0.06] rounded-2xl p-4 space-y-2.5">
+        <div className="bg-ink border border-gray-800 rounded-xl p-4 space-y-2.5">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[11px] font-medium text-zinc-400">
+              <div className="text-[10px] uppercase font-bold text-sage">
                 {method === 'fnb' ? 'FNB Pay2Cell Number' : 'eWallet Number'}
               </div>
-              <div className="text-base font-bold text-white font-mono mt-0.5">
+              <div className="text-lg font-black text-white mt-0.5">
                 {currentNumber}
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(currentNumber, false)}
-              className="flex items-center gap-1 text-emerald-400 text-xs font-medium active:scale-[0.96] transition-transform"
+              className="flex items-center gap-1 text-pine text-xs font-bold active:scale-95 transition-transform"
             >
               {copiedNum ? (
                 <Check className="w-3.5 h-3.5" />
               ) : (
                 <Copy className="w-3.5 h-3.5" />
               )}
-              {copiedNum ? 'Copied' : 'Copy'}
+              {copiedNum ? 'Copied' : 'Copy Number'}
             </button>
           </div>
 
-          <p className="text-zinc-400 text-xs leading-relaxed bg-black/40 p-3 rounded-xl">
+          <p className="text-sage text-xs leading-relaxed bg-black/40 p-3 rounded-lg">
             {method === 'fnb' ? (
               <>
                 Send the agreed amount to{' '}
-                <strong className="text-white font-mono">77037168</strong> via
-                FNB. Use{' '}
-                <strong className="text-amber-300 font-mono">
-                  {referenceCode}
-                </strong>{' '}
-                as the reference.
+                <strong className="text-white">77037168</strong> via FNB. Use{' '}
+                <strong className="text-pine">{referenceCode}</strong> as the
+                reference.
               </>
             ) : (
               <>
                 Send the agreed eWallet to{' '}
-                <strong className="text-white font-mono">71321163</strong>. Keep
-                your transaction reference handy.
+                <strong className="text-white">71321163</strong>. Keep your
+                transaction reference handy.
               </>
             )}
           </p>
@@ -337,7 +328,7 @@ export default function EscrowVault({
         {/* Verification Inputs */}
         <div className="flex flex-col gap-3 pt-1">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-zinc-400">
+            <label className="text-xs font-bold uppercase tracking-wider text-sage">
               Item or Service
             </label>
             <input
@@ -347,13 +338,13 @@ export default function EscrowVault({
               placeholder="e.g. Calculus Textbook / Graphic Design"
               disabled={verifying}
               required
-              className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 text-xs transition-all"
+              className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-xs transition-colors"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-zinc-400">
+              <label className="text-xs font-bold uppercase tracking-wider text-sage">
                 Amount (Pula)
               </label>
               <input
@@ -363,12 +354,12 @@ export default function EscrowVault({
                 placeholder="0.00"
                 disabled={verifying}
                 required
-                className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 text-xs font-mono transition-all"
+                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-xs transition-colors"
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-zinc-400">
-                Seller&apos;s Student Email
+              <label className="text-xs font-bold uppercase tracking-wider text-sage">
+                Seller&apos;s Email
               </label>
               <input
                 type="email"
@@ -377,13 +368,13 @@ export default function EscrowVault({
                 placeholder="seller@ub.ac.bw"
                 disabled={verifying}
                 required
-                className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 text-xs transition-all"
+                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-xs transition-colors"
               />
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5 pt-2 border-t border-white/[0.05]">
-            <label className="text-xs font-medium text-zinc-400">
+          <div className="flex flex-col gap-1.5 pt-2 border-t border-gray-800">
+            <label className="text-xs font-bold uppercase tracking-wider text-sage">
               Transaction Reference ID
             </label>
             <input
@@ -394,10 +385,10 @@ export default function EscrowVault({
               disabled={verifying}
               required
               minLength={6}
-              className="bg-zinc-950/90 rounded-xl h-11 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 transition-all disabled:opacity-50 text-xs font-mono"
+              className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors disabled:opacity-50 text-xs"
             />
             {txRef.length > 0 && txRef.length < 6 && (
-              <span className="text-rose-400 text-[11px] font-medium">
+              <span className="text-red-400 text-[11px] font-bold">
                 Transaction ID must be at least 6 characters
               </span>
             )}
@@ -407,7 +398,7 @@ export default function EscrowVault({
         <button
           onClick={handleVerify}
           disabled={verifying || !canVerify}
-          className="w-full h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-xs tracking-tight active:scale-[0.98] transition-all duration-150 ease-out disabled:opacity-40 flex items-center justify-center gap-2 shadow-sm"
+          className="w-full h-12 rounded-xl bg-pine text-black font-black text-sm active:scale-[0.97] transition-all duration-150 ease-out disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg"
         >
           {verifying && (
             <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
@@ -418,22 +409,19 @@ export default function EscrowVault({
 
       {/* SECTION C — Protected Trades History */}
       <section className="mt-6">
-        <span className="text-zinc-400 text-xs font-medium px-1">
+        <span className="text-sage text-xs font-bold uppercase tracking-wider px-1">
           Protected Trades History
         </span>
 
         {trades.length === 0 ? (
-          <div className="mt-3 bg-zinc-900/40 ring-1 ring-white/[0.05] rounded-2xl flex flex-col items-center justify-center gap-2.5 py-10 px-4">
-            <div className="w-12 h-12 rounded-2xl bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center">
-              <PackageOpen
-                className="w-5 h-5 text-zinc-400"
-                strokeWidth={1.5}
-              />
+          <div className="mt-3 bg-surface border border-gray-800 rounded-2xl flex flex-col items-center justify-center gap-2.5 py-10 px-4">
+            <div className="w-12 h-12 rounded-full bg-ink border border-gray-800 flex items-center justify-center">
+              <PackageOpen className="w-5 h-5 text-sage" strokeWidth={1.5} />
             </div>
-            <span className="text-zinc-200 text-xs font-semibold">
+            <span className="text-white text-xs font-bold">
               No protected trades yet
             </span>
-            <span className="text-zinc-500 text-[11px] text-center max-w-[230px]">
+            <span className="text-sage text-[11px] text-center max-w-[230px]">
               Your escrow-protected transactions will appear here once you lock
               a deposit.
             </span>
@@ -443,22 +431,22 @@ export default function EscrowVault({
             {trades.map((trade) => (
               <div
                 key={trade.id}
-                className={`relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3 transition-all ${
+                className={`relative overflow-hidden rounded-2xl p-4 flex flex-col gap-3 bg-surface border ${
                   trade.status === 'verified'
-                    ? 'bg-emerald-950/25 ring-1 ring-emerald-700/40'
-                    : 'bg-zinc-900/60 ring-1 ring-white/[0.06]'
+                    ? 'border-pine/50'
+                    : 'border-gray-800'
                 }`}
               >
-                <div className="flex items-center justify-between border-b border-white/[0.05] pb-2.5">
-                  <span className="text-zinc-100 font-semibold text-sm tracking-tight">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-2.5">
+                  <span className="text-white font-bold text-sm">
                     {trade.item_name}
                   </span>
                   {trade.status === 'verified' ? (
-                    <div className="flex items-center gap-1 bg-emerald-950/80 border border-emerald-700/40 text-emerald-300 px-2.5 py-0.5 rounded-full text-[10px] font-medium">
+                    <div className="flex items-center gap-1 bg-pine text-black px-2.5 py-0.5 rounded-full text-[10px] font-black">
                       <Check className="w-3 h-3" /> Verified
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1 bg-amber-400/10 border border-amber-400/25 text-amber-300 px-2.5 py-0.5 rounded-full text-[10px] font-medium">
+                    <div className="flex items-center gap-1 bg-ink border border-pine/40 text-pine px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                       <Clock className="w-3 h-3" /> Pending Audit
                     </div>
                   )}
@@ -466,14 +454,14 @@ export default function EscrowVault({
 
                 <div className="flex flex-col gap-1.5 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-zinc-400">Amount Secured</span>
-                    <span className="font-mono font-semibold text-amber-300">
+                    <span className="text-sage">Amount Secured</span>
+                    <span className="font-black text-pine">
                       P {trade.amount}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-400">Seller</span>
-                    <span className="text-zinc-200 font-medium">
+                    <span className="text-sage">Seller</span>
+                    <span className="text-white font-bold">
                       {trade.seller_email}
                     </span>
                   </div>
