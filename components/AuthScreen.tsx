@@ -66,7 +66,7 @@ export default function AuthScreen({
       });
       onVerified(guestProfile);
       setGuestLoading(false);
-    }, 600);
+    }, 500);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -211,28 +211,28 @@ export default function AuthScreen({
   };
 
   return (
-    <div className="flex-1 bg-[#0B0F0E] flex flex-col items-center justify-center p-6 w-full h-[100dvh] relative">
-      <div className="w-full max-w-[380px] bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] rounded-3xl p-7 flex flex-col gap-6 shadow-2xl">
+    <div className="flex-1 bg-midnight flex flex-col items-center justify-center p-6 w-full h-[100dvh] relative">
+      <div className="w-full max-w-[390px] bg-surface border border-gray-800 rounded-3xl p-7 flex flex-col gap-6 shadow-2xl animate-slide-up">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="w-6 h-6" strokeWidth={1.75} />
+          <div className="w-14 h-14 rounded-2xl bg-ink border border-pine/40 flex items-center justify-center text-pine shadow-[0_0_20px_rgba(255,222,77,0.12)]">
+            <ShieldCheck className="w-7 h-7" strokeWidth={2} />
           </div>
-          <h1 className="text-white font-semibold text-2xl tracking-tight mt-1">
+          <h1 className="text-white font-black text-2xl tracking-tight mt-1">
             Kampus
           </h1>
-          <p className="text-zinc-400 text-xs">
-            Verified student safety, marketplace & community
+          <p className="text-sage text-xs font-medium">
+            Verified student safety, marketplace &amp; academic hub
           </p>
         </div>
 
         <form onSubmit={handleAuth} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-zinc-400 text-xs font-medium">
+            <label className="text-sage text-xs font-bold uppercase tracking-wider">
               Student Email
             </label>
             <div className="relative flex items-center">
               <Mail
-                className="absolute left-3.5 w-4 h-4 text-zinc-500"
+                className="absolute left-3.5 w-4 h-4 text-sage"
                 strokeWidth={1.75}
               />
               <input
@@ -241,18 +241,18 @@ export default function AuthScreen({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="student@ub.ac.bw"
                 required
-                className="w-full h-11 rounded-xl bg-zinc-950/90 ring-1 ring-white/[0.07] pl-10 pr-4 text-white placeholder:text-zinc-500 text-sm outline-none focus:ring-emerald-700/50 transition-all"
+                className="w-full h-12 rounded-xl bg-ink border border-gray-800 pl-10 pr-4 text-white placeholder:text-sage/60 text-sm outline-none focus:border-pine transition-colors"
               />
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-zinc-400 text-xs font-medium">
+            <label className="text-sage text-xs font-bold uppercase tracking-wider">
               Password
             </label>
             <div className="relative flex items-center">
               <Lock
-                className="absolute left-3.5 w-4 h-4 text-zinc-500"
+                className="absolute left-3.5 w-4 h-4 text-sage"
                 strokeWidth={1.75}
               />
               <input
@@ -262,7 +262,7 @@ export default function AuthScreen({
                 placeholder="••••••••"
                 required
                 minLength={6}
-                className="w-full h-11 rounded-xl bg-zinc-950/90 ring-1 ring-white/[0.07] pl-10 pr-4 text-white placeholder:text-zinc-500 text-sm outline-none focus:ring-emerald-700/50 transition-all"
+                className="w-full h-12 rounded-xl bg-ink border border-gray-800 pl-10 pr-4 text-white placeholder:text-sage/60 text-sm outline-none focus:border-pine transition-colors"
               />
             </div>
           </div>
@@ -270,21 +270,21 @@ export default function AuthScreen({
           <button
             type="submit"
             disabled={loading || guestLoading}
-            className="w-full h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-sm active:scale-[0.98] transition-all duration-150 ease-out disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm mt-1"
+            className="w-full h-12 rounded-xl bg-pine text-black font-black text-sm active:scale-[0.97] hover:brightness-105 transition-all duration-150 ease-out disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg mt-1"
           >
             {loading && (
-              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2} />
+              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2.5} />
             )}
             <span>{isSignUp ? 'Create Student Account' : 'Sign In'}</span>
-            {!loading && <ArrowRight className="w-4 h-4" strokeWidth={2} />}
+            {!loading && <ArrowRight className="w-4 h-4" strokeWidth={2.5} />}
           </button>
         </form>
 
-        <div className="flex flex-col gap-3 pt-3 border-t border-white/[0.06]">
+        <div className="flex flex-col gap-3 pt-3 border-t border-gray-800">
           <button
             type="button"
             onClick={() => setIsSignUp(!isSignUp)}
-            className="text-zinc-400 text-xs hover:text-white transition-colors font-medium text-center"
+            className="text-sage text-xs hover:text-pine transition-colors font-bold text-center"
           >
             {isSignUp
               ? 'Already have an account? Sign in'
@@ -295,12 +295,12 @@ export default function AuthScreen({
             type="button"
             onClick={handleGuestLogin}
             disabled={loading || guestLoading}
-            className="w-full h-10 rounded-xl bg-zinc-950/70 ring-1 ring-white/[0.07] hover:bg-zinc-900 text-zinc-300 hover:text-white text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            className="w-full h-11 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.97]"
           >
             {guestLoading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+              <Loader2 className="w-4 h-4 animate-spin text-pine" />
             ) : (
-              <Eye className="w-3.5 h-3.5 text-emerald-400" />
+              <Eye className="w-4 h-4 text-pine" />
             )}
             <span>Explore in Guest Mode (Preview)</span>
           </button>
