@@ -17,8 +17,12 @@ import {
   Camera,
   Edit3,
   X,
+  BookOpen,
+  GraduationCap,
+  PauseCircle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { classifyUniversity } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 import PushNotificationBanner from '@/components/PushNotificationBanner';
@@ -36,16 +40,19 @@ function fmtDate(iso: string | null) {
 
 export default function ProfileScreen({
   profile,
+  onProfileUpdate,
   onDisconnect,
   onOpenSubscription,
   onOpenAdminQueue,
 }: {
   profile: Profile | null;
+  onProfileUpdate?: (updated: Profile) => void;
   onDisconnect: () => void;
   onOpenSubscription: () => void;
   onOpenAdminQueue?: () => void;
 }) {
   const { toast } = useToast();
+  const schoolInfo = classifyUniversity(profile?.email || profile?.university);
 
   const [signingOut, setSigningOut] = useState(false);
   const [ewallet, setEwallet] = useState(profile?.ewallet_number ?? '');
@@ -67,6 +74,7 @@ export default function ProfileScreen({
   const [editUsername, setEditUsername] = useState(
     profile?.username || profile?.email?.split('@')[0] || ''
   );
+  const [editCourse, setEditCourse] = useState(profile?.course_code || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -76,10 +84,20 @@ export default function ProfileScreen({
   const [localUsername, setLocalUsername] = useState<string>(
     profile?.username || profile?.email?.split('@')[0] || 'Student'
   );
+  const [localCourse, setLocalCourse] = useState<string>(
+    profile?.course_code || ''
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!profile) return;
+    setLocalUsername(
+      profile.username || profile.email?.split('@')[0] || 'Student'
+    );
+    setLocalCourse(profile.course_code || '');
+    setEditUsername(profile.username || profile.email?.split('@')[0] || '');
+    setEditCourse(profile.course_code || '');
+
     (async () => {
       const { count: listings } = await supabase
         .from('hustles')
@@ -113,6 +131,7 @@ export default function ProfileScreen({
   const active =
     !!profile?.is_admin ||
     !!profile?.is_premium ||
+    !!profile?.kritic_unlimited ||
     (!!profile?.subscribed_until &&
       new Date(profile.subscribed_until) > new Date());
 
@@ -192,9 +211,16 @@ export default function ProfileScreen({
     if (!profile || !editUsername.trim()) return;
     setIsSavingProfile(true);
 
+    const cleanUsername = editUsername.trim().replace(/^@/, '');
+    const cleanCourse = editCourse.trim().toUpperCase();
+
     const { error } = await supabase
       .from('profiles')
-      .update({ username: editUsername.trim() })
+      .update({
+        username: cleanUsername,
+        course_code: cleanCourse || null,
+        university: schoolInfo.fullName,
+      })
       .eq('id', profile.id);
 
     setIsSavingProfile(false);
@@ -206,11 +232,20 @@ export default function ProfileScreen({
         variant: 'destructive',
       });
     } else {
-      setLocalUsername(editUsername.trim());
+      setLocalUsername(cleanUsername);
+      setLocalCourse(cleanCourse);
       setIsEditModalOpen(false);
+      if (onProfileUpdate) {
+        onProfileUpdate({
+          ...profile,
+          username: cleanUsername,
+          course_code: cleanCourse || null,
+          university: schoolInfo.fullName,
+        });
+      }
       toast({
         title: 'Profile Updated',
-        description: 'Your username has been updated.',
+        description: 'Your username and course settings are now active.',
       });
     }
   };
@@ -257,24 +292,24 @@ export default function ProfileScreen({
   };
 
   return (
-    <div className="flex-1 bg-[#0B0F0E] flex flex-col items-center overflow-y-auto px-4 pb-32 pt-5 relative">
+    <div className="flex-1 bg-midnight flex flex-col items-center overflow-y-auto px-4 pb-32 pt-5 relative">
       <PushNotificationBanner userId={profile?.id ?? ''} />
 
-      {/* Edit Profile Modal */}
+      {/* Edit Profile & Course Modal */}
       {isEditModalOpen && (
         <div className="absolute inset-0 z-[2000] flex items-end">
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setIsEditModalOpen(false)}
           />
-          <div className="relative w-full bg-[#121816] ring-1 ring-white/[0.08] rounded-t-3xl p-6 flex flex-col gap-5 animate-slide-up pb-10">
+          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 flex flex-col gap-5 animate-slide-up pb-10">
             <div className="flex items-center justify-between">
-              <span className="text-white font-semibold tracking-tight text-base">
+              <span className="text-white font-black text-base">
                 Edit Student Profile
               </span>
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="text-zinc-400 hover:text-white"
+                className="text-sage hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -282,10 +317,10 @@ export default function ProfileScreen({
 
             <div className="flex flex-col items-center gap-3">
               <div
-                className="relative w-24 h-24 rounded-full bg-zinc-900 ring-2 ring-emerald-700/50 p-1 cursor-pointer group"
+                className="relative w-24 h-24 rounded-full bg-ink border-2 border-pine/50 p-1 cursor-pointer group"
                 onClick={() => fileInputRef.current?.click()}
               >
-                <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center overflow-hidden relative">
+                <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden relative">
                   {localAvatarUrl ? (
                     <img
                       src={localAvatarUrl}
@@ -293,11 +328,11 @@ export default function ProfileScreen({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="w-10 h-10 text-zinc-500" />
+                    <User className="w-10 h-10 text-sage" />
                   )}
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     {uploadingAvatar ? (
-                      <Loader2 className="w-5 h-5 text-amber-300 animate-spin" />
+                      <Loader2 className="w-5 h-5 text-pine animate-spin" />
                     ) : (
                       <Camera className="w-5 h-5 text-white" />
                     )}
@@ -311,33 +346,46 @@ export default function ProfileScreen({
                   className="hidden"
                 />
               </div>
-              <span className="text-zinc-500 text-xs">
+              <span className="text-sage text-xs">
                 Tap photo to upload a new avatar
               </span>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-zinc-400 text-xs font-medium">
-                Display Name / Handle
+              <label className="text-sage text-xs font-bold uppercase tracking-wider">
+                Student Username
               </label>
               <input
                 type="text"
                 value={editUsername}
                 onChange={(e) => setEditUsername(e.target.value)}
-                placeholder="Enter your campus handle"
-                className="bg-zinc-950/90 rounded-xl h-11 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 transition-all text-sm"
+                placeholder="Enter your campus username"
+                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-sm"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sage text-xs font-bold uppercase tracking-wider">
+                Active Course / Programme (Used by Kampus Kritic)
+              </label>
+              <input
+                type="text"
+                value={editCourse}
+                onChange={(e) => setEditCourse(e.target.value)}
+                placeholder="e.g. CSE311 / BSc Computer Systems / ACC201"
+                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-sm"
               />
             </div>
 
             <button
               onClick={handleSaveProfile}
               disabled={isSavingProfile || !editUsername.trim()}
-              className="w-full h-11 mt-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full h-12 mt-1 rounded-xl bg-pine text-black font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
             >
               {isSavingProfile ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                'Save Changes'
+                'Save Profile & Course'
               )}
             </button>
           </div>
@@ -350,17 +398,17 @@ export default function ProfileScreen({
           {suspendedGigs.map((gig) => (
             <div
               key={gig.id}
-              className="bg-rose-950/25 ring-1 ring-rose-500/30 rounded-2xl p-4 flex flex-col gap-3 w-full"
+              className="bg-red-950/30 border border-red-500/40 rounded-2xl p-4 flex flex-col gap-3 w-full"
             >
               <div className="flex items-center gap-2">
-                <span className="text-sm">⏸️</span>
-                <span className="text-rose-300 font-semibold text-xs">
+                <PauseCircle className="w-4 h-4 text-red-400" />
+                <span className="text-red-300 font-bold text-xs">
                   Listing Paused
                 </span>
               </div>
-              <p className="text-zinc-300 text-xs leading-relaxed">
+              <p className="text-white text-xs leading-relaxed">
                 Payment verification needed for reference{' '}
-                <span className="text-amber-300 font-mono font-semibold">
+                <span className="text-pine font-mono font-bold">
                   {gig.reference_code}
                 </span>
                 .
@@ -372,7 +420,7 @@ export default function ProfileScreen({
                     value={resubmitRef}
                     onChange={(e) => setResubmitRef(e.target.value)}
                     placeholder="Enter payment reference ID"
-                    className="bg-zinc-950/90 rounded-xl h-10 px-3 ring-1 ring-white/[0.08] text-white placeholder:text-zinc-500 text-xs outline-none"
+                    className="bg-ink rounded-xl h-10 px-3 border border-gray-800 text-white placeholder:text-sage/60 text-xs outline-none"
                   />
                   <div className="flex gap-2">
                     <button
@@ -396,14 +444,14 @@ export default function ProfileScreen({
                         });
                       }}
                       disabled={resubmitRef.trim().length < 3}
-                      className="flex-1 h-9 rounded-xl bg-amber-400 text-zinc-950 text-xs font-semibold active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
+                      className="flex-1 h-9 rounded-xl bg-pine text-black text-xs font-black active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />{' '}
                       Reactivate
                     </button>
                     <button
                       onClick={() => setResubmitId(null)}
-                      className="h-9 px-4 rounded-xl bg-zinc-900 ring-1 ring-white/[0.06] text-zinc-400 text-xs font-medium"
+                      className="h-9 px-4 rounded-xl bg-surface border border-gray-800 text-sage text-xs font-bold"
                     >
                       Cancel
                     </button>
@@ -415,7 +463,7 @@ export default function ProfileScreen({
                     setResubmitId(gig.id);
                     setResubmitRef('');
                   }}
-                  className="w-full h-9 rounded-xl bg-zinc-900 ring-1 ring-white/[0.08] text-amber-300 text-xs font-medium active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                  className="w-full h-9 rounded-xl bg-ink border border-pine/40 text-pine text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
                 >
                   <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />{' '}
                   Submit Payment Ref
@@ -429,17 +477,17 @@ export default function ProfileScreen({
       {profile?.is_admin && onOpenAdminQueue && (
         <button
           onClick={onOpenAdminQueue}
-          className="w-full mb-5 h-11 rounded-2xl bg-rose-950/30 ring-1 ring-rose-500/30 text-rose-300 font-medium text-xs active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          className="w-full mb-5 h-11 rounded-2xl bg-surface border border-red-500/40 text-red-400 font-bold text-xs active:scale-95 transition-all flex items-center justify-center gap-2"
         >
-          <ShieldAlert className="w-4 h-4 text-rose-400" strokeWidth={1.75} />
+          <ShieldAlert className="w-4 h-4 text-red-400" strokeWidth={1.75} />
           <span>Flagged Content Queue</span>
         </button>
       )}
 
       {/* Avatar & Identity Header */}
       <div className="relative">
-        <div className="w-24 h-24 rounded-full bg-zinc-900 ring-2 ring-white/[0.08] p-1 shadow-lg">
-          <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center overflow-hidden">
+        <div className="w-24 h-24 rounded-full bg-surface border-2 border-gray-800 p-1 shadow-lg">
+          <div className="w-full h-full rounded-full bg-ink flex items-center justify-center overflow-hidden">
             {localAvatarUrl ? (
               <img
                 src={localAvatarUrl}
@@ -447,48 +495,39 @@ export default function ProfileScreen({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <User className="w-10 h-10 text-zinc-500" strokeWidth={1.5} />
+              <User className="w-10 h-10 text-sage" strokeWidth={1.5} />
             )}
           </div>
         </div>
         <button
           onClick={() => setIsEditModalOpen(true)}
-          className="absolute bottom-0 right-0 w-8 h-8 bg-amber-400 rounded-full flex items-center justify-center ring-2 ring-[#0B0F0E] active:scale-[0.95] transition-transform shadow-md"
+          className="absolute bottom-0 right-0 w-8 h-8 bg-pine rounded-full flex items-center justify-center border-2 border-midnight active:scale-95 transition-transform shadow-md"
         >
-          <Edit3 className="w-3.5 h-3.5 text-zinc-950" strokeWidth={2.25} />
+          <Edit3 className="w-3.5 h-3.5 text-black" strokeWidth={2.25} />
         </button>
       </div>
 
       <div className="flex flex-col items-center gap-2 mt-3.5">
-        <span className="text-white font-semibold tracking-tight text-xl">
-          {localUsername}
+        <span className="text-white font-black tracking-tight text-xl">
+          @{localUsername.replace(/^@/, '')}
         </span>
 
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {profile?.verified || profile?.email_verified ? (
-            <div className="flex items-center gap-1.5 rounded-full bg-emerald-950/50 border border-emerald-800/40 px-3 py-1">
-              <ShieldCheck
-                className="w-3.5 h-3.5 text-emerald-400"
-                strokeWidth={1.75}
-              />
-              <span className="text-emerald-300 text-[11px] font-medium">
-                Verified · {profile?.university ?? 'Campus Network'}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 rounded-full bg-rose-950/40 border border-rose-800/40 px-3 py-1">
-              <span className="text-rose-300 text-[11px] font-medium">
-                Unverified Student
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 rounded-full bg-surface border border-pine/40 px-3 py-1">
+            <GraduationCap className="w-3.5 h-3.5 text-pine" strokeWidth={2} />
+            <span className="text-white text-[11px] font-bold">
+              {schoolInfo.fullName}
+            </span>
+          </div>
 
           {active ? (
-            <div className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium bg-amber-400/10 text-amber-300 border border-amber-400/25">
+            <div className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold bg-pine/15 text-pine border border-pine/40">
               <Crown className="w-3.5 h-3.5" strokeWidth={1.75} />
               <span>
                 {profile?.is_admin
                   ? 'Admin Access'
+                  : profile?.kritic_unlimited
+                  ? 'Kritic Unlimited'
                   : profile?.is_premium
                   ? 'Pro Member'
                   : `Active until ${fmtDate(profile?.subscribed_until ?? null)}`}
@@ -497,7 +536,7 @@ export default function ProfileScreen({
           ) : (
             <button
               onClick={onOpenSubscription}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium bg-amber-400 text-zinc-950 active:scale-[0.97] transition-all"
+              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black bg-pine text-black active:scale-95 transition-all"
             >
               <Crown className="w-3.5 h-3.5" strokeWidth={2} />
               <span>Upgrade Plan</span>
@@ -506,17 +545,40 @@ export default function ProfileScreen({
         </div>
       </div>
 
+      {/* Dedicated Course & Academic Calibration Card */}
+      <div className="w-full mt-5 bg-surface border border-gray-800 rounded-2xl p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-ink border border-pine/30 flex items-center justify-center shrink-0">
+            <BookOpen className="w-5 h-5 text-pine" strokeWidth={1.75} />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
+              Course / Programme
+            </span>
+            <span className="text-white font-bold text-sm truncate">
+              {localCourse || 'Not set — tap Edit to configure Kritic'}
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsEditModalOpen(true)}
+          className="px-3 py-1.5 rounded-xl bg-pine text-black text-xs font-black shrink-0 active:scale-95 transition-transform"
+        >
+          {localCourse ? 'Edit' : 'Set Course'}
+        </button>
+      </div>
+
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3 w-full mt-6">
+      <div className="grid grid-cols-2 gap-3 w-full mt-4">
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] rounded-2xl p-3.5 flex flex-col items-center gap-1"
+            className="bg-surface border border-gray-800 rounded-2xl p-3.5 flex flex-col items-center gap-1"
           >
-            <span className="text-white font-semibold font-mono text-lg">
+            <span className="text-pine font-black font-mono text-lg">
               {stat.value}
             </span>
-            <span className="text-zinc-400 text-[11px] font-medium text-center">
+            <span className="text-sage text-[11px] font-bold text-center">
               {stat.label}
             </span>
           </div>
@@ -525,46 +587,36 @@ export default function ProfileScreen({
 
       {/* Emergency Hotlines */}
       <div className="w-full mt-6">
-        <span className="text-zinc-400 text-xs font-medium px-1">
+        <span className="text-sage text-xs font-bold uppercase tracking-wider px-1">
           Campus Security Hotlines
         </span>
         <div className="flex flex-col gap-2.5 mt-2.5">
           <a
             href="tel:+2673552396"
-            className="bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] hover:ring-emerald-800/40 rounded-2xl p-4 flex items-center justify-between active:scale-[0.99] transition-all"
+            className="bg-surface border border-gray-800 hover:border-pine/40 rounded-2xl p-4 flex items-center justify-between active:scale-[0.99] transition-all"
           >
             <div className="flex flex-col gap-0.5">
-              <span className="text-zinc-100 text-xs font-semibold">
+              <span className="text-white text-xs font-bold">
                 UB Protection Services
               </span>
-              <span className="text-zinc-400 text-xs font-mono">
-                +267 355 2396
-              </span>
+              <span className="text-sage text-xs font-mono">+267 355 2396</span>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center">
-              <Phone
-                className="w-4 h-4 text-emerald-400"
-                strokeWidth={1.75}
-              />
+            <div className="w-9 h-9 rounded-xl bg-ink border border-pine/30 flex items-center justify-center">
+              <Phone className="w-4 h-4 text-pine" strokeWidth={1.75} />
             </div>
           </a>
           <a
             href="tel:+2673953062"
-            className="bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] hover:ring-emerald-800/40 rounded-2xl p-4 flex items-center justify-between active:scale-[0.99] transition-all"
+            className="bg-surface border border-gray-800 hover:border-pine/40 rounded-2xl p-4 flex items-center justify-between active:scale-[0.99] transition-all"
           >
             <div className="flex flex-col gap-0.5">
-              <span className="text-zinc-100 text-xs font-semibold">
-                BAC Campus Security
+              <span className="text-white text-xs font-bold">
+                BAC / BSBS Campus Security
               </span>
-              <span className="text-zinc-400 text-xs font-mono">
-                +267 395 3062
-              </span>
+              <span className="text-sage text-xs font-mono">+267 395 3062</span>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-emerald-950/50 border border-emerald-800/30 flex items-center justify-center">
-              <Phone
-                className="w-4 h-4 text-emerald-400"
-                strokeWidth={1.75}
-              />
+            <div className="w-9 h-9 rounded-xl bg-ink border border-pine/30 flex items-center justify-center">
+              <Phone className="w-4 h-4 text-pine" strokeWidth={1.75} />
             </div>
           </a>
         </div>
@@ -572,31 +624,28 @@ export default function ProfileScreen({
 
       {/* Account Settings */}
       <div className="w-full mt-6">
-        <span className="text-zinc-400 text-xs font-medium px-1">
+        <span className="text-sage text-xs font-bold uppercase tracking-wider px-1">
           Account Settings
         </span>
-        <div className="bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] rounded-2xl mt-2.5 flex flex-col overflow-hidden">
+        <div className="bg-surface border border-gray-800 rounded-2xl mt-2.5 flex flex-col overflow-hidden">
           {SETTINGS.map((item, i) => {
             const Icon = item.icon;
             return (
               <button
                 key={item.label}
                 onClick={item.onClick}
-                className={`flex items-center justify-between px-4 py-3.5 w-full text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.06] ${
-                  i !== SETTINGS.length - 1 ? 'border-b border-white/[0.05]' : ''
+                className={`flex items-center justify-between px-4 py-3.5 w-full text-left transition-colors hover:bg-ink/60 ${
+                  i !== SETTINGS.length - 1 ? 'border-b border-gray-800' : ''
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon
-                    className="w-4 h-4 text-zinc-400"
-                    strokeWidth={1.75}
-                  />
-                  <span className="text-zinc-200 text-xs font-medium">
+                  <Icon className="w-4 h-4 text-pine" strokeWidth={1.75} />
+                  <span className="text-white text-xs font-bold">
                     {item.label}
                   </span>
                 </div>
                 <ChevronRight
-                  className="w-4 h-4 text-zinc-500"
+                  className="w-4 h-4 text-sage"
                   strokeWidth={1.75}
                 />
               </button>
@@ -607,11 +656,11 @@ export default function ProfileScreen({
 
       {/* Payout Methods */}
       <div className="w-full mt-6">
-        <span className="text-zinc-400 text-xs font-medium px-1">
-          Escrow Payout Number
+        <span className="text-sage text-xs font-bold uppercase tracking-wider px-1">
+          Escrow &amp; Benchmark Payout Number
         </span>
-        <div className="bg-zinc-900/60 backdrop-blur-md ring-1 ring-white/[0.06] rounded-2xl mt-2.5 p-4 flex flex-col gap-3">
-          <label className="text-zinc-200 text-xs font-medium">
+        <div className="bg-surface border border-gray-800 rounded-2xl mt-2.5 p-4 flex flex-col gap-3">
+          <label className="text-white text-xs font-bold">
             eWallet / Mobile Money Number
           </label>
           <input
@@ -619,15 +668,16 @@ export default function ProfileScreen({
             value={ewallet}
             onChange={(e) => setEwallet(e.target.value)}
             placeholder="+267 7X XXX XXX"
-            className="bg-zinc-950/90 rounded-xl h-10 w-full px-3.5 ring-1 ring-white/[0.07] text-white placeholder:text-zinc-500 outline-none focus:ring-emerald-700/50 transition-all text-xs font-mono"
+            className="bg-ink rounded-xl h-10 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-xs font-mono"
           />
-          <p className="text-zinc-500 text-[11px] leading-snug">
-            Used exclusively for disbursing your verified Escrow payouts.
+          <p className="text-sage text-[11px] leading-snug">
+            Used for disbursing your verified Escrow payouts and 80%+ benchmark
+            royalties.
           </p>
           <button
             onClick={handleSaveEwallet}
             disabled={isSavingEwallet || !ewallet.trim()}
-            className="self-end flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-xs font-semibold px-4 h-9 active:scale-[0.97] transition-all disabled:opacity-50"
+            className="self-end flex items-center justify-center gap-1.5 rounded-xl bg-pine text-black text-xs font-black px-4 h-9 active:scale-95 transition-all disabled:opacity-50"
           >
             {isSavingEwallet && (
               <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
@@ -641,18 +691,18 @@ export default function ProfileScreen({
       <button
         onClick={handleLogout}
         disabled={signingOut}
-        className="w-full mt-6 h-11 rounded-2xl bg-zinc-900/60 ring-1 ring-white/[0.06] hover:bg-rose-950/30 hover:ring-rose-500/30 flex items-center justify-center gap-2 px-4 transition-all disabled:opacity-50"
+        className="w-full mt-6 h-11 rounded-2xl bg-surface border border-gray-800 hover:border-red-500/40 flex items-center justify-center gap-2 px-4 transition-all disabled:opacity-50"
       >
         {signingOut ? (
           <Loader2
-            className="w-4 h-4 text-rose-400 animate-spin"
+            className="w-4 h-4 text-red-400 animate-spin"
             strokeWidth={2}
           />
         ) : (
-          <LogOut className="w-4 h-4 text-rose-400" strokeWidth={1.75} />
+          <LogOut className="w-4 h-4 text-red-400" strokeWidth={1.75} />
         )}
-        <span className="text-rose-400 font-medium text-xs">
-          {signingOut ? 'Signing out…' : 'Sign Out'}
+        <span className="text-red-400 font-bold text-xs">
+          {signingOut ? 'Signing out...' : 'Sign Out'}
         </span>
       </button>
     </div>
