@@ -37,3 +37,38 @@ export function timeAgo(iso: string): string {
 export function locationLabel(lat: number, lng: number): string {
   return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 }
+
+export function classifyUniversity(email?: string | null): {
+  code: 'UB' | 'BAC / BSBS' | 'BIUST' | 'BOTHO' | 'BUAN';
+  fullName: string;
+} {
+  const clean = (email || '').trim().toLowerCase();
+  if (clean.includes('bac.ac.bw') || clean.includes('bsbs.ac.bw')) {
+    return {
+      code: 'BAC / BSBS',
+      fullName: 'BAC / BSBS (Botswana School of Business Sciences)',
+    };
+  }
+  if (clean.includes('biust.ac.bw')) {
+    return {
+      code: 'BIUST',
+      fullName: 'BIUST (Botswana International University of Science and Technology)',
+    };
+  }
+  if (clean.includes('botho.ac.bw')) {
+    return {
+      code: 'BOTHO',
+      fullName: 'Botho University',
+    };
+  }
+  if (clean.includes('buan.ac.bw')) {
+    return {
+      code: 'BUAN',
+      fullName: 'BUAN (Botswana University of Agriculture and Natural Resources)',
+    };
+  }
+  return {
+    code: 'UB',
+    fullName: 'UB (University of Botswana)',
+  };
+}
