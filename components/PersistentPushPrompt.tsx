@@ -9,19 +9,18 @@ export default function PersistentPushPrompt({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // 1. Check if notifications are supported
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
 
-    // 2. If they already granted or denied, do not show the prompt
-    if (Notification.permission === 'granted' || Notification.permission === 'denied') {
+    if (
+      Notification.permission === 'granted' ||
+      Notification.permission === 'denied'
+    ) {
       return;
     }
 
-    // 3. Check if they temporarily dismissed it this session
     const dismissedThisSession = sessionStorage.getItem('push_prompt_dismissed');
     if (dismissedThisSession) return;
 
-    // 4. Delay the popup slightly so it doesn't jump-scare them before the feed loads
     const timer = setTimeout(() => {
       setShow(true);
     }, 2500);
@@ -30,7 +29,6 @@ export default function PersistentPushPrompt({ userId }: { userId: string }) {
   }, []);
 
   const handleDismiss = () => {
-    // Hide it for now, but it WILL come back next time they open the app
     sessionStorage.setItem('push_prompt_dismissed', 'true');
     setShow(false);
   };
@@ -38,9 +36,8 @@ export default function PersistentPushPrompt({ userId }: { userId: string }) {
   const handleEnablePush = async () => {
     setLoading(true);
     try {
-      // This triggers the browser's native "Allow Notifications" popup
       const permission = await Notification.requestPermission();
-      
+
       if (permission === 'granted') {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({
@@ -48,16 +45,15 @@ export default function PersistentPushPrompt({ userId }: { userId: string }) {
           applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
         });
 
-        // Save it to your database so the blasts actually reach them
         await supabase.from('push_subscriptions').upsert({
           user_id: userId,
           subscription: JSON.stringify(subscription),
           endpoint: subscription.endpoint,
         });
 
-        setShow(false); // Success! Hide forever.
+        setShow(false);
       } else {
-        handleDismiss(); // They clicked block or closed the native prompt
+        handleDismiss();
       }
     } catch (error) {
       console.error('Error enabling push:', error);
@@ -70,8 +66,8 @@ export default function PersistentPushPrompt({ userId }: { userId: string }) {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-[9999] bg-[#111827] border border-pine/30 rounded-2xl p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5">
-      <button 
+    <div className="fixed bottom-20 left-4 right-4 z-[9999] bg-surface border border-pine/40 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-5">
+      <button
         onClick={handleDismiss}
         className="absolute top-3 right-3 text-sage hover:text-white transition-colors"
       >
@@ -79,15 +75,18 @@ export default function PersistentPushPrompt({ userId }: { userId: string }) {
       </button>
 
       <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-xl bg-pine/15 border border-pine/30 flex items-center justify-center text-pine shrink-0 mt-1">
-          <Bell className="w-6 h-6 animate-pulse" />
+        <div className="w-12 h-12 rounded-xl bg-ink border border-pine/30 flex items-center justify-center text-pine shrink-0 mt-1">
+          <Bell className="w-6 h-6" />
         </div>
-        
+
         <div className="flex flex-col gap-2 pr-4">
           <div>
-            <h3 className="text-white font-bold text-sm">Don't miss the campus tea 🚨</h3>
+            <h3 className="text-white font-bold text-sm">
+              Enable Campus Alerts
+            </h3>
             <p className="text-sage text-xs leading-relaxed mt-1">
-              Turn on notifications to know instantly when a wild confession or blast drops on the timeline.
+              Turn on notifications to know immediately when an emergency alert
+              or campus blast drops on the timeline.
             </p>
           </div>
 
