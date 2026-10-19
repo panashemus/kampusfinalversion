@@ -2,24 +2,11 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { classifyUniversity } from '@/lib/utils';
 
-const AI_CLICHES = [
-  'delve',
-  'tapestry',
-  'testament',
-  'moreover',
-  'furthermore',
-  'crucial',
-  'underscores',
-  'realm',
-  'pivotal',
-  'intricate',
-];
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Optional automated SMS webhook handler for iPhone Shortcuts / FNB inContact
+    // Automated SMS webhook handler for iPhone Shortcuts / FNB inContact
     if (body.action === 'auto_verify_sms') {
       const { smsText } = body;
       const refMatch = (smsText || '').match(/KRT-\d{4}/i);
@@ -52,49 +39,52 @@ export async function POST(req: Request) {
     } = body;
 
     const schoolInfo = classifyUniversity(email || university);
-    const activeSchool = university || schoolInfo.fullName;
-    const activeCourse = (courseCode || 'General Coursework').trim().toUpperCase();
+    const activeSchool = schoolInfo.fullName;
+    const activeCourse = (courseCode || '').trim();
 
-    // 1. Query verified 80%+ contributor benchmarks for this exact course & school
-    let benchmarkCitation = `${schoolInfo.code} Institutional Academic Standard (${activeCourse})`;
-    let benchmarkExcerpt = '';
-
+    // 1. Check if verified 80%+ contributor papers exist in Supabase for this exact course
+    let verifiedBenchmarks: any[] = [];
     try {
-      const { data: benchmarks } = await supabase
+      const { data } = await supabase
         .from('academic_contributors')
-        .select('course_code, grade_achieved, sample_title, methodology_notes, institution')
+        .select(
+          'course_code, grade_achieved, sample_title, methodology_notes, institution'
+        )
+        .eq('verified', true)
         .ilike('course_code', `%${activeCourse}%`)
         .limit(2);
 
-      if (benchmarks && benchmarks.length > 0) {
-        const top = benchmarks[0];
-        benchmarkCitation = `${top.institution || schoolInfo.code} ${top.course_code} Distinction Benchmark (Scored ${top.grade_achieved} on "${top.sample_title}")`;
-        benchmarkExcerpt = top.methodology_notes;
+      if (data && data.length > 0) {
+        verifiedBenchmarks = data;
       }
     } catch {
-      // Continues with institutional rubric if table is empty
+      verifiedBenchmarks = [];
     }
 
-    // 2. Call Gemini API if GEMINI_API_KEY is configured in environment variables
+    const hasBenchmarks = verifiedBenchmarks.length > 0;
+    const benchmarkStatusLabel = hasBenchmarks
+      ? `Verified ${schoolInfo.code} Benchmark (${verifiedBenchmarks[0].course_code} - ${verifiedBenchmarks[0].grade_achieved})`
+      : `In Development — ${schoolInfo.code} (${activeCourse || 'No Course Selected'})`;
+
+    // 2. Call Gemini API if GEMINI_API_KEY is present in environment variables
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-      const systemInstruction = `You are Kampus Kritic (powered by Argon), the academic benchmark and pre-submission audit engine for ${activeSchool}.
-You are speaking directly with ${username}, who is studying ${activeCourse} at ${schoolInfo.code}.
-Active Benchmark Reference: ${benchmarkCitation}
-${benchmarkExcerpt ? `Verified Distinction Excerpt from this course:\n${benchmarkExcerpt}\n` : ''}
+      const systemInstruction = `You are Kampus Kritic, the academic assistant for ${activeSchool}.
+You are speaking directly with ${username}, who is enrolled in "${activeCourse}" at ${schoolInfo.code}.
+
+MANDATORY TRANSPARENCY DISCLAIMER:
+${
+  hasBenchmarks
+    ? `Use these verified past-student benchmark notes for ${activeCourse}:\n${verifiedBenchmarks[0].methodology_notes}`
+    : `Always begin your response with a one-line notice stating: "[Notice: Kampus Kritic is still in development and does not yet source past or current ${schoolInfo.code} student coursework for ${activeCourse}. The following is general AI academic guidance.]"`
+}
 
 Rules:
-1. Never use emojis under any circumstances. Keep your tone sharp, analytical, direct, and grounded in ${schoolInfo.code} marking standards.
-2. Address the student's exact prompt or uploaded assignment image: check structure, methodology, calculations, Harvard/APA citations, and flag robotic AI phrasing.
-3. Explicitly reference their school (${schoolInfo.code}) and course (${activeCourse}) standards.
-4. Provide:
-   - [BENCHMARK ALIGNMENT]: How their work compares to ${schoolInfo.code} distinction standards (with estimated grade band).
-   - [CRITICAL DEDUCTIONS]: Specific errors, missing citations, calculation mistakes, or AI-flagged phrases found.
-   - [REFINED OUTPUT]: The corrected, polished section, calculation verification, or structured solution.`;
+1. Never use emojis under any circumstances.
+2. Tailor your academic guidance to a student studying ${activeCourse} at ${activeSchool}.
+3. If the student pastes an assignment draft, calculation, or image, point out structural improvements, citation formatting, and clarity fixes honestly without inventing fake past-student citations.`;
 
       const contents: any[] = [];
-
-      // Append recent conversation history for context recall
       if (Array.isArray(history)) {
         for (const msg of history.slice(-8)) {
           if (msg.content) {
@@ -106,9 +96,10 @@ Rules:
         }
       }
 
-      const currentParts: any[] = [{ text: promptText || 'Analyze the attached academic material.' }];
+      const currentParts: any[] = [
+        { text: promptText || 'Review the attached academic material.' },
+      ];
 
-      // Attach any pasted/uploaded images
       if (Array.isArray(images)) {
         for (const imgUrl of images) {
           if (imgUrl.startsWith('data:image/')) {
@@ -126,77 +117,56 @@ Rules:
 
       contents.push({ role: 'user', parts: currentParts });
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents,
-          }),
-        }
-      );
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      let endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+      if (apiKey.startsWith('AQ.')) {
+        headers['x-goog-api-key'] = apiKey;
+      }
+
+      const geminiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents,
+        }),
+      });
 
       if (geminiRes.ok) {
         const geminiJson = await geminiRes.json();
-        const replyText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const replyText =
+          geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (replyText) {
           return NextResponse.json({
             reply: replyText,
-            benchmark_used: benchmarkCitation,
+            benchmark_used: benchmarkStatusLabel,
+            is_preview: !hasBenchmarks,
           });
         }
       }
     }
 
-    // 3. Deterministic Academic Audit Fallback (Works immediately even before GEMINI_API_KEY is added)
-    const lower = promptText.toLowerCase();
-    const detectedCliches = AI_CLICHES.filter((w) => lower.includes(w));
-    const hasCitations =
-      /\([a-zA-Z]+,?\s*\d{4}\)/.test(promptText) || /\[\d+\]/.test(promptText);
-    const wordCount = promptText.trim() ? promptText.trim().split(/\s+/).length : 0;
-    const estScore = Math.min(
-      92,
-      Math.max(64, 76 + (hasCitations ? 8 : -5) - detectedCliches.length * 4)
-    );
+    // 3. Honest Pre-Launch Notice (No fake 71% grade or fabricated rubric scores)
+    const honestPreviewReply = `[DEVELOPMENT NOTICE — BENCHMARK ARCHIVE IN PROGRESS]
+Institution: ${activeSchool}
+Selected Programme: ${activeCourse || 'Not Set'}
+Benchmark Status: 0 Verified Student Papers Indexed
 
-    const structuredReply = `[BENCHMARK ALIGNMENT — ${schoolInfo.code} | ${activeCourse}]
-Reference Standard: ${benchmarkCitation}
-Estimated Rubric Standing: ${estScore}% (${estScore >= 80 ? 'Distinction Band' : 'Credit Band — Needs Tightening'})
-Input Analyzed: ${wordCount} words${images.length > 0 ? ` + ${images.length} attached image(s)` : ''}
+Kampus Kritic is currently being built and is not yet functional for live benchmark grading. It does not currently source past or current student coursework from ${schoolInfo.code}.
 
-[CRITICAL DEDUCTIONS & AUDIT FINDINGS]
-1. Citation & Referencing Check: ${
-      hasCitations
-        ? `In-text citations detected. Verify that every bracketed source matches an alphabetical entry in your final ${schoolInfo.code} Reference List.`
-        : `No formal Harvard/APA in-text citations (Author, Year) were detected. ${schoolInfo.code} marking rubrics deduct 10 to 15 marks for unsubstantiated claims.`
-    }
-2. AI Probability & Tone Check: ${
-      detectedCliches.length > 0
-        ? `High Turnitin AI-tone risk detected. Replace overused terms (${detectedCliches.join(', ')}) with direct empirical phrasing.`
-        : `Low AI-tone risk (Human academic cadence verified). Sentence burstiness and transitions read naturally.`
-    }
-3. ${activeCourse} Methodological Rigor: Top-scoring 85%+ submissions at ${schoolInfo.code} anchor every section by contrasting theoretical models with applied local data or step-by-step working.
-
-[REFINED REVISION & NEXT STEP]
-${
-  promptText.trim()
-    ? promptText
-        .replace(/\b(delve|Moreover|Furthermore|tapestry|testament|crucial)\b/gi, '')
-        .trim()
-    : 'Image attachment logged for inspection.'
-}
-
-[KRITIC RECOMMENDATION]: State your primary thesis metric in sentence one, attach a supporting (Author, Year) citation after your second claim, and paste your next section or rubric screenshot below for line-by-line verification.`;
+Once verified 80%+ distinction papers for ${activeCourse || schoolInfo.code} are indexed and the live model connection is active in your deployment environment, you will be able to audit your assignments here. This test message did not use your free trial prompt.`;
 
     return NextResponse.json({
-      reply: structuredReply,
-      benchmark_used: benchmarkCitation,
+      reply: honestPreviewReply,
+      benchmark_used: benchmarkStatusLabel,
+      is_preview: true,
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: err.message || 'Audit request failed.' },
+      { error: err.message || 'Request failed.' },
       { status: 500 }
     );
   }
