@@ -6,28 +6,6 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Automated SMS webhook handler for iPhone Shortcuts / FNB inContact
-    if (body.action === 'auto_verify_sms') {
-      const { smsText } = body;
-      const refMatch = (smsText || '').match(/KRT-\d{4}/i);
-      if (refMatch) {
-        const matchedRef = refMatch[0].toUpperCase();
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        await supabase
-          .from('profiles')
-          .update({
-            kritic_unlimited: true,
-            is_premium: true,
-            kritic_sub_until: nextMonth.toISOString(),
-            payment_ref_code: 'VERIFIED',
-          })
-          .eq('payment_ref_code', matchedRef);
-        return NextResponse.json({ verified: true, reference: matchedRef });
-      }
-      return NextResponse.json({ verified: false });
-    }
-
     const {
       promptText = '',
       images = [],
@@ -42,7 +20,7 @@ export async function POST(req: Request) {
     const activeSchool = schoolInfo.fullName;
     const activeCourse = (courseCode || '').trim() || 'General Coursework';
 
-    // 1. Query verified 80%+ contributor benchmarks for this course
+    // 1. Check for verified benchmark papers in Supabase
     let verifiedBenchmarks: any[] = [];
     try {
       const { data } = await supabase
@@ -64,28 +42,27 @@ export async function POST(req: Request) {
       ? `Verified ${schoolInfo.code} Benchmark (${verifiedBenchmarks[0].course_code} - ${verifiedBenchmarks[0].grade_achieved})`
       : `${schoolInfo.code} Academic Engine (${activeCourse})`;
 
-    // 2. Call Gemini API
+    // 2. Query Gemini API using gemini-1.5-flash
     const apiKey = process.env.GEMINI_API_KEY;
+
     if (apiKey) {
       const systemInstruction = `You are Kampus Kritic (powered by Argon), the conversational academic assistant and pre-flight assignment auditor for ${activeSchool}.
 You are chatting with ${username}, a verified student enrolled in "${activeCourse}" at ${schoolInfo.code}.
 
-Benchmark Knowledge:
+Benchmark Context:
 ${
   hasBenchmarks
-    ? `You have access to verified distinction benchmark papers for ${activeCourse}:\n${verifiedBenchmarks[0].methodology_notes}`
-    : `(Note: Institutional benchmark archive is currently populating for ${activeCourse}. Use standard ${schoolInfo.code} university grading and citation conventions.)`
+    ? `Verified distinction benchmark notes for ${activeCourse}:\n${verifiedBenchmarks[0].methodology_notes}`
+    : `(Institutional benchmark archive is currently populating. Provide rigorous, standard ${schoolInfo.code} academic grading, Harvard/APA citation, and coursework guidance.)`
 }
 
-Behavior Rules:
+Rules:
 1. Never use emojis under any circumstances.
-2. Be a helpful, sharp, and authentic academic thought partner. If the user greets you casually (e.g. "yo", "hi", "what's up"), greet ${username} naturally, acknowledge their programme (${activeCourse} at ${schoolInfo.code}), and let them know you're ready to review their work, check citations, or help with coursework.
-3. If the user pastes an essay, question, lab report, formula, or code, audit it thoroughly: identify flaws, cite Harvard/APA referencing standards, test calculations, and give clean improvements.
-4. If an image is attached, inspect the image content directly and address their questions about it.`;
+2. Be an authentic, helpful academic thought partner. If the student greets you casually (e.g. "yo", "whats your name"), answer naturally, state that you are Kampus Kritic calibrated for ${activeCourse} at ${schoolInfo.code}, and ask how you can assist with their coursework or assignments.
+3. If the student submits drafts, questions, code, or formulas, audit them rigorously according to university rubrics.`;
 
       const contents: any[] = [];
 
-      // Append conversation history for memory recall
       if (Array.isArray(history)) {
         for (const msg of history.slice(-8)) {
           if (msg.content) {
@@ -98,20 +75,16 @@ Behavior Rules:
       }
 
       const currentParts: any[] = [
-        { text: promptText || 'Please inspect the attached material.' },
+        { text: promptText || 'Please inspect the attached coursework.' },
       ];
 
-      // Handle attached images (data URLs)
       if (Array.isArray(images)) {
         for (const imgUrl of images) {
           if (imgUrl.startsWith('data:image/')) {
             const [meta, base64Data] = imgUrl.split(',');
             const mimeType = meta.split(':')[1]?.split(';')[0] || 'image/png';
             currentParts.push({
-              inlineData: {
-                mimeType,
-                data: base64Data,
-              },
+              inlineData: { mimeType, data: base64Data },
             });
           }
         }
@@ -119,28 +92,22 @@ Behavior Rules:
 
       contents.push({ role: 'user', parts: currentParts });
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-      if (apiKey.startsWith('AQ.')) {
-        headers['x-goog-api-key'] = apiKey;
-      }
-
-      const geminiRes = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-        }),
-      });
+      // Correct endpoint using gemini-1.5-flash
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents,
+          }),
+        }
+      );
 
       if (geminiRes.ok) {
         const geminiJson = await geminiRes.json();
-        const replyText =
-          geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const replyText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (replyText) {
           return NextResponse.json({
             reply: replyText,
@@ -149,20 +116,14 @@ Behavior Rules:
           });
         }
       } else {
-        const errorDetails = await geminiRes.text();
-        console.error('Gemini API Error:', errorDetails);
+        const errorText = await geminiRes.text();
+        console.error('Gemini API Error from Google:', errorText);
       }
     }
 
-    // 3. Fallback if GEMINI_API_KEY is not yet active or redeployed
-    const fallbackReply = `Hey ${username}. I am set up for ${activeCourse} at ${activeSchool}. 
-
-If you are seeing this message, your GEMINI_API_KEY environment variable is still completing its deployment in Vercel. 
-
-Once Vercel finishes deploying, I will respond dynamically to all your questions, assignment drafts, and attached images.`;
-
+    // Fallback if key is missing or failed
     return NextResponse.json({
-      reply: fallbackReply,
+      reply: `Hey ${username}. I am calibrated for ${activeCourse} at ${activeSchool}. Could you please re-send your message or assignment draft?`,
       benchmark_used: benchmarkStatusLabel,
       is_preview: true,
     });
