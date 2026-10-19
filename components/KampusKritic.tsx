@@ -16,14 +16,18 @@ import {
   Wallet,
   GraduationCap,
   BookOpen,
-  Info,
+  AlertCircle,
   Trash2,
-  FileText,
+  Search,
   ChevronRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadImages } from '@/lib/payment';
-import { classifyUniversity, timeAgo } from '@/lib/utils';
+import {
+  classifyUniversity,
+  isValidCourseForSchool,
+  timeAgo,
+} from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 
@@ -45,21 +49,23 @@ type KriticChatSession = {
   messages: KriticMessage[];
 };
 
-const QUICK_STARTERS = [
-  'Audit my assignment draft against 85%+ course benchmarks',
-  'Check my Harvard citations and Turnitin AI tone risk',
-  'Verify my lab calculations, units, and methodology',
-  'Convert my notes into presentation slides and a speaker script',
+const PROMPT_STARTERS = [
+  'Check my assignment draft for Harvard citations and structure:',
+  'Verify the methodology and calculations in this lab report:',
+  'Convert these lecture notes into presentation slide points:',
+  'Draft a formal email to my lecturer regarding my continuous assessment mark:',
 ];
 
 export default function KampusKritic({
   profile,
   onProfileUpdate,
   onOpenTerms,
+  onOpenProfile,
 }: {
   profile: Profile | null;
   onProfileUpdate?: (updated: Profile) => void;
   onOpenTerms?: () => void;
+  onOpenProfile?: () => void;
 }) {
   const { toast } = useToast();
 
@@ -69,9 +75,14 @@ export default function KampusKritic({
     profile?.email?.split('@')[0] ||
     'Student';
 
-  // Course state synced with Profile
-  const [courseInput, setCourseInput] = useState(profile?.course_code || '');
-  const [isEditingCourse, setIsEditingCourse] = useState(!profile?.course_code);
+  const hasValidCourse = isValidCourseForSchool(
+    profile?.course_code,
+    profile?.email || profile?.university
+  );
+
+  // Course Gate Search State (for users who haven't set a valid school course yet)
+  const [courseSearch, setCourseSearch] = useState('');
+  const [selectedGateCourse, setSelectedGateCourse] = useState('');
   const [savingCourse, setSavingCourse] = useState(false);
 
   // Chat & History State
@@ -79,7 +90,6 @@ export default function KampusKritic({
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<KriticMessage[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [showIntroBanner, setShowIntroBanner] = useState(true);
 
   // Composer State
   const [input, setInput] = useState('');
@@ -114,16 +124,11 @@ export default function KampusKritic({
   }, []);
 
   useEffect(() => {
-    if (profile?.course_code) {
-      setCourseInput(profile.course_code);
-      setIsEditingCourse(false);
-    }
     if (typeof profile?.kritic_prompts_used === 'number') {
       setPromptsUsed(profile.kritic_prompts_used);
     }
-  }, [profile?.course_code, profile?.kritic_prompts_used]);
+  }, [profile?.kritic_prompts_used]);
 
-  // Load saved chat history from localStorage + Supabase
   useEffect(() => {
     if (!profile?.id) return;
     const storageKey = `kampus_kritic_sessions_${profile.id}`;
@@ -147,54 +152,6 @@ export default function KampusKritic({
         // Ignore malformed cache
       }
     }
-
-    // Sync with Supabase tables if migrated
-    (async () => {
-      try {
-        const { data: chatRows } = await supabase
-          .from('kritic_chats')
-          .select('*')
-          .eq('user_id', profile.id)
-          .order('updated_at', { ascending: false })
-          .limit(25);
-
-        if (chatRows && chatRows.length > 0) {
-          const chatIds = chatRows.map((c: any) => c.id);
-          const { data: msgRows } = await supabase
-            .from('kritic_messages')
-            .select('*')
-            .in('chat_id', chatIds)
-            .order('created_at', { ascending: true });
-
-          const hydrated: KriticChatSession[] = chatRows.map((c: any) => ({
-            id: c.id,
-            title: c.title,
-            course_code: c.course_code || profile.course_code || 'GENERAL',
-            university: c.university || schoolInfo.code,
-            created_at: c.created_at,
-            messages: (msgRows || [])
-              .filter((m: any) => m.chat_id === c.id)
-              .map((m: any) => ({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                images: m.images || [],
-                benchmark_used: m.benchmark_used,
-                created_at: m.created_at,
-              })),
-          }));
-
-          setSessions(hydrated);
-          localStorage.setItem(storageKey, JSON.stringify(hydrated));
-          if (!activeSessionId && hydrated.length > 0) {
-            setActiveSessionId(hydrated[0].id);
-            setMessages(hydrated[0].messages);
-          }
-        }
-      } catch {
-        // Fallback to localStorage sessions
-      }
-    })();
   }, [profile?.id]);
 
   useEffect(() => {
@@ -211,34 +168,35 @@ export default function KampusKritic({
     }
   };
 
-  const handleSaveCourse = async () => {
-    const clean = courseInput.trim().toUpperCase();
-    if (!clean || !profile) return;
+  const handleLockInCourse = async () => {
+    if (!selectedGateCourse || !profile) return;
     setSavingCourse(true);
 
     const { data, error } = await supabase
       .from('profiles')
-      .update({ course_code: clean, university: schoolInfo.fullName })
+      .update({
+        course_code: selectedGateCourse,
+        university: schoolInfo.fullName,
+      })
       .eq('id', profile.id)
       .select()
       .maybeSingle();
 
     setSavingCourse(false);
-    setIsEditingCourse(false);
 
     if (!error && data && onProfileUpdate) {
       onProfileUpdate(data as Profile);
     } else if (onProfileUpdate) {
       onProfileUpdate({
         ...profile,
-        course_code: clean,
+        course_code: selectedGateCourse,
         university: schoolInfo.fullName,
       });
     }
 
     toast({
-      title: 'Course Configured',
-      description: `Kampus Kritic is now calibrated for ${clean} at ${schoolInfo.code}.`,
+      title: 'Programme Linked',
+      description: `${selectedGateCourse} saved to your ${schoolInfo.code} profile.`,
     });
   };
 
@@ -247,7 +205,6 @@ export default function KampusKritic({
     setUploadingImage(true);
 
     try {
-      // Convert to base64 data URLs for instant AI vision + upload to storage
       const base64Promises = files.map(
         (file) =>
           new Promise<string>((resolve) => {
@@ -288,7 +245,7 @@ export default function KampusKritic({
       handleFilesSelected(files);
       toast({
         title: 'Image Attached',
-        description: `${files.length} screenshot(s) ready for Kritic analysis.`,
+        description: `${files.length} image(s) attached to prompt.`,
       });
     }
   };
@@ -310,18 +267,19 @@ export default function KampusKritic({
     try {
       await supabase.from('kritic_chats').delete().eq('id', id);
     } catch {
-      // Ignore if not in DB
+      // Ignore
     }
   };
 
-  const handleSend = async (customPrompt?: string) => {
-    const textToSend = (customPrompt ?? input).trim();
+  const handleSend = async () => {
+    const textToSend = input.trim();
     if ((!textToSend && pendingImages.length === 0) || sending) return;
 
     if (isLockedByPaywall) {
       toast({
         title: 'Free Trial Completed',
-        description: 'Unlock Kampus Kritic Unlimited (P50/mo) to continue auditing.',
+        description:
+          'Unlock Kampus Kritic Unlimited (P50/mo) to continue auditing.',
         variant: 'destructive',
       });
       return;
@@ -335,7 +293,7 @@ export default function KampusKritic({
     const userMsg: KriticMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: textToSend || 'Attached image for academic review.',
+      content: textToSend || 'Attached image for review.',
       images: attachedImages,
       created_at: new Date().toISOString(),
     };
@@ -346,41 +304,13 @@ export default function KampusKritic({
     let currentSessionId = activeSessionId;
     const sessionTitle =
       textToSend.slice(0, 48) ||
-      `${courseInput || schoolInfo.code} Image Audit`;
+      `${profile?.course_code || schoolInfo.code} Session`;
 
     if (!currentSessionId) {
       currentSessionId = crypto.randomUUID
         ? crypto.randomUUID()
         : `chat-${Date.now()}`;
       setActiveSessionId(currentSessionId);
-
-      if (profile?.id) {
-        try {
-          await supabase.from('kritic_chats').insert({
-            id: currentSessionId,
-            user_id: profile.id,
-            title: sessionTitle,
-            course_code: courseInput || 'GENERAL',
-            university: schoolInfo.code,
-          });
-        } catch {
-          // Handled by local sync
-        }
-      }
-    }
-
-    if (profile?.id) {
-      try {
-        await supabase.from('kritic_messages').insert({
-          chat_id: currentSessionId,
-          user_id: profile.id,
-          role: 'user',
-          content: userMsg.content,
-          images: attachedImages,
-        });
-      } catch {
-        // Handled by local sync
-      }
     }
 
     try {
@@ -394,7 +324,7 @@ export default function KampusKritic({
           email: profile?.email,
           username: displayUsername,
           university: schoolInfo.fullName,
-          courseCode: courseInput || profile?.course_code || 'GENERAL',
+          courseCode: profile?.course_code || '',
         }),
       });
 
@@ -404,7 +334,7 @@ export default function KampusKritic({
         role: 'assistant',
         content:
           data.reply ||
-          'Audit complete. Please review the structural deductions above.',
+          'Kampus Kritic is currently in development and does not yet source student coursework.',
         images: [],
         benchmark_used: data.benchmark_used,
         created_at: new Date().toISOString(),
@@ -413,24 +343,24 @@ export default function KampusKritic({
       const finalMessages = [...updatedMessages, assistantMsg];
       setMessages(finalMessages);
 
-      // Increment prompt usage count (enforces the 1-free-prompt trial)
-      const nextUsed = promptsUsed + 1;
-      setPromptsUsed(nextUsed);
-      if (profile?.id) {
-        localStorage.setItem(
-          `kampus_kritic_used_${profile.id}`,
-          String(nextUsed)
-        );
-        await supabase
-          .from('profiles')
-          .update({ kritic_prompts_used: nextUsed })
-          .eq('id', profile.id);
-        if (onProfileUpdate && profile) {
-          onProfileUpdate({ ...profile, kritic_prompts_used: nextUsed });
+      if (!data.is_preview) {
+        const nextUsed = promptsUsed + 1;
+        setPromptsUsed(nextUsed);
+        if (profile?.id) {
+          localStorage.setItem(
+            `kampus_kritic_used_${profile.id}`,
+            String(nextUsed)
+          );
+          await supabase
+            .from('profiles')
+            .update({ kritic_prompts_used: nextUsed })
+            .eq('id', profile.id);
+          if (onProfileUpdate && profile) {
+            onProfileUpdate({ ...profile, kritic_prompts_used: nextUsed });
+          }
         }
       }
 
-      // Persist session in history
       const existingIdx = sessions.findIndex((s) => s.id === currentSessionId);
       let nextSessions: KriticChatSession[];
       if (existingIdx >= 0) {
@@ -442,7 +372,7 @@ export default function KampusKritic({
           {
             id: currentSessionId!,
             title: sessionTitle,
-            course_code: courseInput || 'GENERAL',
+            course_code: profile?.course_code || schoolInfo.code,
             university: schoolInfo.code,
             created_at: new Date().toISOString(),
             messages: finalMessages,
@@ -451,24 +381,10 @@ export default function KampusKritic({
         ];
       }
       persistSessions(nextSessions);
-
-      if (profile?.id) {
-        try {
-          await supabase.from('kritic_messages').insert({
-            chat_id: currentSessionId,
-            user_id: profile.id,
-            role: 'assistant',
-            content: assistantMsg.content,
-            benchmark_used: assistantMsg.benchmark_used,
-          });
-        } catch {
-          // Local storage already updated
-        }
-      }
     } catch {
       toast({
         title: 'Connection Error',
-        description: 'Failed to reach Kampus Kritic engine. Please try again.',
+        description: 'Could not reach Kampus Kritic.',
         variant: 'destructive',
       });
     } finally {
@@ -490,7 +406,7 @@ export default function KampusKritic({
           kritic_unlimited: true,
           is_premium: true,
           kritic_sub_until: nextMonth.toISOString(),
-          Subscribed_until: nextMonth.toISOString(),
+          subscribed_until: nextMonth.toISOString(),
           tier: 'kritic_unlimited',
           payment_ref_code: referenceCode,
           payment_ref_id: paymentRefId.trim(),
@@ -517,7 +433,7 @@ export default function KampusKritic({
 
       toast({
         title: 'Kampus Kritic Unlimited Activated',
-        description: `Ref ${referenceCode} logged. You now have full access.`,
+        description: `Ref ${referenceCode} logged.`,
       });
     } catch {
       toast({
@@ -540,73 +456,122 @@ export default function KampusKritic({
     }
   };
 
-  return (
-    <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
-      {/* Sub-Header: School, Course Badge & History Controls */}
-      <div className="px-4 py-2.5 bg-surface border-b border-gray-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="px-2.5 py-1 rounded-lg bg-ink border border-gray-800 flex items-center gap-1.5 shrink-0">
-            <GraduationCap className="w-3.5 h-3.5 text-pine" strokeWidth={2} />
-            <span className="text-white text-[11px] font-bold">
-              {schoolInfo.code}
-            </span>
+  const filteredSchoolCourses = schoolInfo.courses.filter((c) =>
+    c.toLowerCase().includes(courseSearch.trim().toLowerCase())
+  );
+
+  // MANDATORY COURSE GATE: Prompts any new or existing student to select from their school's official course list
+  if (!hasValidCourse) {
+    return (
+      <div className="flex-1 bg-midnight flex flex-col overflow-y-auto px-4 py-6 pb-28">
+        <div className="bg-surface border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 animate-slide-up">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shrink-0">
+              <GraduationCap className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-pine text-[10px] font-black uppercase tracking-wider">
+                Profile Setup Required
+              </span>
+              <h2 className="text-white font-black text-base">
+                Hi, {displayUsername} — Select Your Course
+              </h2>
+            </div>
           </div>
 
-          {isEditingCourse ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="text"
-                value={courseInput}
-                onChange={(e) => setCourseInput(e.target.value)}
-                placeholder="Course (e.g. CSE311)"
-                className="h-7 w-32 rounded-lg bg-ink border border-pine/50 px-2 text-white text-[11px] font-bold uppercase outline-none"
-              />
-              <button
-                onClick={handleSaveCourse}
-                disabled={savingCourse || !courseInput.trim()}
-                className="h-7 px-2.5 rounded-lg bg-pine text-black text-[10px] font-black active:scale-95 transition-transform"
-              >
-                Save
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsEditingCourse(true)}
-              className="px-2.5 py-1 rounded-lg bg-ink border border-gray-800 hover:border-pine/50 flex items-center gap-1.5 text-left transition-colors truncate"
-            >
-              <BookOpen className="w-3 h-3 text-pine shrink-0" />
-              <span className="text-sage text-[11px] font-bold truncate">
-                {courseInput || 'Set Course'}
-              </span>
-            </button>
-          )}
-        </div>
+          <p className="text-sage text-xs leading-relaxed">
+            Your account is registered under{' '}
+            <strong className="text-white">{schoolInfo.fullName}</strong>.
+            Please select your official degree programme offered at{' '}
+            <strong className="text-white">{schoolInfo.code}</strong> before
+            using Kampus Kritic. You can change this anytime in your Profile
+            tab.
+          </p>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="relative flex items-center">
+            <Search className="absolute left-3.5 w-4 h-4 text-sage" />
+            <input
+              type="text"
+              value={courseSearch}
+              onChange={(e) => setCourseSearch(e.target.value)}
+              placeholder={`Search ${schoolInfo.code} courses (e.g. Law, Computer, Accounting)...`}
+              className="w-full h-11 rounded-xl bg-ink border border-gray-800 pl-10 pr-4 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine"
+            />
+          </div>
+
+          <div className="max-h-56 overflow-y-auto rounded-xl bg-ink border border-gray-800 divide-y divide-gray-800/70 no-scrollbar">
+            {filteredSchoolCourses.length === 0 ? (
+              <div className="p-4 text-center text-sage text-xs">
+                No matching degree programme offered at {schoolInfo.code} for
+                &quot;{courseSearch}&quot;.
+              </div>
+            ) : (
+              filteredSchoolCourses.map((course) => {
+                const isSelected = selectedGateCourse === course;
+                return (
+                  <button
+                    key={course}
+                    type="button"
+                    onClick={() => setSelectedGateCourse(course)}
+                    className={`w-full px-3.5 py-3 text-left text-xs flex items-center justify-between transition-colors ${
+                      isSelected
+                        ? 'bg-pine text-black font-black'
+                        : 'text-white hover:bg-surface font-medium'
+                    }`}
+                  >
+                    <span className="pr-2">{course}</span>
+                    {isSelected && <Check className="w-4 h-4 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
           <button
-            onClick={() => setShowIntroBanner((v) => !v)}
-            title="How Kampus Kritic Works"
-            className={`p-1.5 rounded-lg border transition-colors ${
-              showIntroBanner
-                ? 'bg-ink border-pine/40 text-pine'
-                : 'bg-ink border-gray-800 text-sage hover:text-white'
-            }`}
+            type="button"
+            onClick={handleLockInCourse}
+            disabled={!selectedGateCourse || savingCourse}
+            className="w-full h-11 rounded-xl bg-pine text-black font-black text-xs active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
           >
-            <Info className="w-4 h-4" strokeWidth={1.75} />
+            {savingCourse ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <span>Save Programme &amp; Open Kampus Kritic</span>
+            )}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
+      {/* Minimal, Clean Sub-Row: Shows School + Course on left, History & New on right */}
+      <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
+        <button
+          onClick={onOpenProfile}
+          className="flex items-center gap-1.5 text-left min-w-0 pr-2 group"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-pine shrink-0" />
+          <span className="text-sage group-hover:text-white text-xs font-bold truncate transition-colors">
+            {schoolInfo.code} · {profile?.course_code}
+          </span>
+        </button>
+
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowHistory(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-ink border border-gray-800 hover:border-gray-700 text-sage hover:text-white text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-surface border border-gray-800 text-sage hover:text-white text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-all"
           >
             <History className="w-3.5 h-3.5 text-pine" />
             <span>History ({sessions.length})</span>
           </button>
           <button
             onClick={startNewChat}
-            title="New Audit Thread"
-            className="p-1.5 rounded-lg bg-pine text-black active:scale-95 transition-transform"
+            className="px-2.5 py-1 rounded-lg bg-pine text-black text-[11px] font-black flex items-center gap-1 active:scale-95 transition-transform"
           >
-            <Plus className="w-4 h-4" strokeWidth={2.5} />
+            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>New</span>
           </button>
         </div>
       </div>
@@ -621,7 +586,7 @@ export default function KampusKritic({
           <div className="relative w-72 max-w-[82%] bg-surface border-r border-gray-800 h-full flex flex-col p-4 z-10 animate-in slide-in-from-left duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-gray-800">
               <span className="text-white font-black text-sm">
-                Audit History
+                Saved Sessions
               </span>
               <button
                 onClick={() => setShowHistory(false)}
@@ -636,14 +601,13 @@ export default function KampusKritic({
               className="w-full mt-3 h-10 rounded-xl bg-pine text-black font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
             >
               <Plus className="w-4 h-4" strokeWidth={2.5} />
-              <span>Start New Audit</span>
+              <span>New Session</span>
             </button>
 
             <div className="flex-1 overflow-y-auto mt-3 flex flex-col gap-2 no-scrollbar">
               {sessions.length === 0 ? (
                 <p className="text-sage text-xs text-center py-8">
-                  No saved audits yet. Your conversations and pasted images will
-                  be stored here automatically.
+                  No saved threads yet.
                 </p>
               ) : (
                 sessions.map((s) => (
@@ -664,7 +628,7 @@ export default function KampusKritic({
                       <span className="text-xs font-bold text-white truncate">
                         {s.title}
                       </span>
-                      <span className="text-[10px] text-sage mt-0.5">
+                      <span className="text-[10px] text-sage mt-0.5 truncate">
                         {s.course_code} · {timeAgo(s.created_at)}
                       </span>
                     </div>
@@ -684,91 +648,56 @@ export default function KampusKritic({
 
       {/* Main Chat Stream */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 no-scrollbar">
-        {/* Personalized Greeting & How Kampus Kritic Works */}
-        {(messages.length === 0 || showIntroBanner) && (
-          <div className="bg-surface border border-gray-800 rounded-2xl p-5 flex flex-col gap-3.5 animate-slide-up">
+        {/* Explicit Pre-Launch Disclaimer Banner */}
+        <div className="bg-surface border border-pine/40 rounded-2xl p-3.5 flex items-start gap-3">
+          <AlertCircle className="w-4 h-4 text-pine shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-pine text-[11px] font-black uppercase tracking-wider">
+              Still Being Built — Benchmark Archive Not Yet Active
+            </span>
+            <p className="text-sage text-xs leading-relaxed">
+              Kampus Kritic is currently under construction and does not yet
+              source past or current student coursework for{' '}
+              <strong className="text-white">{profile?.course_code}</strong>.
+              Responses during this build phase are general AI previews only.
+            </p>
+          </div>
+        </div>
+
+        {/* Clean Personalized Intro When Chat Is Empty */}
+        {messages.length === 0 && (
+          <div className="bg-surface border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 animate-slide-up">
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-col gap-1">
-                <span className="text-pine text-[10px] font-black uppercase tracking-wider">
-                  Kampus Kritic · Argon Academic Engine
-                </span>
                 <h1 className="text-white font-black text-xl tracking-tight">
                   Hi, {displayUsername}
                 </h1>
                 <p className="text-sage text-xs leading-relaxed">
-                  Calibrated for{' '}
-                  <strong className="text-white">{schoolInfo.fullName}</strong>
-                  {courseInput ? (
-                    <>
-                      {' '}
-                      · Course <strong className="text-pine">{courseInput}</strong>
-                    </>
-                  ) : (
-                    ''
-                  )}
-                  .
+                  {schoolInfo.code} ·{' '}
+                  <strong className="text-pine">{profile?.course_code}</strong>
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shrink-0">
-                <Sparkles className="w-5 h-5" strokeWidth={2} />
+              <div className="w-9 h-9 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shrink-0">
+                <Sparkles className="w-4 h-4" strokeWidth={2} />
               </div>
             </div>
 
-            <div className="bg-ink border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2">
-              <span className="text-white text-xs font-bold">
-                How Kampus Kritic Works
-              </span>
-              <p className="text-sage text-xs leading-relaxed">
-                Generic AI tools do not know how lecturers at UB, BAC / BSBS, or
-                BIUST grade. Kampus Kritic benchmarks your drafts, lab
-                calculations, and pasted screenshots directly against anonymized
-                80%+ distinction coursework from your exact institution and
-                course.
-              </p>
-              <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
-                  1. Paste Drafts or Images
-                </div>
-                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
-                  2. Check Rubric &amp; Citations
-                </div>
-                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
-                  3. Strip Turnitin AI Flags
-                </div>
-                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
-                  4. Recall Full Chat History
-                </div>
-              </div>
-            </div>
+            <p className="text-sage text-xs leading-relaxed">
+              Paste an assignment paragraph, calculation, or image below, or tap
+              a prompt starter to populate your message box.
+            </p>
 
-            {/* Trial Status Indicator */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-ink border border-gray-800 text-xs">
-              <span className="text-sage font-medium">Access Status</span>
-              {hasUnlimited ? (
-                <span className="text-pine font-black">
-                  Unlimited Plan Active
-                </span>
-              ) : promptsUsed === 0 ? (
-                <span className="text-pine font-bold">
-                  1 Free Assignment Audit Available
-                </span>
-              ) : (
-                <span className="text-red-400 font-bold">
-                  Free Trial Used · Upgrade Required
-                </span>
-              )}
-            </div>
-
-            {messages.length === 0 && !isLockedByPaywall && (
+            {!isLockedByPaywall && (
               <div className="flex flex-col gap-2 pt-1">
                 <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
-                  Quick Audit Starters
+                  Prompt Starters
                 </span>
-                <div className="grid grid-cols-1 gap-2">
-                  {QUICK_STARTERS.map((starter) => (
+                <div className="flex flex-col gap-2">
+                  {PROMPT_STARTERS.map((starter) => (
                     <button
                       key={starter}
-                      onClick={() => handleSend(starter)}
+                      type="button"
+                      onClick={() => setInput(`${starter} `)}
                       className="w-full p-3 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-left flex items-center justify-between group active:scale-[0.99] transition-all"
                     >
                       <span className="text-white text-xs font-medium group-hover:text-pine transition-colors">
@@ -808,7 +737,7 @@ export default function KampusKritic({
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(m.content);
-                        toast({ title: 'Audit response copied' });
+                        toast({ title: 'Response copied' });
                       }}
                       className="text-[10px] font-bold text-sage hover:text-white flex items-center gap-1 shrink-0"
                     >
@@ -823,7 +752,7 @@ export default function KampusKritic({
                       <img
                         key={i}
                         src={img}
-                        alt="Attached academic work"
+                        alt="Attached work"
                         className="w-full h-28 object-cover rounded-xl border border-black/20"
                       />
                     ))}
@@ -851,8 +780,7 @@ export default function KampusKritic({
             <div className="bg-surface border border-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2.5">
               <Loader2 className="w-4 h-4 text-pine animate-spin" />
               <span className="text-sage text-xs font-medium">
-                Auditing against {schoolInfo.code}{' '}
-                {courseInput || 'institutional'} benchmarks...
+                Processing response for {schoolInfo.code}...
               </span>
             </div>
           </div>
@@ -873,9 +801,10 @@ export default function KampusKritic({
                   Unlock Kampus Kritic Unlimited
                 </h3>
                 <p className="text-sage text-xs leading-relaxed">
-                  Continue auditing assignments, pasting rubric images, checking
-                  citations, and recalling full history calibrated for{' '}
-                  <strong className="text-white">{schoolInfo.code}</strong>.
+                  Continue auditing assignments, pasting images, and recalling
+                  chat history for{' '}
+                  <strong className="text-white">{profile?.course_code}</strong>
+                  .
                 </p>
               </div>
               <div className="bg-ink border border-pine/40 px-3 py-2 rounded-xl text-right shrink-0">
@@ -1002,7 +931,7 @@ export default function KampusKritic({
             </button>
 
             <p className="text-sage text-[10px] text-center">
-              Unlimited usage is subject to our standard Fair Use Policy in the{' '}
+              Subject to Fair Use Policy in the{' '}
               <button
                 type="button"
                 onClick={onOpenTerms}
@@ -1018,7 +947,7 @@ export default function KampusKritic({
         <div ref={bottomRef} />
       </div>
 
-      {/* Sticky Chat & Image Paste Composer */}
+      {/* Clean Bottom Chat & Image Paste Bar (Zero Scrollbar Clutter) */}
       <div className="p-3 bg-surface border-t border-gray-800 flex flex-col gap-2 shrink-0">
         {pendingImages.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
@@ -1046,7 +975,7 @@ export default function KampusKritic({
           </div>
         )}
 
-        <div className="flex items-end gap-2">
+        <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -1089,14 +1018,14 @@ export default function KampusKritic({
             placeholder={
               isLockedByPaywall
                 ? 'Unlock P50/month Unlimited above to continue...'
-                : 'Paste assignment text, questions, or Ctrl+V images...'
+                : 'Message Kampus Kritic or Ctrl+V paste images...'
             }
-            className="flex-1 max-h-28 min-h-[44px] rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none"
+            className="flex-1 h-11 max-h-24 rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none overflow-hidden no-scrollbar"
           />
 
           <button
             type="button"
-            onClick={() => handleSend()}
+            onClick={handleSend}
             disabled={
               isLockedByPaywall ||
               sending ||
