@@ -28,9 +28,15 @@ import type {
   HazardRow,
   AppNotification,
 } from '@/lib/types';
-import { haversineMeters, locationLabel, timeAgo } from '@/lib/utils';
+import {
+  haversineMeters,
+  locationLabel,
+  timeAgo,
+  classifyUniversity,
+} from '@/lib/utils';
 import WelcomeModal from '@/components/WelcomeModal';
 import AuthScreen from '@/components/AuthScreen';
+import KampusKritic from '@/components/KampusKritic';
 import HustleHub from '@/components/HustleHub';
 import CommunityHub from '@/components/CommunityHub';
 import EscrowVault from '@/components/EscrowVault';
@@ -49,19 +55,29 @@ import AdminDashboard from '@/components/AdminDashboard';
 const RadarMap = dynamic(() => import('@/components/RadarMap'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-[#0B0F0E] flex items-center justify-center">
-      <span className="text-zinc-500 text-xs font-medium">Loading radar…</span>
+    <div className="w-full h-full bg-midnight flex items-center justify-center">
+      <span className="text-sage text-xs font-bold">Loading radar...</span>
     </div>
   ),
 });
 
 const HEADER_TITLES: Record<Exclude<View, 'auth'>, string> = {
+  kritic: 'Kampus Kritic',
   radar: 'Kampus Radar',
   hustle: 'Hustle Hub',
   community: 'Campus Feed',
   escrow: 'Escrow & Payments',
   profile: 'Student ID',
 };
+
+const VALID_VIEWS: Exclude<View, 'auth'>[] = [
+  'kritic',
+  'radar',
+  'hustle',
+  'community',
+  'escrow',
+  'profile',
+];
 
 const HAZARD_CATEGORIES = [
   'Suspicious Activity',
@@ -170,7 +186,7 @@ export default function Home() {
           if (notif.user_id === profile.id) {
             setDbNotifications((prev) => [notif, ...prev]);
             const title =
-              notif.type === 'message' ? '💬 New Message' : '🔔 New Reply';
+              notif.type === 'message' ? 'New Message' : 'New Reply';
             toast({ title, description: notif.body });
             fireSystemNotification(title, notif.body);
           }
@@ -247,11 +263,11 @@ export default function Home() {
                 alert.location_name ?? locationLabel(alert.lat, alert.lng);
               const text = `EMERGENCY: ${userName} triggered an assistance alert near ${loc}.`;
               toast({
-                title: '🚨 Emergency Alert',
+                title: 'Emergency Alert',
                 description: text,
                 variant: 'destructive',
               });
-              fireSystemNotification('🚨 Emergency Alert', text);
+              fireSystemNotification('Emergency Alert', text);
               setSosNotifications((prev) => [
                 { id: alert.id, text, time: 'just now' },
                 ...prev,
@@ -319,7 +335,7 @@ export default function Home() {
       } else {
         await supabase.from('feed_posts').insert({
           user_id: profile?.id,
-          author_name: '⚠️ Kampus Radar',
+          author_name: 'Kampus Radar',
           category: 'General',
           text: `A new ${hazardCategory} hazard was reported on campus. Check the radar map to stay safe.`,
           is_anonymous: false,
@@ -396,7 +412,7 @@ export default function Home() {
 
       await supabase.from('feed_posts').insert({
         user_id: profile?.id ?? null,
-        author_name: '🚨 Kampus SOS',
+        author_name: 'Kampus SOS',
         category: 'General',
         text: `${userName} triggered an emergency beacon near ${loc}. Open the radar map immediately.`,
         is_anonymous: false,
@@ -511,22 +527,40 @@ export default function Home() {
         .select('*')
         .eq('id', session.user.id)
         .maybeSingle();
-      if (data && mounted) {
-        setProfile(data as Profile);
 
-        const initialHash = window.location.hash.replace('#', '') as View;
-        if (
-          ['radar', 'hustle', 'community', 'escrow', 'profile'].includes(
-            initialHash
-          )
-        ) {
+      const school = classifyUniversity(session.user.email);
+      const hydratedProfile: Profile = data
+        ? {
+            ...(data as Profile),
+            university: (data as Profile).university || school.fullName,
+          }
+        : {
+            id: session.user.id,
+            email: session.user.email || '',
+            username: session.user.email?.split('@')[0] || 'Student',
+            avatar_url: null,
+            university: school.fullName,
+            verified: true,
+            email_verified: true,
+            is_admin: false,
+            is_premium: false,
+            subscribed_until: null,
+            sentinel_points: 0,
+            ewallet_number: '',
+          };
+
+      if (mounted) {
+        setProfile(hydratedProfile);
+
+        const initialHash = window.location.hash.replace('#', '') as Exclude<
+          View,
+          'auth'
+        >;
+        if (VALID_VIEWS.includes(initialHash)) {
           setActiveView(initialHash);
         } else {
-          setActiveView('radar');
-        }
-
-        if (!(data as Profile).email_verified) {
-          setShowOtp(true);
+          // Always push Kampus Kritic first when logging in
+          setActiveView('kritic');
         }
       }
     })();
@@ -556,10 +590,11 @@ export default function Home() {
 
   useEffect(() => {
     const handlePopState = () => {
-      const hash = window.location.hash.replace('#', '') as View;
-      if (
-        ['radar', 'hustle', 'community', 'escrow', 'profile'].includes(hash)
-      ) {
+      const hash = window.location.hash.replace('#', '') as Exclude<
+        View,
+        'auth'
+      >;
+      if (VALID_VIEWS.includes(hash)) {
         setActiveView(hash);
       }
     };
@@ -572,7 +607,8 @@ export default function Home() {
       <AuthScreen
         onVerified={(p) => {
           setProfile(p);
-          setActiveView('radar');
+          // Push Kampus Kritic into the user's face immediately on login
+          setActiveView('kritic');
         }}
       />
     );
@@ -581,22 +617,27 @@ export default function Home() {
   const showSearch = activeView === 'hustle' || activeView === 'community';
   const unreadCount =
     dbNotifications.filter((n) => !n.read).length + sosNotifications.length;
+  const myName = profile
+    ? profile.username
+      ? `@${profile.username.replace(/^@/, '')}`
+      : profile.email.split('@')[0]
+    : 'student';
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#070A09] items-center">
-      <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-[#0B0F0E] ring-1 ring-white/[0.04]">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-ink items-center">
+      <div className="relative w-full max-w-[430px] h-[100dvh] flex flex-col overflow-hidden bg-midnight border-x border-gray-800">
         <WelcomeModal />
 
-        {/* Sticky Matte Header */}
-        <header className="sticky top-0 z-[1000] bg-[#0B0F0E]/85 backdrop-blur-xl border-b border-white/[0.05] px-4 py-3.5 flex items-center justify-between">
-          <span className="text-white font-semibold text-lg tracking-tight">
+        {/* Original Forest Green & Yellow Top Banner */}
+        <header className="sticky top-0 z-[1000] bg-midnight border-b border-gray-800 px-4 py-3.5 flex items-center justify-between shrink-0">
+          <span className="text-white font-black text-lg tracking-tight">
             {HEADER_TITLES[activeView]}
           </span>
           <div className="flex items-center gap-2.5">
             {isAdminUser && (
               <button
                 onClick={() => setShowAdmin(true)}
-                className="bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 font-medium text-[11px] tracking-tight px-3 py-1 rounded-full active:scale-[0.97] transition-all"
+                className="bg-surface border border-pine/40 text-pine font-bold text-[11px] tracking-tight px-3 py-1 rounded-full active:scale-95 transition-transform"
               >
                 Admin
               </button>
@@ -608,8 +649,8 @@ export default function Home() {
                 aria-label="Search"
                 className={`p-1.5 rounded-full transition-colors ${
                   searchOpen
-                    ? 'text-amber-300 bg-zinc-900 ring-1 ring-white/[0.08]'
-                    : 'text-zinc-400 hover:text-white'
+                    ? 'text-pine bg-surface border border-pine/40'
+                    : 'text-sage hover:text-white'
                 }`}
               >
                 <Search className="w-5 h-5" strokeWidth={1.75} />
@@ -618,7 +659,7 @@ export default function Home() {
             <button
               onClick={() => setChatInboxOpen(true)}
               aria-label="Messages"
-              className="relative p-1.5 text-zinc-400 hover:text-white transition-colors"
+              className="relative p-1.5 text-sage hover:text-white transition-colors"
             >
               <MessageCircle className="w-5 h-5" strokeWidth={1.75} />
             </button>
@@ -630,11 +671,11 @@ export default function Home() {
                 });
               }}
               aria-label="Toggle notifications"
-              className="relative p-1.5 text-zinc-400 hover:text-white transition-colors"
+              className="relative p-1.5 text-sage hover:text-white transition-colors"
             >
               <Bell className="w-5 h-5" strokeWidth={1.75} />
               {unreadCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-amber-400 text-zinc-950 rounded-full flex items-center justify-center text-[9px] font-bold">
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-pine text-black rounded-full flex items-center justify-center text-[9px] font-black">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -644,7 +685,7 @@ export default function Home() {
 
         {/* Expandable Search Bar */}
         {showSearch && searchOpen && (
-          <div className="px-4 py-2.5 bg-[#0B0F0E] border-b border-white/[0.05]">
+          <div className="px-4 py-2.5 bg-midnight border-b border-gray-800 shrink-0">
             <input
               autoFocus
               type="text"
@@ -655,7 +696,7 @@ export default function Home() {
                   ? 'Search gigs by title or seller...'
                   : 'Search posts by keyword...'
               }
-              className="w-full h-10 rounded-xl bg-zinc-900/80 ring-1 ring-white/[0.07] px-3.5 text-white placeholder:text-zinc-500 text-xs outline-none focus:ring-emerald-700/50 transition-all"
+              className="w-full h-10 rounded-xl bg-ink border border-gray-800 px-3.5 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors"
             />
           </div>
         )}
@@ -663,15 +704,15 @@ export default function Home() {
         {/* Notifications Popover */}
         {isNotifOpen && (
           <div className="absolute top-16 left-0 right-0 z-[1500] px-4">
-            <div className="bg-[#121816]/95 backdrop-blur-xl rounded-2xl ring-1 ring-white/[0.08] shadow-2xl flex flex-col gap-3 p-4 animate-slide-down">
-              <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
-                <span className="text-white font-semibold text-xs tracking-tight">
+            <div className="bg-surface rounded-2xl border border-gray-800 shadow-2xl flex flex-col gap-3 p-4 animate-slide-down">
+              <div className="flex items-center justify-between border-b border-gray-800 pb-2.5">
+                <span className="text-white font-black text-xs uppercase tracking-wider">
                   Notifications
                 </span>
                 <button
                   onClick={() => setIsNotifOpen(false)}
                   aria-label="Close"
-                  className="text-zinc-400 hover:text-white transition-colors"
+                  className="text-sage hover:text-white transition-colors"
                 >
                   <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
@@ -680,7 +721,7 @@ export default function Home() {
               <div className="flex flex-col gap-2.5 max-h-[60vh] overflow-y-auto no-scrollbar">
                 {sosNotifications.length === 0 &&
                 dbNotifications.length === 0 ? (
-                  <span className="text-zinc-500 text-xs py-4 text-center">
+                  <span className="text-sage text-xs py-4 text-center">
                     You&apos;re all caught up.
                   </span>
                 ) : (
@@ -688,19 +729,19 @@ export default function Home() {
                     {sosNotifications.map((n) => (
                       <div
                         key={n.id}
-                        className="flex items-start gap-3 p-3 bg-rose-950/30 rounded-xl ring-1 ring-rose-500/30"
+                        className="flex items-start gap-3 p-3 bg-red-950/30 rounded-xl border border-red-500/30"
                       >
-                        <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
                           <ShieldAlert
-                            className="w-4 h-4 text-rose-400"
+                            className="w-4 h-4 text-red-400"
                             strokeWidth={1.75}
                           />
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-rose-100 text-xs font-semibold leading-snug">
+                          <span className="text-white text-xs font-bold leading-snug">
                             {n.text}
                           </span>
-                          <span className="text-rose-400/70 text-[10px]">
+                          <span className="text-red-300 text-[10px]">
                             {n.time}
                           </span>
                         </div>
@@ -712,8 +753,8 @@ export default function Home() {
                         key={n.id}
                         className={`flex items-start gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${
                           !n.read
-                            ? 'bg-emerald-950/30 ring-1 ring-emerald-800/30'
-                            : 'hover:bg-white/[0.03]'
+                            ? 'bg-ink border border-pine/30'
+                            : 'hover:bg-ink/60'
                         }`}
                         onClick={() => {
                           if (n.type === 'message') {
@@ -725,27 +766,27 @@ export default function Home() {
                           }
                         }}
                       >
-                        <div className="w-8 h-8 rounded-full bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
                           {n.type === 'message' ? (
                             <MessageCircle
-                              className="w-4 h-4 text-amber-300"
+                              className="w-4 h-4 text-pine"
                               strokeWidth={1.75}
                             />
                           ) : (
                             <MessageSquare
-                              className="w-4 h-4 text-emerald-400"
+                              className="w-4 h-4 text-pine"
                               strokeWidth={1.75}
                             />
                           )}
                         </div>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-zinc-100 text-xs font-semibold leading-snug">
+                          <span className="text-white text-xs font-bold leading-snug">
                             {n.title}
                           </span>
-                          <span className="text-zinc-400 text-xs leading-snug">
+                          <span className="text-sage text-xs leading-snug">
                             {n.body}
                           </span>
-                          <span className="text-zinc-500 text-[10px]">
+                          <span className="text-sage/70 text-[10px]">
                             {timeAgo(n.created_at)}
                           </span>
                         </div>
@@ -759,7 +800,15 @@ export default function Home() {
         )}
 
         {/* Main Viewport */}
-        <main className="flex-1 relative overflow-y-auto overscroll-y-contain pb-32">
+        <main className="flex-1 relative flex flex-col overflow-y-auto overscroll-y-contain pb-28">
+          {activeView === 'kritic' && (
+            <KampusKritic
+              profile={profile}
+              onProfileUpdate={(updated) => setProfile(updated)}
+              onOpenTerms={() => setLegalModal('terms')}
+            />
+          )}
+
           {activeView === 'radar' && (
             <div className="absolute inset-0">
               <RadarMap
@@ -772,18 +821,18 @@ export default function Home() {
 
               {activeSosAlerts.filter((a) => a.active).length === 0 && (
                 <div className="absolute top-4 left-4 right-4 z-[500] pointer-events-none">
-                  <div className="bg-zinc-900/75 backdrop-blur-md rounded-2xl ring-1 ring-white/[0.07] p-3.5 flex items-center gap-3 shadow-lg">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center shrink-0">
+                  <div className="bg-surface/95 backdrop-blur-md rounded-2xl border border-gray-800 p-3.5 flex items-center gap-3 shadow-lg">
+                    <div className="w-9 h-9 rounded-xl bg-ink border border-pine/40 flex items-center justify-center shrink-0">
                       <ShieldCheck
-                        className="w-4 h-4 text-emerald-400"
+                        className="w-4 h-4 text-pine"
                         strokeWidth={1.75}
                       />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-zinc-100 text-xs font-semibold tracking-tight">
+                      <span className="text-white text-xs font-bold tracking-tight">
                         No active emergencies reported nearby
                       </span>
-                      <span className="text-zinc-400 text-[11px]">
+                      <span className="text-sage text-[11px]">
                         Campus radar is clear
                       </span>
                     </div>
@@ -798,13 +847,13 @@ export default function Home() {
                     setIsSosModalOpen(true);
                   }}
                   aria-label="Campus SOS — request help"
-                  className="h-13 w-13 p-3.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white shadow-lg ring-4 ring-rose-500/20 flex items-center justify-center active:scale-[0.96] transition-all"
+                  className="h-13 w-13 p-3.5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all"
                 >
                   <ShieldAlert className="w-5 h-5" strokeWidth={2} />
                 </button>
                 <button
                   onClick={() => setIsReportModalOpen(true)}
-                  className="h-13 w-13 p-3.5 rounded-full bg-amber-400 hover:bg-amber-300 text-zinc-950 flex items-center justify-center active:scale-[0.96] transition-all shadow-lg"
+                  className="h-13 w-13 p-3.5 rounded-full bg-pine text-black flex items-center justify-center active:scale-95 transition-all shadow-lg"
                   aria-label="Drop new hazard pin"
                 >
                   <Plus className="w-5 h-5" strokeWidth={2.5} />
@@ -813,50 +862,56 @@ export default function Home() {
 
               {activeHelpCard && (
                 <div className="absolute bottom-48 left-4 right-4 z-[1001]">
-                  <div className="bg-rose-950/90 ring-1 ring-rose-500/40 rounded-2xl p-4 backdrop-blur-md shadow-xl flex flex-col gap-3 animate-slide-up">
+                  <div className="bg-surface border border-red-500/40 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-slide-up">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping inline-block" />
-                        <span className="text-rose-200 font-semibold text-xs tracking-tight">
+                        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                        <span className="text-red-400 font-bold text-xs">
                           Active SOS Beacon
                         </span>
                       </div>
                       <button
                         onClick={handleDismissHelpCard}
-                        className="text-rose-300 hover:text-white transition-colors"
+                        className="text-sage hover:text-white transition-colors"
                       >
                         <X className="w-4 h-4" strokeWidth={1.75} />
                       </button>
                     </div>
 
-                    <p className="text-zinc-100 text-xs leading-relaxed">
+                    <p className="text-white text-xs leading-relaxed">
                       Your SOS beacon is live. Verified students within{' '}
-                      <span className="text-rose-200 font-semibold">1km</span>{' '}
-                      have been alerted.
+                      <span className="text-pine font-bold">1km</span> have been
+                      alerted.
                     </p>
 
                     <div className="grid grid-cols-2 gap-2">
                       <a
                         href="tel:+26735523962"
-                        className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-rose-900/60 ring-1 ring-rose-500/30 text-white text-xs font-medium active:scale-[0.98] transition-transform"
+                        className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-ink border border-gray-800 text-white text-xs font-bold active:scale-95 transition-transform"
                       >
-                        <Phone className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        <Phone
+                          className="w-3.5 h-3.5 text-pine"
+                          strokeWidth={1.75}
+                        />
                         UB Protection
                       </a>
                       <a
                         href="tel:+26739530622"
-                        className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-rose-900/60 ring-1 ring-rose-500/30 text-white text-xs font-medium active:scale-[0.98] transition-transform"
+                        className="flex items-center justify-center gap-1.5 h-9 rounded-xl bg-ink border border-gray-800 text-white text-xs font-bold active:scale-95 transition-transform"
                       >
-                        <Phone className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        <Phone
+                          className="w-3.5 h-3.5 text-pine"
+                          strokeWidth={1.75}
+                        />
                         BAC Security
                       </a>
                     </div>
 
                     <button
                       onClick={handleDismissHelpCard}
-                      className="w-full h-9 rounded-xl bg-zinc-950/50 ring-1 ring-white/10 text-rose-200 text-xs font-medium active:scale-[0.98] transition-transform"
+                      className="w-full h-9 rounded-xl bg-ink border border-gray-800 text-red-300 text-xs font-bold active:scale-95 transition-transform"
                     >
-                      I&apos;m Safe — Deactivate Beacon
+                      I am Safe — Deactivate Beacon
                     </button>
                   </div>
                 </div>
@@ -888,6 +943,7 @@ export default function Home() {
           {activeView === 'profile' && (
             <ProfileScreen
               profile={profile}
+              onProfileUpdate={(updated) => setProfile(updated)}
               onDisconnect={handleSignOut}
               onOpenSubscription={() => setIsSubscriptionOpen(true)}
               onOpenAdminQueue={() => setAdminQueueOpen(true)}
@@ -902,21 +958,21 @@ export default function Home() {
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setIsReportModalOpen(false)}
             />
-            <div className="relative w-full bg-[#121816] ring-1 ring-white/[0.08] rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between shrink-0">
-                <span className="text-white font-semibold tracking-tight text-base">
+                <span className="text-white font-black text-base">
                   Report Campus Hazard
                 </span>
                 <button
                   onClick={() => setIsReportModalOpen(false)}
-                  className="w-8 h-8 rounded-full bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white"
+                  className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center text-sage hover:text-white"
                 >
                   <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
 
               <div className="flex flex-col gap-2 shrink-0">
-                <span className="text-zinc-400 text-xs font-medium">
+                <span className="text-sage text-xs font-bold uppercase tracking-wider">
                   Hazard Type
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -924,10 +980,10 @@ export default function Home() {
                     <button
                       key={cat}
                       onClick={() => setHazardCategory(cat)}
-                      className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+                      className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
                         hazardCategory === cat
-                          ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-700/50 font-semibold'
-                          : 'bg-zinc-900/80 ring-1 ring-white/[0.06] text-zinc-400'
+                          ? 'bg-pine text-black'
+                          : 'bg-ink border border-gray-800 text-sage'
                       }`}
                     >
                       {cat}
@@ -938,12 +994,12 @@ export default function Home() {
 
               <div className="flex items-center gap-2 shrink-0">
                 <div
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium ${
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${
                     geoStatus === 'locked'
-                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/40'
+                      ? 'bg-ink text-pine border border-pine/40'
                       : geoStatus === 'denied'
-                      ? 'bg-rose-950/60 text-rose-300 border border-rose-800/40'
-                      : 'bg-zinc-900 text-zinc-400 ring-1 ring-white/[0.06]'
+                      ? 'bg-red-950/60 text-red-300 border border-red-800/40'
+                      : 'bg-ink text-sage border border-gray-800'
                   }`}
                 >
                   <Lock className="w-3 h-3" strokeWidth={1.75} />
@@ -956,7 +1012,7 @@ export default function Home() {
                     : 'Locks to live GPS'}
                 </div>
                 {liveCoords && geoStatus === 'locked' && (
-                  <span className="text-zinc-500 text-[11px] font-mono">
+                  <span className="text-sage text-[11px] font-mono">
                     {liveCoords[0].toFixed(4)}, {liveCoords[1].toFixed(4)}
                   </span>
                 )}
@@ -966,7 +1022,7 @@ export default function Home() {
                 <button
                   onClick={handleDropPin}
                   disabled={geoStatus === 'locating'}
-                  className="w-full h-11 rounded-xl bg-amber-400 text-zinc-950 hover:bg-amber-300 font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50"
+                  className="w-full h-11 rounded-xl bg-pine text-black font-black text-sm active:scale-95 transition-all disabled:opacity-50"
                 >
                   {geoStatus === 'locating'
                     ? 'Locking GPS...'
@@ -974,7 +1030,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setIsReportModalOpen(false)}
-                  className="w-full h-10 text-zinc-400 hover:text-white font-medium text-xs transition-colors"
+                  className="w-full h-10 text-sage hover:text-white font-bold text-xs transition-colors"
                 >
                   Cancel
                 </button>
@@ -992,65 +1048,65 @@ export default function Home() {
                 if (sosGeoStatus !== 'broadcasting') setIsSosModalOpen(false);
               }}
             />
-            <div className="relative w-full bg-[#140C0E] ring-1 ring-rose-500/30 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="relative w-full bg-surface border-t border-red-500/40 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-5 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
                     <ShieldAlert
-                      className="w-5 h-5 text-rose-400"
+                      className="w-5 h-5 text-red-400"
                       strokeWidth={1.75}
                     />
                   </div>
-                  <span className="text-white font-semibold text-base tracking-tight">
+                  <span className="text-white font-black text-base">
                     Emergency Broadcast
                   </span>
                 </div>
                 {sosGeoStatus !== 'broadcasting' && (
                   <button
                     onClick={() => setIsSosModalOpen(false)}
-                    className="text-zinc-400 hover:text-white transition-colors"
+                    className="text-sage hover:text-white transition-colors"
                   >
                     <X className="w-5 h-5" strokeWidth={1.75} />
                   </button>
                 )}
               </div>
 
-              <p className="text-zinc-300 text-xs leading-relaxed shrink-0">
+              <p className="text-sage text-xs leading-relaxed shrink-0">
                 This alerts verified students within{' '}
-                <span className="text-rose-300 font-semibold">1km</span> of your
-                live coordinates and places an active SOS beacon on the radar.
+                <span className="text-white font-bold">1km</span> of your live
+                coordinates and places an active SOS beacon on the radar.
               </p>
 
               <div className="flex flex-col gap-2 shrink-0">
-                <span className="text-zinc-400 text-xs font-medium">
+                <span className="text-sage text-xs font-bold uppercase tracking-wider">
                   Campus Security Direct Lines
                 </span>
                 <div className="flex flex-col gap-2">
                   <a
                     href="tel:+26735523962"
-                    className="w-full flex items-center justify-between px-4 h-11 rounded-xl bg-zinc-900/80 ring-1 ring-white/[0.07] text-white text-xs font-medium active:scale-[0.98] transition-transform"
+                    className="w-full flex items-center justify-between px-4 h-11 rounded-xl bg-ink border border-gray-800 text-white text-xs font-bold active:scale-95 transition-transform"
                   >
                     <div className="flex items-center gap-2.5">
                       <Phone
-                        className="w-4 h-4 text-rose-400"
+                        className="w-4 h-4 text-pine"
                         strokeWidth={1.75}
                       />
                       <span>UB Protection</span>
                     </div>
-                    <span className="text-zinc-300 font-mono">355 2396</span>
+                    <span className="text-pine font-mono">355 2396</span>
                   </a>
                   <a
                     href="tel:+26739530622"
-                    className="w-full flex items-center justify-between px-4 h-11 rounded-xl bg-zinc-900/80 ring-1 ring-white/[0.07] text-white text-xs font-medium active:scale-[0.98] transition-transform"
+                    className="w-full flex items-center justify-between px-4 h-11 rounded-xl bg-ink border border-gray-800 text-white text-xs font-bold active:scale-95 transition-transform"
                   >
                     <div className="flex items-center gap-2.5">
                       <Phone
-                        className="w-4 h-4 text-rose-400"
+                        className="w-4 h-4 text-pine"
                         strokeWidth={1.75}
                       />
                       <span>BAC Security</span>
                     </div>
-                    <span className="text-zinc-300 font-mono">395 3062</span>
+                    <span className="text-pine font-mono">395 3062</span>
                   </a>
                 </div>
               </div>
@@ -1060,7 +1116,7 @@ export default function Home() {
                 disabled={
                   sosGeoStatus === 'locating' || sosGeoStatus === 'broadcasting'
                 }
-                className="w-full h-12 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 shrink-0"
+                className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-sm active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2 shrink-0"
               >
                 {(sosGeoStatus === 'locating' ||
                   sosGeoStatus === 'broadcasting') && (
@@ -1086,48 +1142,48 @@ export default function Home() {
               className="absolute inset-0 bg-black/70 backdrop-blur-sm"
               onClick={() => setOpenHazard(null)}
             />
-            <div className="relative w-full bg-[#121816] ring-1 ring-white/[0.08] rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
+            <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up max-h-[85dvh] overflow-y-auto no-scrollbar">
               <div className="flex items-center justify-between shrink-0">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-white font-semibold tracking-tight text-base">
+                  <span className="text-white font-black text-base">
                     {openHazard.category}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <MapPin
-                      className="w-3.5 h-3.5 text-amber-300"
+                      className="w-3.5 h-3.5 text-pine"
                       strokeWidth={1.75}
                     />
-                    <span className="text-zinc-400 text-xs">
+                    <span className="text-sage text-xs">
                       {openHazard.label}
                     </span>
                   </div>
                 </div>
                 <button
                   onClick={() => setOpenHazard(null)}
-                  className="w-8 h-8 rounded-full bg-zinc-900 ring-1 ring-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white"
+                  className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center text-sage hover:text-white"
                 >
                   <X className="w-4 h-4" strokeWidth={1.75} />
                 </button>
               </div>
 
               <div className="flex items-center justify-between shrink-0">
-                <span className="text-zinc-400 text-xs">
+                <span className="text-sage text-xs">
                   Reported {openHazard.time}
                 </span>
                 {openHazard.lockedToLive && (
-                  <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
+                  <div className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold bg-ink text-pine border border-pine/40">
                     <Lock className="w-3 h-3" strokeWidth={1.75} />
                     Live GPS Verified
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-between bg-zinc-950/70 p-3.5 rounded-2xl ring-1 ring-white/[0.06] shrink-0">
+              <div className="flex items-center justify-between bg-ink p-3.5 rounded-2xl border border-gray-800 shrink-0">
                 <div className="flex flex-col">
-                  <span className="text-zinc-100 text-xs font-semibold">
+                  <span className="text-white text-xs font-bold">
                     Was this pin helpful?
                   </span>
-                  <span className="text-zinc-500 text-[11px]">
+                  <span className="text-sage text-[11px]">
                     Confirm accuracy for other students
                   </span>
                 </div>
@@ -1167,17 +1223,20 @@ export default function Home() {
                       description: 'Thanks for keeping campus informed.',
                     });
                   }}
-                  className="flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 px-3.5 py-2 rounded-xl text-xs font-medium active:scale-[0.97] transition-all"
+                  className="flex items-center gap-1.5 bg-pine text-black px-3.5 py-2 rounded-xl text-xs font-black active:scale-95 transition-all"
                 >
-                  <ThumbsUp className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <ThumbsUp className="w-3.5 h-3.5" strokeWidth={2} />
                   <span>Helpful ({openHazard.upvotes || 0})</span>
                 </button>
               </div>
 
-              <div className="pt-2 border-t border-white/[0.06] shrink-0">
+              <div className="pt-2 border-t border-gray-800 shrink-0">
                 <CommentThread
                   comments={openHazard.comments}
                   onAdd={addHazardComment}
+                  currentUserId={profile?.id}
+                  isAnonymousPost={false}
+                  myName={myName}
                   onAuthorClick={(username, id) => {
                     setProfileUser(username);
                     setProfileUserId(id || '');
@@ -1201,18 +1260,18 @@ export default function Home() {
           />
         )}
 
-        {/* Subtle Legal Footer Bar */}
-        <footer className="absolute bottom-[max(68px,calc(68px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-[#0B0F0E]/80 backdrop-blur-md border-t border-white/[0.04] px-4 py-2 flex items-center justify-center gap-4">
+        {/* Legal Footer Bar */}
+        <footer className="absolute bottom-[max(64px,calc(64px+env(safe-area-inset-bottom)))] left-0 right-0 z-[500] bg-midnight/95 border-t border-gray-800 px-4 py-1.5 flex items-center justify-center gap-4">
           <button
             onClick={() => setLegalModal('terms')}
-            className="text-zinc-500 text-[10px] font-medium hover:text-zinc-300 transition-colors"
+            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
           >
             Terms of Service
           </button>
-          <span className="text-zinc-800 text-[10px]">·</span>
+          <span className="text-gray-700 text-[10px]">·</span>
           <button
             onClick={() => setLegalModal('privacy')}
-            className="text-zinc-500 text-[10px] font-medium hover:text-zinc-300 transition-colors"
+            className="text-sage text-[10px] font-bold hover:text-pine transition-colors"
           >
             Privacy Policy
           </button>
