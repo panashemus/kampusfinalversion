@@ -1,690 +1,1115 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
-  FileCheck2,
-  Presentation,
-  FlaskConical,
-  MailCheck,
-  Award,
+  Send,
+  ImagePlus,
+  History,
+  Plus,
+  X,
   Lock,
   Check,
   Copy,
   Loader as Loader2,
-  X,
   CreditCard,
   Wallet,
-  AlertTriangle,
-  CheckCircle2,
-  UploadCloud,
+  GraduationCap,
+  BookOpen,
+  Info,
+  Trash2,
+  FileText,
+  ChevronRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { uploadImages } from '@/lib/payment';
+import { classifyUniversity, timeAgo } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 
-type AuditMode = 'essay' | 'lab' | 'slides' | 'email';
-
-type AuditResult = {
-  overall_score: number;
-  ai_probability: string;
-  benchmark_citation: string;
-  summary_verdict: string;
-  critical_issues: string[];
-  polished_rewrite: string;
-  rubric_breakdown: { criterion: string; score: string; note: string }[];
+type KriticMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  images: string[];
+  benchmark_used?: string;
+  created_at: string;
 };
 
-const MODES: { id: AuditMode; label: string; icon: typeof FileCheck2; desc: string }[] = [
-  {
-    id: 'essay',
-    label: 'Assignment Audit',
-    icon: FileCheck2,
-    desc: 'Harvard/APA citations, AI-tone humanizer & rubric grading',
-  },
-  {
-    id: 'lab',
-    label: 'Lab & Math Sanity',
-    icon: FlaskConical,
-    desc: 'Units, formulas, dimensional analysis & methodology check',
-  },
-  {
-    id: 'slides',
-    label: 'Slide Deck + Script',
-    icon: Presentation,
-    desc: 'Converts rough notes into slide bullets + 2-min speaker script',
-  },
-  {
-    id: 'email',
-    label: 'Lecturer Dispute',
-    icon: MailCheck,
-    desc: 'Diplomatic CA remark requests, extensions & formal emails',
-  },
+type KriticChatSession = {
+  id: string;
+  title: string;
+  course_code: string;
+  university: string;
+  created_at: string;
+  messages: KriticMessage[];
+};
+
+const QUICK_STARTERS = [
+  'Audit my assignment draft against 85%+ course benchmarks',
+  'Check my Harvard citations and Turnitin AI tone risk',
+  'Verify my lab calculations, units, and methodology',
+  'Convert my notes into presentation slides and a speaker script',
 ];
 
 export default function KampusKritic({
   profile,
-  onClose,
+  onProfileUpdate,
+  onOpenTerms,
 }: {
   profile: Profile | null;
-  onClose: () => void;
+  onProfileUpdate?: (updated: Profile) => void;
+  onOpenTerms?: () => void;
 }) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'audit' | 'contribute'>('audit');
 
-  // Audit State
-  const [institution, setInstitution] = useState<'UB' | 'BAC'>('UB');
-  const [courseCode, setCourseCode] = useState('');
-  const [mode, setMode] = useState<AuditMode>('essay');
-  const [draftText, setDraftText] = useState('');
-  const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<AuditResult | null>(null);
+  const schoolInfo = classifyUniversity(profile?.email || profile?.university);
+  const displayUsername =
+    profile?.username?.replace(/^@/, '') ||
+    profile?.email?.split('@')[0] ||
+    'Student';
 
-  // Micro-transaction Unlock State (P15)
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [showUnlockCheckout, setShowUnlockCheckout] = useState(false);
+  // Course state synced with Profile
+  const [courseInput, setCourseInput] = useState(profile?.course_code || '');
+  const [isEditingCourse, setIsEditingCourse] = useState(!profile?.course_code);
+  const [savingCourse, setSavingCourse] = useState(false);
+
+  // Chat & History State
+  const [sessions, setSessions] = useState<KriticChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<KriticMessage[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showIntroBanner, setShowIntroBanner] = useState(true);
+
+  // Composer State
+  const [input, setInput] = useState('');
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  // Paywall State (1 Free Prompt -> P50/month Unlimited)
+  const [promptsUsed, setPromptsUsed] = useState<number>(
+    profile?.kritic_prompts_used ?? 0
+  );
   const [payMethod, setPayMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
-  const [refCode, setRefCode] = useState('');
-  const [txId, setTxId] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [unlocking, setUnlocking] = useState(false);
+  const [referenceCode, setReferenceCode] = useState('');
+  const [paymentRefId, setPaymentRefId] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedNum, setCopiedNum] = useState(false);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
-  // Contributor Vault State (For 80%+ Final Years)
-  const [contribCourse, setContribCourse] = useState('');
-  const [contribFaculty, setContribFaculty] = useState('Computing & IS');
-  const [contribGrade, setContribGrade] = useState('');
-  const [contribEwallet, setContribEwallet] = useState(profile?.ewallet_number ?? '');
-  const [contribTitle, setContribTitle] = useState('');
-  const [contribContent, setContribContent] = useState('');
-  const [submittingContrib, setSubmittingContrib] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const isFreeUnlocked = !!profile?.is_admin || !!profile?.is_premium;
+  const hasUnlimited =
+    Boolean(profile?.is_admin) ||
+    Boolean(profile?.kritic_unlimited) ||
+    (Boolean(profile?.kritic_sub_until) &&
+      new Date(profile!.kritic_sub_until!) > new Date());
 
-  const handleRunAudit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (draftText.trim().length < 20) {
+  const isLockedByPaywall = !hasUnlimited && promptsUsed >= 1;
+
+  useEffect(() => {
+    setReferenceCode(`KRT-${Math.floor(1000 + Math.random() * 9000)}`);
+  }, []);
+
+  useEffect(() => {
+    if (profile?.course_code) {
+      setCourseInput(profile.course_code);
+      setIsEditingCourse(false);
+    }
+    if (typeof profile?.kritic_prompts_used === 'number') {
+      setPromptsUsed(profile.kritic_prompts_used);
+    }
+  }, [profile?.course_code, profile?.kritic_prompts_used]);
+
+  // Load saved chat history from localStorage + Supabase
+  useEffect(() => {
+    if (!profile?.id) return;
+    const storageKey = `kampus_kritic_sessions_${profile.id}`;
+    const usedKey = `kampus_kritic_used_${profile.id}`;
+
+    const localUsed = Number(localStorage.getItem(usedKey) || '0');
+    if (localUsed > (profile.kritic_prompts_used || 0)) {
+      setPromptsUsed(localUsed);
+    }
+
+    const savedRaw = localStorage.getItem(storageKey);
+    if (savedRaw) {
+      try {
+        const parsed = JSON.parse(savedRaw) as KriticChatSession[];
+        setSessions(parsed);
+        if (parsed.length > 0) {
+          setActiveSessionId(parsed[0].id);
+          setMessages(parsed[0].messages || []);
+        }
+      } catch {
+        // Ignore malformed cache
+      }
+    }
+
+    // Sync with Supabase tables if migrated
+    (async () => {
+      try {
+        const { data: chatRows } = await supabase
+          .from('kritic_chats')
+          .select('*')
+          .eq('user_id', profile.id)
+          .order('updated_at', { ascending: false })
+          .limit(25);
+
+        if (chatRows && chatRows.length > 0) {
+          const chatIds = chatRows.map((c: any) => c.id);
+          const { data: msgRows } = await supabase
+            .from('kritic_messages')
+            .select('*')
+            .in('chat_id', chatIds)
+            .order('created_at', { ascending: true });
+
+          const hydrated: KriticChatSession[] = chatRows.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            course_code: c.course_code || profile.course_code || 'GENERAL',
+            university: c.university || schoolInfo.code,
+            created_at: c.created_at,
+            messages: (msgRows || [])
+              .filter((m: any) => m.chat_id === c.id)
+              .map((m: any) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                images: m.images || [],
+                benchmark_used: m.benchmark_used,
+                created_at: m.created_at,
+              })),
+          }));
+
+          setSessions(hydrated);
+          localStorage.setItem(storageKey, JSON.stringify(hydrated));
+          if (!activeSessionId && hydrated.length > 0) {
+            setActiveSessionId(hydrated[0].id);
+            setMessages(hydrated[0].messages);
+          }
+        }
+      } catch {
+        // Fallback to localStorage sessions
+      }
+    })();
+  }, [profile?.id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, sending]);
+
+  const persistSessions = (updated: KriticChatSession[]) => {
+    setSessions(updated);
+    if (profile?.id) {
+      localStorage.setItem(
+        `kampus_kritic_sessions_${profile.id}`,
+        JSON.stringify(updated)
+      );
+    }
+  };
+
+  const handleSaveCourse = async () => {
+    const clean = courseInput.trim().toUpperCase();
+    if (!clean || !profile) return;
+    setSavingCourse(true);
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ course_code: clean, university: schoolInfo.fullName })
+      .eq('id', profile.id)
+      .select()
+      .maybeSingle();
+
+    setSavingCourse(false);
+    setIsEditingCourse(false);
+
+    if (!error && data && onProfileUpdate) {
+      onProfileUpdate(data as Profile);
+    } else if (onProfileUpdate) {
+      onProfileUpdate({
+        ...profile,
+        course_code: clean,
+        university: schoolInfo.fullName,
+      });
+    }
+
+    toast({
+      title: 'Course Configured',
+      description: `Kampus Kritic is now calibrated for ${clean} at ${schoolInfo.code}.`,
+    });
+  };
+
+  const handleFilesSelected = async (files: File[]) => {
+    if (!files.length) return;
+    setUploadingImage(true);
+
+    try {
+      // Convert to base64 data URLs for instant AI vision + upload to storage
+      const base64Promises = files.map(
+        (file) =>
+          new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.readAsDataURL(file);
+          })
+      );
+      const dataUrls = await Promise.all(base64Promises);
+      setPendingImages((prev) => [...prev, ...dataUrls]);
+
+      if (profile?.id) {
+        uploadImages(files, profile.id).catch(() => {});
+      }
+    } catch {
       toast({
-        title: 'Draft too short',
-        description: 'Paste at least a paragraph or problem prompt to audit.',
+        title: 'Image attachment error',
+        description: 'Could not read the selected image.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const f = items[i].getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      handleFilesSelected(files);
+      toast({
+        title: 'Image Attached',
+        description: `${files.length} screenshot(s) ready for Kritic analysis.`,
+      });
+    }
+  };
+
+  const startNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setShowHistory(false);
+  };
+
+  const deleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const filtered = sessions.filter((s) => s.id !== id);
+    persistSessions(filtered);
+    if (activeSessionId === id) {
+      setActiveSessionId(filtered[0]?.id || null);
+      setMessages(filtered[0]?.messages || []);
+    }
+    try {
+      await supabase.from('kritic_chats').delete().eq('id', id);
+    } catch {
+      // Ignore if not in DB
+    }
+  };
+
+  const handleSend = async (customPrompt?: string) => {
+    const textToSend = (customPrompt ?? input).trim();
+    if ((!textToSend && pendingImages.length === 0) || sending) return;
+
+    if (isLockedByPaywall) {
+      toast({
+        title: 'Free Trial Completed',
+        description: 'Unlock Kampus Kritic Unlimited (P50/mo) to continue auditing.',
         variant: 'destructive',
       });
       return;
     }
 
-    setScanning(true);
-    setResult(null);
-    const generatedRef = `KRT-${Math.floor(1000 + Math.random() * 9000)}`;
-    setRefCode(generatedRef);
-    setIsUnlocked(isFreeUnlocked);
+    const attachedImages = [...pendingImages];
+    setInput('');
+    setPendingImages([]);
+    setSending(true);
+
+    const userMsg: KriticMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: textToSend || 'Attached image for academic review.',
+      images: attachedImages,
+      created_at: new Date().toISOString(),
+    };
+
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+
+    let currentSessionId = activeSessionId;
+    const sessionTitle =
+      textToSend.slice(0, 48) ||
+      `${courseInput || schoolInfo.code} Image Audit`;
+
+    if (!currentSessionId) {
+      currentSessionId = crypto.randomUUID
+        ? crypto.randomUUID()
+        : `chat-${Date.now()}`;
+      setActiveSessionId(currentSessionId);
+
+      if (profile?.id) {
+        try {
+          await supabase.from('kritic_chats').insert({
+            id: currentSessionId,
+            user_id: profile.id,
+            title: sessionTitle,
+            course_code: courseInput || 'GENERAL',
+            university: schoolInfo.code,
+          });
+        } catch {
+          // Handled by local sync
+        }
+      }
+    }
+
+    if (profile?.id) {
+      try {
+        await supabase.from('kritic_messages').insert({
+          chat_id: currentSessionId,
+          user_id: profile.id,
+          role: 'user',
+          content: userMsg.content,
+          images: attachedImages,
+        });
+      } catch {
+        // Handled by local sync
+      }
+    }
 
     try {
       const res = await fetch('/api/kritic-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          institution,
-          courseCode: courseCode.trim().toUpperCase() || 'GENERAL',
-          mode,
-          draftText: draftText.trim(),
+          promptText: textToSend,
+          images: attachedImages,
+          history: updatedMessages,
+          email: profile?.email,
+          username: displayUsername,
+          university: schoolInfo.fullName,
+          courseCode: courseInput || profile?.course_code || 'GENERAL',
         }),
       });
 
       const data = await res.json();
-      setResult(data as AuditResult);
+      const assistantMsg: KriticMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content:
+          data.reply ||
+          'Audit complete. Please review the structural deductions above.',
+        images: [],
+        benchmark_used: data.benchmark_used,
+        created_at: new Date().toISOString(),
+      };
+
+      const finalMessages = [...updatedMessages, assistantMsg];
+      setMessages(finalMessages);
+
+      // Increment prompt usage count (enforces the 1-free-prompt trial)
+      const nextUsed = promptsUsed + 1;
+      setPromptsUsed(nextUsed);
+      if (profile?.id) {
+        localStorage.setItem(
+          `kampus_kritic_used_${profile.id}`,
+          String(nextUsed)
+        );
+        await supabase
+          .from('profiles')
+          .update({ kritic_prompts_used: nextUsed })
+          .eq('id', profile.id);
+        if (onProfileUpdate && profile) {
+          onProfileUpdate({ ...profile, kritic_prompts_used: nextUsed });
+        }
+      }
+
+      // Persist session in history
+      const existingIdx = sessions.findIndex((s) => s.id === currentSessionId);
+      let nextSessions: KriticChatSession[];
+      if (existingIdx >= 0) {
+        nextSessions = sessions.map((s, idx) =>
+          idx === existingIdx ? { ...s, messages: finalMessages } : s
+        );
+      } else {
+        nextSessions = [
+          {
+            id: currentSessionId!,
+            title: sessionTitle,
+            course_code: courseInput || 'GENERAL',
+            university: schoolInfo.code,
+            created_at: new Date().toISOString(),
+            messages: finalMessages,
+          },
+          ...sessions,
+        ];
+      }
+      persistSessions(nextSessions);
+
+      if (profile?.id) {
+        try {
+          await supabase.from('kritic_messages').insert({
+            chat_id: currentSessionId,
+            user_id: profile.id,
+            role: 'assistant',
+            content: assistantMsg.content,
+            benchmark_used: assistantMsg.benchmark_used,
+          });
+        } catch {
+          // Local storage already updated
+        }
+      }
     } catch {
       toast({
-        title: 'Scan error',
-        description: 'Could not complete audit. Please try again.',
+        title: 'Connection Error',
+        description: 'Failed to reach Kampus Kritic engine. Please try again.',
         variant: 'destructive',
       });
     } finally {
-      setScanning(false);
+      setSending(false);
     }
   };
 
-  const handleConfirmUnlock = async () => {
-    if (txId.trim().length < 4) return;
-    setUnlocking(true);
+  const handleUnlockUnlimited = async () => {
+    if (!profile || paymentRefId.trim().length < 4) return;
+    setSubmittingPayment(true);
 
-    if (profile?.id) {
-      await supabase.from('kritic_audits').insert({
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          kritic_unlimited: true,
+          is_premium: true,
+          kritic_sub_until: nextMonth.toISOString(),
+          Subscribed_until: nextMonth.toISOString(),
+          tier: 'kritic_unlimited',
+          payment_ref_code: referenceCode,
+          payment_ref_id: paymentRefId.trim(),
+        })
+        .eq('id', profile.id);
+
+      await supabase.from('payments').insert({
         user_id: profile.id,
-        course_code: courseCode.trim().toUpperCase() || 'GENERAL',
-        audit_mode: mode,
-        reference_code: refCode,
-        payment_ref_id: txId.trim(),
-        is_unlocked: true,
-        overall_score: result?.overall_score ?? 80,
+        amount: 50,
+        reference_code: referenceCode,
+        payment_ref_id: paymentRefId.trim(),
+        feature: 'kritic_unlimited_p50',
+        status: 'pending',
       });
-    }
 
-    setTimeout(() => {
-      setUnlocking(false);
-      setIsUnlocked(true);
-      setShowUnlockCheckout(false);
+      if (onProfileUpdate) {
+        onProfileUpdate({
+          ...profile,
+          kritic_unlimited: true,
+          is_premium: true,
+          kritic_sub_until: nextMonth.toISOString(),
+        });
+      }
+
       toast({
-        title: 'Full Kritic Audit Unlocked ',
-        description: 'Your benchmark fixes and polished output are ready.',
+        title: 'Kampus Kritic Unlimited Activated',
+        description: `Ref ${referenceCode} logged. You now have full access.`,
       });
-    }, 800);
+    } catch {
+      toast({
+        title: 'Verification Logged',
+        description: 'Your reference has been submitted for activation.',
+      });
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
-  const handleContributorSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contribCourse.trim() || !contribGrade.trim() || !contribContent.trim()) return;
-    setSubmittingContrib(true);
-
-    const handle = profile?.username
-      ? `@${profile.username}`
-      : profile?.email?.split('@')[0] || 'scholar';
-
-    const { error } = await supabase.from('academic_contributors').insert({
-      user_id: profile?.id ?? null,
-      student_handle: handle,
-      institution,
-      faculty: contribFaculty,
-      course_code: contribCourse.trim().toUpperCase(),
-      grade_achieved: contribGrade.trim(),
-      ewallet_number: contribEwallet.trim(),
-      sample_title: contribTitle.trim() || 'Distinction Benchmark',
-      methodology_notes: contribContent.trim(),
-    });
-
-    setSubmittingContrib(false);
-
-    if (error) {
-      toast({
-        title: 'Saved Locally',
-        description: 'Run the SQL migration in Supabase to persist contributor rows.',
-      });
+  const copyText = (text: string, isCode: boolean) => {
+    navigator.clipboard.writeText(text);
+    if (isCode) {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
     } else {
-      toast({
-        title: 'Benchmark Submitted to Vault ',
-        description: 'Once verified, you earn royalties every time your course benchmark is used.',
-      });
-      setContribCourse('');
-      setContribGrade('');
-      setContribTitle('');
-      setContribContent('');
+      setCopiedNum(true);
+      setTimeout(() => setCopiedNum(false), 2000);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[6000] flex items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-[430px] h-[100dvh] sm:h-[90dvh] bg-midnight sm:rounded-3xl border border-gray-800 flex flex-col overflow-hidden shadow-2xl animate-slide-up">
-        {/* Header */}
-        <div className="px-5 py-4 bg-surface border-b border-gray-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shadow-[0_0_12px_rgba(255,222,77,0.2)]">
-              <Sparkles className="w-5 h-5" strokeWidth={2} />
+    <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
+      {/* Sub-Header: School, Course Badge & History Controls */}
+      <div className="px-4 py-2.5 bg-surface border-b border-gray-800 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="px-2.5 py-1 rounded-lg bg-ink border border-gray-800 flex items-center gap-1.5 shrink-0">
+            <GraduationCap className="w-3.5 h-3.5 text-pine" strokeWidth={2} />
+            <span className="text-white text-[11px] font-bold">
+              {schoolInfo.code}
+            </span>
+          </div>
+
+          {isEditingCourse ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={courseInput}
+                onChange={(e) => setCourseInput(e.target.value)}
+                placeholder="Course (e.g. CSE311)"
+                className="h-7 w-32 rounded-lg bg-ink border border-pine/50 px-2 text-white text-[11px] font-bold uppercase outline-none"
+              />
+              <button
+                onClick={handleSaveCourse}
+                disabled={savingCourse || !courseInput.trim()}
+                className="h-7 px-2.5 rounded-lg bg-pine text-black text-[10px] font-black active:scale-95 transition-transform"
+              >
+                Save
+              </button>
             </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="text-white font-black text-base tracking-tight">
-                  Kampus Kritic
+          ) : (
+            <button
+              onClick={() => setIsEditingCourse(true)}
+              className="px-2.5 py-1 rounded-lg bg-ink border border-gray-800 hover:border-pine/50 flex items-center gap-1.5 text-left transition-colors truncate"
+            >
+              <BookOpen className="w-3 h-3 text-pine shrink-0" />
+              <span className="text-sage text-[11px] font-bold truncate">
+                {courseInput || 'Set Course'}
+              </span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowIntroBanner((v) => !v)}
+            title="How Kampus Kritic Works"
+            className={`p-1.5 rounded-lg border transition-colors ${
+              showIntroBanner
+                ? 'bg-ink border-pine/40 text-pine'
+                : 'bg-ink border-gray-800 text-sage hover:text-white'
+            }`}
+          >
+            <Info className="w-4 h-4" strokeWidth={1.75} />
+          </button>
+          <button
+            onClick={() => setShowHistory(true)}
+            className="px-2.5 py-1.5 rounded-lg bg-ink border border-gray-800 hover:border-gray-700 text-sage hover:text-white text-[11px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+          >
+            <History className="w-3.5 h-3.5 text-pine" />
+            <span>History ({sessions.length})</span>
+          </button>
+          <button
+            onClick={startNewChat}
+            title="New Audit Thread"
+            className="p-1.5 rounded-lg bg-pine text-black active:scale-95 transition-transform"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+
+      {/* History Slide-Over Drawer */}
+      {showHistory && (
+        <div className="absolute inset-0 z-[2000] flex">
+          <div
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => setShowHistory(false)}
+          />
+          <div className="relative w-72 max-w-[82%] bg-surface border-r border-gray-800 h-full flex flex-col p-4 z-10 animate-in slide-in-from-left duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+              <span className="text-white font-black text-sm">
+                Audit History
+              </span>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="w-7 h-7 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              onClick={startNewChat}
+              className="w-full mt-3 h-10 rounded-xl bg-pine text-black font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+            >
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+              <span>Start New Audit</span>
+            </button>
+
+            <div className="flex-1 overflow-y-auto mt-3 flex flex-col gap-2 no-scrollbar">
+              {sessions.length === 0 ? (
+                <p className="text-sage text-xs text-center py-8">
+                  No saved audits yet. Your conversations and pasted images will
+                  be stored here automatically.
+                </p>
+              ) : (
+                sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      setActiveSessionId(s.id);
+                      setMessages(s.messages || []);
+                      setShowHistory(false);
+                    }}
+                    className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between gap-2 transition-colors ${
+                      activeSessionId === s.id
+                        ? 'bg-ink border-pine/50 text-white'
+                        : 'bg-ink/60 border-gray-800 text-sage hover:text-white'
+                    }`}
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-white truncate">
+                        {s.title}
+                      </span>
+                      <span className="text-[10px] text-sage mt-0.5">
+                        {s.course_code} · {timeAgo(s.created_at)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={(e) => deleteSession(s.id, e)}
+                      className="p-1 text-sage hover:text-red-400 shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Chat Stream */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 no-scrollbar">
+        {/* Personalized Greeting & How Kampus Kritic Works */}
+        {(messages.length === 0 || showIntroBanner) && (
+          <div className="bg-surface border border-gray-800 rounded-2xl p-5 flex flex-col gap-3.5 animate-slide-up">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-pine text-[10px] font-black uppercase tracking-wider">
+                  Kampus Kritic · Argon Academic Engine
                 </span>
-                <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-pine text-black">
-                  Argon
-                </span>
+                <h1 className="text-white font-black text-xl tracking-tight">
+                  Hi, {displayUsername}
+                </h1>
+                <p className="text-sage text-xs leading-relaxed">
+                  Calibrated for{' '}
+                  <strong className="text-white">{schoolInfo.fullName}</strong>
+                  {courseInput ? (
+                    <>
+                      {' '}
+                      · Course <strong className="text-pine">{courseInput}</strong>
+                    </>
+                  ) : (
+                    ''
+                  )}
+                  .
+                </p>
               </div>
-              <span className="text-sage text-[10px]">
-                Institutional Benchmark &amp; Pre-Submission Engine
+              <div className="w-10 h-10 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shrink-0">
+                <Sparkles className="w-5 h-5" strokeWidth={2} />
+              </div>
+            </div>
+
+            <div className="bg-ink border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2">
+              <span className="text-white text-xs font-bold">
+                How Kampus Kritic Works
+              </span>
+              <p className="text-sage text-xs leading-relaxed">
+                Generic AI tools do not know how lecturers at UB, BAC / BSBS, or
+                BIUST grade. Kampus Kritic benchmarks your drafts, lab
+                calculations, and pasted screenshots directly against anonymized
+                80%+ distinction coursework from your exact institution and
+                course.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
+                  1. Paste Drafts or Images
+                </div>
+                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
+                  2. Check Rubric &amp; Citations
+                </div>
+                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
+                  3. Strip Turnitin AI Flags
+                </div>
+                <div className="bg-surface border border-gray-800 rounded-lg p-2 text-white font-semibold">
+                  4. Recall Full Chat History
+                </div>
+              </div>
+            </div>
+
+            {/* Trial Status Indicator */}
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-ink border border-gray-800 text-xs">
+              <span className="text-sage font-medium">Access Status</span>
+              {hasUnlimited ? (
+                <span className="text-pine font-black">
+                  Unlimited Plan Active
+                </span>
+              ) : promptsUsed === 0 ? (
+                <span className="text-pine font-bold">
+                  1 Free Assignment Audit Available
+                </span>
+              ) : (
+                <span className="text-red-400 font-bold">
+                  Free Trial Used · Upgrade Required
+                </span>
+              )}
+            </div>
+
+            {messages.length === 0 && !isLockedByPaywall && (
+              <div className="flex flex-col gap-2 pt-1">
+                <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
+                  Quick Audit Starters
+                </span>
+                <div className="grid grid-cols-1 gap-2">
+                  {QUICK_STARTERS.map((starter) => (
+                    <button
+                      key={starter}
+                      onClick={() => handleSend(starter)}
+                      className="w-full p-3 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-left flex items-center justify-between group active:scale-[0.99] transition-all"
+                    >
+                      <span className="text-white text-xs font-medium group-hover:text-pine transition-colors">
+                        {starter}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-sage group-hover:text-pine shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Conversation Messages */}
+        {messages.map((m) => {
+          const isUser = m.role === 'user';
+          return (
+            <div
+              key={m.id}
+              className={`flex flex-col gap-1.5 animate-slide-up ${
+                isUser ? 'items-end' : 'items-start'
+              }`}
+            >
+              <div
+                className={`max-w-[90%] rounded-2xl p-4 flex flex-col gap-2.5 ${
+                  isUser
+                    ? 'bg-pine text-black font-medium rounded-tr-sm'
+                    : 'bg-surface border border-gray-800 text-white rounded-tl-sm'
+                }`}
+              >
+                {!isUser && m.benchmark_used && (
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-800">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-pine">
+                      {m.benchmark_used}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(m.content);
+                        toast({ title: 'Audit response copied' });
+                      }}
+                      className="text-[10px] font-bold text-sage hover:text-white flex items-center gap-1 shrink-0"
+                    >
+                      <Copy className="w-3 h-3" /> Copy
+                    </button>
+                  </div>
+                )}
+
+                {m.images && m.images.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {m.images.map((img, i) => (
+                      <img
+                        key={i}
+                        src={img}
+                        alt="Attached academic work"
+                        className="w-full h-28 object-cover rounded-xl border border-black/20"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <p
+                  className={`text-xs leading-relaxed whitespace-pre-wrap ${
+                    isUser ? 'text-black font-semibold' : 'text-white'
+                  }`}
+                >
+                  {m.content}
+                </p>
+              </div>
+              <span className="text-sage text-[10px] px-1">
+                {isUser ? displayUsername : 'Kampus Kritic'} ·{' '}
+                {timeAgo(m.created_at)}
+              </span>
+            </div>
+          );
+        })}
+
+        {sending && (
+          <div className="flex items-start gap-2.5 animate-slide-up">
+            <div className="bg-surface border border-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2.5">
+              <Loader2 className="w-4 h-4 text-pine animate-spin" />
+              <span className="text-sage text-xs font-medium">
+                Auditing against {schoolInfo.code}{' '}
+                {courseInput || 'institutional'} benchmarks...
               </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-ink border border-gray-800 flex items-center justify-center text-sage hover:text-white active:scale-90 transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        )}
 
-        {/* Mode Switcher */}
-        <div className="px-4 pt-3 pb-2 bg-midnight border-b border-gray-800/80 flex gap-2 shrink-0">
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-              activeTab === 'audit'
-                ? 'bg-pine text-black shadow-md'
-                : 'bg-surface text-sage border border-gray-800'
-            }`}
-          >
-            ⚡ Pre-Flight Audit
-          </button>
-          <button
-            onClick={() => setActiveTab('contribute')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-              activeTab === 'contribute'
-                ? 'bg-pine text-black shadow-md'
-                : 'bg-surface text-sage border border-gray-800'
-            }`}
-          >
-            <Award className="w-3.5 h-3.5" />
-            80%+ Scholar Vault
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 no-scrollbar pb-24">
-          {activeTab === 'audit' ? (
-            <>
-              {/* Institution & Course Input */}
-              <div className="bg-surface border border-gray-800 rounded-2xl p-4 flex flex-col gap-3">
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-sage">
-                      Campus Standard
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5 bg-ink p-1 rounded-xl border border-gray-800">
-                      {(['UB', 'BAC'] as const).map((uni) => (
-                        <button
-                          key={uni}
-                          type="button"
-                          onClick={() => setInstitution(uni)}
-                          className={`py-1.5 rounded-lg text-xs font-black transition-all ${
-                            institution === uni
-                              ? 'bg-pine text-black'
-                              : 'text-sage hover:text-white'
-                          }`}
-                        >
-                          {uni}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-sage">
-                      Course / Module Code
-                    </label>
-                    <input
-                      type="text"
-                      value={courseCode}
-                      onChange={(e) => setCourseCode(e.target.value)}
-                      placeholder="e.g. CSE311 / ACC201"
-                      className="h-9 rounded-xl bg-ink border border-gray-800 px-3 text-white placeholder:text-sage/50 text-xs font-bold uppercase outline-none focus:border-pine"
-                    />
-                  </div>
-                </div>
-
-                {/* 4 Utility Cards */}
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  {MODES.map((m) => {
-                    const Icon = m.icon;
-                    const active = mode === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setMode(m.id)}
-                        className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all active:scale-[0.98] ${
-                          active
-                            ? 'bg-ink border-pine text-white shadow-[0_0_12px_rgba(255,222,77,0.12)]'
-                            : 'bg-ink/60 border-gray-800 text-sage hover:border-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <Icon
-                            className={`w-4 h-4 ${active ? 'text-pine' : 'text-sage'}`}
-                            strokeWidth={2}
-                          />
-                          {active && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-pine" />
-                          )}
-                        </div>
-                        <span className="text-xs font-bold text-white mt-0.5">
-                          {m.label}
-                        </span>
-                        <span className="text-[10px] text-sage leading-tight">
-                          {m.desc}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Draft Input */}
-                <form onSubmit={handleRunAudit} className="flex flex-col gap-3 mt-1">
-                  <textarea
-                    value={draftText}
-                    onChange={(e) => setDraftText(e.target.value)}
-                    placeholder={
-                      mode === 'essay'
-                        ? 'Paste your assignment draft, literature review, or references here...'
-                        : mode === 'lab'
-                        ? 'Paste your lab measurements, calculations, or engineering methodology...'
-                        : mode === 'slides'
-                        ? 'Paste your project notes or report to turn into slides + a 2-min script...'
-                        : 'Explain what you need to email your lecturer (e.g. missing CA mark for test 2)...'
-                    }
-                    rows={5}
-                    className="w-full rounded-xl bg-ink border border-gray-800 p-3.5 text-white placeholder:text-sage/60 text-xs leading-relaxed outline-none focus:border-pine resize-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={scanning || draftText.trim().length < 20}
-                    className="w-full h-11 rounded-xl bg-pine text-black font-black text-xs active:scale-[0.97] transition-all disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg"
-                  >
-                    {scanning ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Benchmarking against {institution} Archive...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>Run Pre-Flight Audit</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-
-              {/* Audit Output Card */}
-              {result && (
-                <div className="bg-surface border border-pine/40 rounded-2xl p-4 flex flex-col gap-4 animate-slide-up shadow-xl">
-                  <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] uppercase font-bold text-pine tracking-wider">
-                        Benchmark Grounding
-                      </span>
-                      <span className="text-white text-xs font-bold mt-0.5">
-                        {result.benchmark_citation}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="bg-ink border border-pine/40 px-3 py-1.5 rounded-xl text-center">
-                        <span className="text-[9px] uppercase text-sage block font-bold">
-                          Grade Read
-                        </span>
-                        <span className="text-pine font-black text-base">
-                          {result.overall_score}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="bg-ink border border-gray-800 rounded-xl p-3">
-                      <span className="text-[10px] text-sage font-bold uppercase">
-                        Turnitin / AI Tone Risk
-                      </span>
-                      <div className="text-white font-black text-sm mt-0.5">
-                        {result.ai_probability}
-                      </div>
-                    </div>
-                    <div className="bg-ink border border-gray-800 rounded-xl p-3">
-                      <span className="text-[10px] text-sage font-bold uppercase">
-                        Red Flags Found
-                      </span>
-                      <div className="text-red-400 font-black text-sm mt-0.5">
-                        {result.critical_issues.length} Issues Detected
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-white text-xs leading-relaxed bg-ink p-3 rounded-xl border border-gray-800">
-                    {result.summary_verdict}
-                  </p>
-
-                  {/* Critical Issues (First 2 visible, rest gated unless unlocked) */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
-                      Detected Deductions &amp; Fixes
-                    </span>
-                    {result.critical_issues.map((issue, idx) => {
-                      const locked = !isUnlocked && idx >= 1;
-                      return (
-                        <div
-                          key={idx}
-                          className={`p-3 rounded-xl bg-ink border border-gray-800 flex items-start gap-2.5 ${
-                            locked ? 'blur-[4px] select-none opacity-60' : ''
-                          }`}
-                        >
-                          <AlertTriangle className="w-4 h-4 text-pine shrink-0 mt-0.5" />
-                          <span className="text-white text-xs leading-relaxed">
-                            {issue}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Polished Rewrite / Output */}
-                  {isUnlocked ? (
-                    <div className="flex flex-col gap-3 pt-2 border-t border-gray-800">
-                      <div className="flex items-center justify-between">
-                        <span className="text-pine text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4" /> Full Benchmark-Polished Output
-                        </span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(result.polished_rewrite);
-                            toast({ title: 'Copied to clipboard' });
-                          }}
-                          className="text-xs font-bold text-pine bg-ink px-2.5 py-1 rounded-lg border border-pine/30 flex items-center gap-1"
-                        >
-                          <Copy className="w-3 h-3" /> Copy
-                        </button>
-                      </div>
-                      <div className="bg-ink border border-gray-800 rounded-xl p-3.5 text-white text-xs leading-relaxed whitespace-pre-wrap">
-                        {result.polished_rewrite}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-ink border border-pine/40 rounded-2xl p-4 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-white font-black text-sm">
-                            Unlock Full Fix &amp; Polished Copy
-                          </span>
-                          <span className="text-sage text-[11px]">
-                            Get all {result.critical_issues.length} rubric fixes + ready-to-submit rewrite
-                          </span>
-                        </div>
-                        <span className="text-pine font-black text-lg">P15</span>
-                      </div>
-
-                      {!showUnlockCheckout ? (
-                        <button
-                          onClick={() => setShowUnlockCheckout(true)}
-                          className="w-full h-11 rounded-xl bg-pine text-black font-black text-xs active:scale-[0.97] transition-all flex items-center justify-center gap-2 shadow-lg"
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Unlock Full Audit (P15)</span>
-                        </button>
-                      ) : (
-                        <div className="flex flex-col gap-3 pt-2 border-t border-gray-800">
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setPayMethod('pay2cell')}
-                              className={`py-2 rounded-lg text-xs font-bold border ${
-                                payMethod === 'pay2cell'
-                                  ? 'bg-pine text-black border-pine'
-                                  : 'bg-surface text-sage border-gray-800'
-                              }`}
-                            >
-                              <CreditCard className="w-3.5 h-3.5 inline mr-1" />
-                              Pay2Cell (77037168)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPayMethod('ewallet')}
-                              className={`py-2 rounded-lg text-xs font-bold border ${
-                                payMethod === 'ewallet'
-                                  ? 'bg-pine text-black border-pine'
-                                  : 'bg-surface text-sage border-gray-800'
-                              }`}
-                            >
-                              <Wallet className="w-3.5 h-3.5 inline mr-1" />
-                              eWallet (71321163)
-                            </button>
-                          </div>
-                          <div className="flex items-center justify-between bg-surface px-3 py-2 rounded-lg border border-gray-800 text-xs">
-                            <span className="text-sage">
-                              Ref: <strong className="text-pine">{refCode}</strong>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(refCode);
-                                setCopied(true);
-                                setTimeout(() => setCopied(false), 1500);
-                              }}
-                              className="text-pine font-bold flex items-center gap-1"
-                            >
-                              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                              {copied ? 'Copied' : 'Copy Ref'}
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            value={txId}
-                            onChange={(e) => setTxId(e.target.value)}
-                            placeholder="Paste SMS / inContact Confirmation ID"
-                            className="h-10 rounded-xl bg-surface border border-gray-800 px-3 text-white text-xs outline-none focus:border-pine"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleConfirmUnlock}
-                            disabled={unlocking || txId.trim().length < 4}
-                            className="w-full h-10 rounded-xl bg-pine text-black font-black text-xs disabled:opacity-40 flex items-center justify-center gap-1.5"
-                          >
-                            {unlocking ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <span>Verify &amp; Unlock Output</span>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            /* CONTRIBUTOR VAULT FOR 80%+ SCHOLARS */
-            <form
-              onSubmit={handleContributorSubmit}
-              className="bg-surface border border-gray-800 rounded-2xl p-5 flex flex-col gap-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shrink-0">
-                  <UploadCloud className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-white font-black text-sm">
-                    Monetize Your 80%+ Distinctions
-                  </span>
-                  <span className="text-sage text-[11px]">
-                    100% Anonymized. Earn royalties every time your course benchmark guides a junior.
+        {/* P50 / Month Paywall Card (Enforced after 1 Free Prompt) */}
+        {isLockedByPaywall && (
+          <div className="bg-surface border border-pine/50 rounded-2xl p-5 flex flex-col gap-4 animate-slide-up">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <Lock className="w-4 h-4 text-pine" />
+                  <span className="text-pine text-xs font-black uppercase tracking-wider">
+                    Free Trial Prompt Completed
                   </span>
                 </div>
+                <h3 className="text-white font-black text-lg">
+                  Unlock Kampus Kritic Unlimited
+                </h3>
+                <p className="text-sage text-xs leading-relaxed">
+                  Continue auditing assignments, pasting rubric images, checking
+                  citations, and recalling full history calibrated for{' '}
+                  <strong className="text-white">{schoolInfo.code}</strong>.
+                </p>
               </div>
+              <div className="bg-ink border border-pine/40 px-3 py-2 rounded-xl text-right shrink-0">
+                <span className="text-pine font-black text-lg block leading-none">
+                  P 50
+                </span>
+                <span className="text-sage text-[10px] font-bold">/ month</span>
+              </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase text-sage">
-                    Course Code
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={contribCourse}
-                    onChange={(e) => setContribCourse(e.target.value)}
-                    placeholder="e.g. CSE311"
-                    className="h-10 rounded-xl bg-ink border border-gray-800 px-3 text-white text-xs font-bold uppercase outline-none focus:border-pine"
-                  />
+            <div className="bg-ink border border-gray-800 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-sage">
+                  Your Reference Code
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase text-sage">
-                    Grade Achieved
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={contribGrade}
-                    onChange={(e) => setContribGrade(e.target.value)}
-                    placeholder="e.g. 92% / A+"
-                    className="h-10 rounded-xl bg-ink border border-gray-800 px-3 text-white text-xs font-bold outline-none focus:border-pine"
-                  />
+                <div className="text-xl font-black text-pine tracking-wider mt-0.5">
+                  {referenceCode}
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase text-sage">
-                    Faculty
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={contribFaculty}
-                    onChange={(e) => setContribFaculty(e.target.value)}
-                    placeholder="Computing / Business"
-                    className="h-10 rounded-xl bg-ink border border-gray-800 px-3 text-white text-xs outline-none focus:border-pine"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-bold uppercase text-sage">
-                    eWallet Payout Number
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={contribEwallet}
-                    onChange={(e) => setContribEwallet(e.target.value)}
-                    placeholder="7X XXX XXX"
-                    className="h-10 rounded-xl bg-ink border border-gray-800 px-3 text-white text-xs outline-none focus:border-pine"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase text-sage">
-                  Assignment / Project Topic
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={contribTitle}
-                  onChange={(e) => setContribTitle(e.target.value)}
-                  placeholder="e.g. Distributed Database Normalization Case Study"
-                  className="h-10 rounded-xl bg-ink border border-gray-800 px-3 text-white text-xs outline-none focus:border-pine"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase text-sage">
-                  Paste Graded Methodology, Structure &amp; Key Excerpts
-                </label>
-                <textarea
-                  rows={5}
-                  required
-                  value={contribContent}
-                  onChange={(e) => setContribContent(e.target.value)}
-                  placeholder="Paste the high-scoring methodology, rubric structure, or full text here (personal names are automatically stripped)..."
-                  className="rounded-xl bg-ink border border-gray-800 p-3 text-white text-xs outline-none focus:border-pine resize-none"
-                />
-              </div>
-
               <button
-                type="submit"
-                disabled={submittingContrib}
-                className="w-full h-11 rounded-xl bg-pine text-black font-black text-xs active:scale-[0.97] transition-all flex items-center justify-center gap-2 shadow-lg"
+                type="button"
+                onClick={() => copyText(referenceCode, true)}
+                className="px-3 py-2 rounded-lg bg-surface border border-pine/30 text-pine text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform"
               >
-                {submittingContrib ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                {copiedCode ? (
+                  <Check className="w-3.5 h-3.5" />
                 ) : (
-                  <Award className="w-4 h-4" />
+                  <Copy className="w-3.5 h-3.5" />
                 )}
-                <span>Submit to Benchmark Vault</span>
+                {copiedCode ? 'Copied' : 'Copy Code'}
               </button>
-            </form>
-          )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPayMethod('pay2cell')}
+                className={`py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  payMethod === 'pay2cell'
+                    ? 'bg-pine text-black border-pine'
+                    : 'bg-ink border-gray-800 text-sage'
+                }`}
+              >
+                <CreditCard className="w-4 h-4" /> FNB Pay2Cell
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayMethod('ewallet')}
+                className={`py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  payMethod === 'ewallet'
+                    ? 'bg-pine text-black border-pine'
+                    : 'bg-ink border-gray-800 text-sage'
+                }`}
+              >
+                <Wallet className="w-4 h-4" /> eWallet
+              </button>
+            </div>
+
+            <div className="bg-ink border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-sage block">
+                    {payMethod === 'pay2cell'
+                      ? 'FNB Pay2Cell Number'
+                      : 'eWallet Number'}
+                  </span>
+                  <span className="text-white font-black text-base">
+                    {payMethod === 'pay2cell' ? '77037168' : '71321163'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyText(
+                      payMethod === 'pay2cell' ? '77037168' : '71321163',
+                      false
+                    )
+                  }
+                  className="text-pine text-xs font-bold flex items-center gap-1"
+                >
+                  {copiedNum ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  {copiedNum ? 'Copied' : 'Copy Number'}
+                </button>
+              </div>
+              <p className="text-sage text-xs leading-relaxed">
+                Send <strong className="text-white">P 50</strong> to{' '}
+                <strong className="text-white">
+                  {payMethod === 'pay2cell' ? '77037168' : '71321163'}
+                </strong>{' '}
+                using reference{' '}
+                <strong className="text-pine">{referenceCode}</strong>, then
+                paste your SMS confirmation ID below.
+              </p>
+            </div>
+
+            <input
+              type="text"
+              value={paymentRefId}
+              onChange={(e) => setPaymentRefId(e.target.value)}
+              placeholder="Paste FNB inContact or SMS Confirmation ID"
+              className="h-11 rounded-xl bg-ink border border-gray-800 px-3.5 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine"
+            />
+
+            <button
+              type="button"
+              onClick={handleUnlockUnlimited}
+              disabled={submittingPayment || paymentRefId.trim().length < 4}
+              className="w-full h-12 rounded-xl bg-pine text-black font-black text-sm active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {submittingPayment ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" strokeWidth={2.5} />
+              )}
+              <span>
+                {submittingPayment
+                  ? 'Activating...'
+                  : 'Confirm P50 Payment & Unlock Unlimited'}
+              </span>
+            </button>
+
+            <p className="text-sage text-[10px] text-center">
+              Unlimited usage is subject to our standard Fair Use Policy in the{' '}
+              <button
+                type="button"
+                onClick={onOpenTerms}
+                className="text-white underline hover:text-pine"
+              >
+                Terms of Service
+              </button>
+              .
+            </p>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Sticky Chat & Image Paste Composer */}
+      <div className="p-3 bg-surface border-t border-gray-800 flex flex-col gap-2 shrink-0">
+        {pendingImages.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {pendingImages.map((img, idx) => (
+              <div
+                key={idx}
+                className="relative w-14 h-14 rounded-xl overflow-hidden border border-pine/50 shrink-0"
+              >
+                <img
+                  src={img}
+                  alt="Upload preview"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPendingImages((prev) => prev.filter((_, i) => i !== idx))
+                  }
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) {
+                handleFilesSelected(Array.from(e.target.files));
+                e.target.value = '';
+              }
+            }}
+          />
+          <button
+            type="button"
+            disabled={isLockedByPaywall || uploadingImage}
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach or paste image"
+            className="w-11 h-11 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-sage hover:text-pine flex items-center justify-center shrink-0 active:scale-95 transition-all disabled:opacity-40"
+          >
+            {uploadingImage ? (
+              <Loader2 className="w-4 h-4 animate-spin text-pine" />
+            ) : (
+              <ImagePlus className="w-5 h-5" strokeWidth={1.75} />
+            )}
+          </button>
+
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onPaste={handlePaste}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            disabled={isLockedByPaywall}
+            rows={1}
+            placeholder={
+              isLockedByPaywall
+                ? 'Unlock P50/month Unlimited above to continue...'
+                : 'Paste assignment text, questions, or Ctrl+V images...'
+            }
+            className="flex-1 max-h-28 min-h-[44px] rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none"
+          />
+
+          <button
+            type="button"
+            onClick={() => handleSend()}
+            disabled={
+              isLockedByPaywall ||
+              sending ||
+              (!input.trim() && pendingImages.length === 0)
+            }
+            className="w-11 h-11 rounded-xl bg-pine text-black flex items-center justify-center shrink-0 active:scale-95 transition-transform disabled:opacity-40"
+          >
+            {sending ? (
+              <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2.5} />
+            ) : (
+              <Send className="w-4 h-4" strokeWidth={2.25} />
+            )}
+          </button>
         </div>
       </div>
     </div>
