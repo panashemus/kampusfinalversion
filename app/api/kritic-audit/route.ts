@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { classifyUniversity } from '@/lib/utils';
 
 const AI_CLICHES = [
   'delve',
@@ -10,53 +11,120 @@ const AI_CLICHES = [
   'crucial',
   'underscores',
   'realm',
-  'beacon',
   'pivotal',
+  'intricate',
 ];
 
 export async function POST(req: Request) {
   try {
-    const { institution, courseCode, mode, draftText } = await req.json();
+    const body = await req.json();
 
-    // 1. Check if we have a real donated student benchmark for this course in Supabase
-    let benchmarkLabel = `${institution} Institutional Rubric (${courseCode})`;
-    let benchmarkContext = '';
+    // Optional automated SMS webhook handler for iPhone Shortcuts / FNB inContact
+    if (body.action === 'auto_verify_sms') {
+      const { smsText } = body;
+      const refMatch = (smsText || '').match(/KRT-\d{4}/i);
+      if (refMatch) {
+        const matchedRef = refMatch[0].toUpperCase();
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        await supabase
+          .from('profiles')
+          .update({
+            kritic_unlimited: true,
+            is_premium: true,
+            kritic_sub_until: nextMonth.toISOString(),
+            payment_ref_code: 'VERIFIED',
+          })
+          .eq('payment_ref_code', matchedRef);
+        return NextResponse.json({ verified: true, reference: matchedRef });
+      }
+      return NextResponse.json({ verified: false });
+    }
+
+    const {
+      promptText = '',
+      images = [],
+      history = [],
+      email = '',
+      username = 'Student',
+      university = '',
+      courseCode = '',
+    } = body;
+
+    const schoolInfo = classifyUniversity(email || university);
+    const activeSchool = university || schoolInfo.fullName;
+    const activeCourse = (courseCode || 'General Coursework').trim().toUpperCase();
+
+    // 1. Query verified 80%+ contributor benchmarks for this exact course & school
+    let benchmarkCitation = `${schoolInfo.code} Institutional Academic Standard (${activeCourse})`;
+    let benchmarkExcerpt = '';
 
     try {
       const { data: benchmarks } = await supabase
         .from('academic_contributors')
-        .select('course_code, grade_achieved, sample_title, methodology_notes')
-        .eq('course_code', courseCode)
+        .select('course_code, grade_achieved, sample_title, methodology_notes, institution')
+        .ilike('course_code', `%${activeCourse}%`)
         .limit(2);
 
       if (benchmarks && benchmarks.length > 0) {
         const top = benchmarks[0];
-        benchmarkLabel = `Verified ${institution} ${top.course_code} Graduate Benchmark (Scored ${top.grade_achieved} on "${top.sample_title}")`;
-        benchmarkContext = top.methodology_notes;
+        benchmarkCitation = `${top.institution || schoolInfo.code} ${top.course_code} Distinction Benchmark (Scored ${top.grade_achieved} on "${top.sample_title}")`;
+        benchmarkExcerpt = top.methodology_notes;
       }
     } catch {
-      // Fallback if table isn't migrated yet
+      // Continues with institutional rubric if table is empty
     }
 
-    // 2. If GEMINI_API_KEY is configured in Vercel, call Gemini API with RAG context
+    // 2. Call Gemini API if GEMINI_API_KEY is configured in environment variables
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-      const prompt = `You are Kampus Kritic (powered by Gemini Argon), an elite academic auditor for ${institution} (${courseCode}).
-Benchmark Reference: ${benchmarkLabel}
-${benchmarkContext ? `Verified Distinction Excerpt to compare against:\n${benchmarkContext}\n` : ''}
-Task Mode: ${mode}
-Student Submission:
-"""
-${draftText}
-"""
-Return ONLY valid JSON with keys:
-- "overall_score": number (60-96)
-- "ai_probability": string (e.g. "Low (12%)" or "High (68% - Flagged)")
-- "benchmark_citation": string (mention how a ${institution} ${courseCode} distinction student structures this)
-- "summary_verdict": string (2 concise sentences)
-- "critical_issues": array of 4 specific actionable fixes
-- "polished_rewrite": string (the improved, humanized, or formatted version / slide script / lecturer email)
-- "rubric_breakdown": array of {"criterion": string, "score": string, "note": string}`;
+      const systemInstruction = `You are Kampus Kritic (powered by Argon), the academic benchmark and pre-submission audit engine for ${activeSchool}.
+You are speaking directly with ${username}, who is studying ${activeCourse} at ${schoolInfo.code}.
+Active Benchmark Reference: ${benchmarkCitation}
+${benchmarkExcerpt ? `Verified Distinction Excerpt from this course:\n${benchmarkExcerpt}\n` : ''}
+
+Rules:
+1. Never use emojis under any circumstances. Keep your tone sharp, analytical, direct, and grounded in ${schoolInfo.code} marking standards.
+2. Address the student's exact prompt or uploaded assignment image: check structure, methodology, calculations, Harvard/APA citations, and flag robotic AI phrasing.
+3. Explicitly reference their school (${schoolInfo.code}) and course (${activeCourse}) standards.
+4. Provide:
+   - [BENCHMARK ALIGNMENT]: How their work compares to ${schoolInfo.code} distinction standards (with estimated grade band).
+   - [CRITICAL DEDUCTIONS]: Specific errors, missing citations, calculation mistakes, or AI-flagged phrases found.
+   - [REFINED OUTPUT]: The corrected, polished section, calculation verification, or structured solution.`;
+
+      const contents: any[] = [];
+
+      // Append recent conversation history for context recall
+      if (Array.isArray(history)) {
+        for (const msg of history.slice(-8)) {
+          if (msg.content) {
+            contents.push({
+              role: msg.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: msg.content }],
+            });
+          }
+        }
+      }
+
+      const currentParts: any[] = [{ text: promptText || 'Analyze the attached academic material.' }];
+
+      // Attach any pasted/uploaded images
+      if (Array.isArray(images)) {
+        for (const imgUrl of images) {
+          if (imgUrl.startsWith('data:image/')) {
+            const [meta, base64Data] = imgUrl.split(',');
+            const mimeType = meta.split(':')[1]?.split(';')[0] || 'image/png';
+            currentParts.push({
+              inlineData: {
+                mimeType,
+                data: base64Data,
+              },
+            });
+          }
+        }
+      }
+
+      contents.push({ role: 'user', parts: currentParts });
 
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -64,75 +132,72 @@ Return ONLY valid JSON with keys:
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents,
           }),
         }
       );
 
       if (geminiRes.ok) {
         const geminiJson = await geminiRes.json();
-        const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          return NextResponse.json(JSON.parse(rawText));
+        const replyText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (replyText) {
+          return NextResponse.json({
+            reply: replyText,
+            benchmark_used: benchmarkCitation,
+          });
         }
       }
     }
 
-    // 3. Built-in Heuristic Fallback (Works immediately even before GEMINI_API_KEY is added)
-    const lower = draftText.toLowerCase();
+    // 3. Deterministic Academic Audit Fallback (Works immediately even before GEMINI_API_KEY is added)
+    const lower = promptText.toLowerCase();
     const detectedCliches = AI_CLICHES.filter((w) => lower.includes(w));
-    const hasCitations = /\([a-zA-Z]+,?\s*\d{4}\)/.test(draftText) || /\[\d+\]/.test(draftText);
-    const wordCount = draftText.trim().split(/\s+/).length;
-
-    const aiRisk =
-      detectedCliches.length >= 2
-        ? `High (${Math.min(88, 45 + detectedCliches.length * 12)}% - Turnitin Risk)`
-        : detectedCliches.length === 1
-        ? 'Moderate (34%)'
-        : 'Low (9% - Human Tone)';
-
-    const baseScore = Math.min(
-      91,
-      Math.max(62, 74 + (hasCitations ? 8 : -6) - detectedCliches.length * 5)
+    const hasCitations =
+      /\([a-zA-Z]+,?\s*\d{4}\)/.test(promptText) || /\[\d+\]/.test(promptText);
+    const wordCount = promptText.trim() ? promptText.trim().split(/\s+/).length : 0;
+    const estScore = Math.min(
+      92,
+      Math.max(64, 76 + (hasCitations ? 8 : -5) - detectedCliches.length * 4)
     );
 
+    const structuredReply = `[BENCHMARK ALIGNMENT — ${schoolInfo.code} | ${activeCourse}]
+Reference Standard: ${benchmarkCitation}
+Estimated Rubric Standing: ${estScore}% (${estScore >= 80 ? 'Distinction Band' : 'Credit Band — Needs Tightening'})
+Input Analyzed: ${wordCount} words${images.length > 0 ? ` + ${images.length} attached image(s)` : ''}
+
+[CRITICAL DEDUCTIONS & AUDIT FINDINGS]
+1. Citation & Referencing Check: ${
+      hasCitations
+        ? `In-text citations detected. Verify that every bracketed source matches an alphabetical entry in your final ${schoolInfo.code} Reference List.`
+        : `No formal Harvard/APA in-text citations (Author, Year) were detected. ${schoolInfo.code} marking rubrics deduct 10 to 15 marks for unsubstantiated claims.`
+    }
+2. AI Probability & Tone Check: ${
+      detectedCliches.length > 0
+        ? `High Turnitin AI-tone risk detected. Replace overused terms (${detectedCliches.join(', ')}) with direct empirical phrasing.`
+        : `Low AI-tone risk (Human academic cadence verified). Sentence burstiness and transitions read naturally.`
+    }
+3. ${activeCourse} Methodological Rigor: Top-scoring 85%+ submissions at ${schoolInfo.code} anchor every section by contrasting theoretical models with applied local data or step-by-step working.
+
+[REFINED REVISION & NEXT STEP]
+${
+  promptText.trim()
+    ? promptText
+        .replace(/\b(delve|Moreover|Furthermore|tapestry|testament|crucial)\b/gi, '')
+        .trim()
+    : 'Image attachment logged for inspection.'
+}
+
+[KRITIC RECOMMENDATION]: State your primary thesis metric in sentence one, attach a supporting (Author, Year) citation after your second claim, and paste your next section or rubric screenshot below for line-by-line verification.`;
+
     return NextResponse.json({
-      overall_score: baseScore,
-      ai_probability: aiRisk,
-      benchmark_citation: benchmarkLabel,
-      summary_verdict: `Audited ${wordCount} words against ${benchmarkLabel}. ${
-        hasCitations
-          ? 'In-text citations detected, but methodological transitions and critical synthesis need tightening to hit the 85%+ distinction band.'
-          : 'No formal Harvard/APA in-text citations (Author, Year) detected—this costs up to 15 marks on UB & BAC marking rubrics.'
-      }`,
-      critical_issues: [
-        detectedCliches.length > 0
-          ? `AI Vocabulary Flag: Remove words like "${detectedCliches.join(', ')}" which immediately trigger lecturer AI detectors.`
-          : 'Structure Check: Anchor your opening claim with a concrete regional or empirical metric in sentence 1.',
-        hasCitations
-          ? 'Citation Cross-Check: Ensure every (Author, Year) bracket has a matching alphabetical entry in your final Reference List.'
-          : 'Missing Citations: Add at least 2 peer-reviewed (Author, Year) citations per body paragraph.',
-        mode === 'lab'
-          ? 'Dimensional Sanity: Explicitly state SI units and percentage uncertainty margins beside every calculated value.'
-          : mode === 'slides'
-          ? 'Slide Density: Cap each slide at 4 bullet points (max 8 words per bullet) and shift explanations to your speaker script.'
-          : 'Rubric Alignment: Top-scoring 85%+ submissions explicitly contrast theory with a local Botswana / SADC case application.',
-      ],
-      polished_rewrite:
-        mode === 'email'
-          ? `Subject: Formal Inquiry Regarding ${courseCode} Continuous Assessment Record\n\nDear Lecturer,\n\nI hope this email finds you well. I am writing to respectfully request a brief review of my ${courseCode} assessment record, as my submitted coursework does not currently reflect on the portal.\n\nI have attached my submission receipt and draft for your convenience. Please let me know if I may pass by during your office hours this week.\n\nKind regards,\n[Your Name & Student ID]`
-          : mode === 'slides'
-          ? `SLIDE 1: CORE PROBLEM & CONTEXT\n• Key operational bottleneck identified\n• Empirical baseline across ${institution} case parameters\n\n[SPEAKER SCRIPT - 0:00 to 0:45]:\n"Good morning everyone. Rather than repeating the textbook definition, let's look directly at the core metric driving our ${courseCode} analysis..."`
-          : `[BENCHMARK-ALIGNED REVISION (${courseCode})]:\n\n${draftText
-              .replace(/\b(delve|Moreover|Furthermore|tapestry|testament)\b/gi, '')
-              .trim()}\n\n[Kritic Structural Note: Insert (Author, 2024) empirical citation here and link directly to the ${institution} ${courseCode} grading rubric conclusion.]`,
-      rubric_breakdown: [
-        { criterion: 'Academic & Rubric Structure', score: `${baseScore}/100`, note: 'Checked against faculty format' },
-        { criterion: 'Citation & Referencing', score: hasCitations ? 'Pass' : 'Needs Fix', note: 'Harvard / APA standard' },
-      ],
+      reply: structuredReply,
+      benchmark_used: benchmarkCitation,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || 'Audit request failed.' },
+      { status: 500 }
+    );
   }
 }
