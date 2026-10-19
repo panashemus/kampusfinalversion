@@ -1,4 +1,11 @@
-export type View = 'auth' | 'radar' | 'hustle' | 'community' | 'escrow' | 'profile';
+export type View =
+  | 'auth'
+  | 'kritic'
+  | 'radar'
+  | 'hustle'
+  | 'community'
+  | 'escrow'
+  | 'profile';
 
 export type Comment = {
   id: string;
@@ -20,7 +27,14 @@ export type Hazard = {
   comments: Comment[];
 };
 
-export type CommunityCategory = 'All Questions' | 'Academic' | 'Housing' | 'Tech' | 'General' | 'Textbooks' | 'Beauty';
+export type CommunityCategory =
+  | 'All Questions'
+  | 'Academic'
+  | 'Housing'
+  | 'Tech'
+  | 'General'
+  | 'Textbooks'
+  | 'Beauty';
 
 export type CommunityPost = {
   id: string;
@@ -54,7 +68,11 @@ export type Hustle = {
   createdAt: string;
 };
 
-export type ReportReason = 'Spam' | 'Harassment' | 'Inappropriate Content' | 'Fake Alert';
+export type ReportReason =
+  | 'Spam'
+  | 'Harassment'
+  | 'Inappropriate Content'
+  | 'Fake Alert';
 export type ReportContentType = 'post' | 'hustle';
 export type ReportStatus = 'pending' | 'dismissed' | 'deleted';
 
@@ -101,16 +119,20 @@ export type Profile = {
   id: string;
   email: string;
   username: string | null;
-  avatar_url: string | null; 
+  avatar_url: string | null;
   university: string | null;
+  course_code?: string | null;
   verified: boolean;
   email_verified: boolean;
   is_admin: boolean;
   is_premium: boolean;
+  kritic_prompts_used?: number;
+  kritic_unlimited?: boolean;
+  kritic_sub_until?: string | null;
   subscribed_until: string | null;
   sentinel_points: number;
   ewallet_number: string;
-  konnect_tier?: number; /* <-- Added the Konnect Tier here! */
+  konnect_tier?: number;
 };
 
 export type Conversation = {
