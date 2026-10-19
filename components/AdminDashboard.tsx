@@ -1,9 +1,21 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldAlert, X, Users, Briefcase, Lock, CheckCircle, XCircle, Trash2, Loader as Loader2, Search, MapPin, Ghost, Zap } from 'lucide-react';
+import {
+  ShieldAlert,
+  X,
+  Users,
+  Briefcase,
+  Lock,
+  CheckCircle,
+  XCircle,
+  Trash2,
+  Loader as Loader2,
+  MapPin,
+  Ghost,
+  Zap,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { timeAgo } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 
@@ -19,27 +31,26 @@ export default function AdminDashboard({
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('subs');
   const [loading, setLoading] = useState(true);
-  
-  // Data States
+
   const [premiumUsers, setPremiumUsers] = useState<any[]>([]);
   const [gigs, setGigs] = useState<any[]>([]);
-  const [escrowTrades, setEscrowTrades] = useState<any[]>([]); 
-  const [konnectPayments, setKonnectPayments] = useState<any[]>([]); 
-  
-  // 🔥 Global Feature Flag State
+  const [escrowTrades, setEscrowTrades] = useState<any[]>([]);
+  const [konnectPayments, setKonnectPayments] = useState<any[]>([]);
   const [isFreeWeekend, setIsFreeWeekend] = useState(false);
 
-  // Security Check: Only musungwa60@gmail.com or marked admins can view this
-  const isAdmin = adminProfile?.is_admin || adminProfile?.email === 'musungwa60@gmail.com';
+  const isAdmin =
+    adminProfile?.is_admin || adminProfile?.email === 'musungwa60@gmail.com';
 
   const loadAdminData = useCallback(async () => {
     setLoading(true);
 
-    // Fetch Global App Settings
-    const { data: settings } = await supabase.from('platform_settings').select('is_free_weekend').eq('id', 1).single();
+    const { data: settings } = await supabase
+      .from('platform_settings')
+      .select('is_free_weekend')
+      .eq('id', 1)
+      .single();
     if (settings) setIsFreeWeekend(settings.is_free_weekend);
 
-    // 1. Fetch Users who have Auto-Upgraded
     const { data: usersData } = await supabase
       .from('profiles')
       .select('*')
@@ -47,16 +58,22 @@ export default function AdminDashboard({
       .order('subscribed_until', { ascending: false });
     if (usersData) setPremiumUsers(usersData);
 
-    // 2. Fetch all Hustles
-    const { data: hustlesData } = await supabase.from('hustles').select('*').order('created_at', { ascending: false });
+    const { data: hustlesData } = await supabase
+      .from('hustles')
+      .select('*')
+      .order('created_at', { ascending: false });
     if (hustlesData) setGigs(hustlesData);
 
-    // 3. Fetch all Escrow Trades
-    const { data: vaultData } = await supabase.from('escrow_transactions').select('*').order('created_at', { ascending: false });
+    const { data: vaultData } = await supabase
+      .from('escrow_transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
     if (vaultData) setEscrowTrades(vaultData);
 
-    // 4. Fetch Konnect Map Payments
-    const { data: konnectData } = await supabase.from('payments').select('*, profiles(email)').order('created_at', { ascending: false });
+    const { data: konnectData } = await supabase
+      .from('payments')
+      .select('*, profiles(email)')
+      .order('created_at', { ascending: false });
     if (konnectData) setKonnectPayments(konnectData);
 
     setLoading(false);
@@ -66,50 +83,81 @@ export default function AdminDashboard({
     if (isAdmin) loadAdminData();
   }, [isAdmin, loadAdminData]);
 
-  // --- 🔥 TOGGLE FREE WEEKEND ---
   const toggleFreeWeekend = async () => {
     const newVal = !isFreeWeekend;
-    setIsFreeWeekend(newVal); // Optimistic update for UI speed
-    
+    setIsFreeWeekend(newVal);
+
     const { error } = await supabase
       .from('platform_settings')
       .update({ is_free_weekend: newVal })
       .eq('id', 1);
 
     if (error) {
-      console.error("🔥 SUPABASE ERROR:", error); // Logs exact error to browser console
       setIsFreeWeekend(!newVal);
-      toast({ title: 'Error', description: 'Check console for details.', variant: 'destructive' });
+      toast({
+        title: 'Error',
+        description: 'Could not update setting.',
+        variant: 'destructive',
+      });
     } else {
-      toast({ title: newVal ? 'Free Weekend LIVE 🚀' : 'Paywall RESTORED 🔒' });
+      toast({
+        title: newVal ? 'Free Weekend Live' : 'Paywall Restored',
+      });
     }
   };
 
-  // --- ACTIONS FOR SUBSCRIPTIONS ---
   const revokePremium = async (userId: string) => {
-    const { error } = await supabase.from('profiles').update({
-        is_premium: false, tier: 'free', payment_ref_code: null, payment_ref_id: null, subscribed_until: null,
-      }).eq('id', userId);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        is_premium: false,
+        kritic_unlimited: false,
+        tier: 'free',
+        payment_ref_code: null,
+        payment_ref_id: null,
+        subscribed_until: null,
+      })
+      .eq('id', userId);
     if (!error) {
       setPremiumUsers((prev) => prev.filter((u) => u.id !== userId));
-      toast({ title: 'Premium Revoked 🚫', description: 'User has been downgraded to Free.' });
+      toast({
+        title: 'Premium Revoked',
+        description: 'User has been downgraded to Free.',
+      });
     }
   };
 
   const verifyPremium = async (userId: string) => {
-    const { error } = await supabase.from('profiles').update({ payment_ref_code: 'VERIFIED' }).eq('id', userId);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ payment_ref_code: 'VERIFIED' })
+      .eq('id', userId);
     if (!error) {
-      setPremiumUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, payment_ref_code: 'VERIFIED' } : u)));
-      toast({ title: 'Payment Verified ✅', description: 'Subscription confirmed.' });
+      setPremiumUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, payment_ref_code: 'VERIFIED' } : u
+        )
+      );
+      toast({
+        title: 'Payment Verified',
+        description: 'Subscription confirmed.',
+      });
     }
   };
 
-  // --- ACTIONS FOR GIGS ---
   const updateGigStatus = async (gigId: string, newStatus: string) => {
-    const { error } = await supabase.from('hustles').update({ status: newStatus }).eq('id', gigId);
+    const { error } = await supabase
+      .from('hustles')
+      .update({ status: newStatus })
+      .eq('id', gigId);
     if (!error) {
-      setGigs((prev) => prev.map((g) => (g.id === gigId ? { ...g, status: newStatus } : g)));
-      toast({ title: 'Gig Updated', description: `Status changed to ${newStatus}.` });
+      setGigs((prev) =>
+        prev.map((g) => (g.id === gigId ? { ...g, status: newStatus } : g))
+      );
+      toast({
+        title: 'Gig Updated',
+        description: `Status changed to ${newStatus}.`,
+      });
     }
   };
 
@@ -117,43 +165,80 @@ export default function AdminDashboard({
     const { error } = await supabase.from('hustles').delete().eq('id', gigId);
     if (!error) {
       setGigs((prev) => prev.filter((g) => g.id !== gigId));
-      toast({ title: 'Gig Deleted 🗑️', description: 'Listing permanently removed.' });
+      toast({
+        title: 'Gig Deleted',
+        description: 'Listing permanently removed.',
+      });
     }
   };
 
-  // --- ACTIONS FOR ESCROW ---
   const verifyEscrow = async (tradeId: string) => {
-    const { error } = await supabase.from('escrow_transactions').update({ status: 'verified' }).eq('id', tradeId);
+    const { error } = await supabase
+      .from('escrow_transactions')
+      .update({ status: 'verified' })
+      .eq('id', tradeId);
     if (!error) {
-      setEscrowTrades((prev) => prev.map((t) => (t.id === tradeId ? { ...t, status: 'verified' } : t)));
-      toast({ title: 'Escrow Verified! 💰', description: 'Funds secured. Users notified.' });
+      setEscrowTrades((prev) =>
+        prev.map((t) => (t.id === tradeId ? { ...t, status: 'verified' } : t))
+      );
+      toast({
+        title: 'Escrow Verified',
+        description: 'Funds secured. Users notified.',
+      });
     }
   };
 
-  // --- ACTIONS FOR KONNECT MAP ---
   const verifyKonnectPayment = async (paymentId: string) => {
-    const { error } = await supabase.from('payments').update({ status: 'verified' }).eq('id', paymentId);
+    const { error } = await supabase
+      .from('payments')
+      .update({ status: 'verified' })
+      .eq('id', paymentId);
     if (!error) {
-      setKonnectPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, status: 'verified' } : p)));
-      toast({ title: 'Map Unlock Verified ✅', description: 'Payment confirmed.' });
+      setKonnectPayments((prev) =>
+        prev.map((p) =>
+          p.id === paymentId ? { ...p, status: 'verified' } : p
+        )
+      );
+      toast({
+        title: 'Payment Verified',
+        description: 'Payment confirmed.',
+      });
     }
   };
 
   const rejectKonnectPayment = async (paymentId: string, userId: string) => {
-    await supabase.from('payments').update({ status: 'failed' }).eq('id', paymentId);
-    await supabase.from('profiles').update({ konnect_tier: 0 }).eq('id', userId);
-    setKonnectPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, status: 'failed' } : p)));
-    toast({ title: 'Access Revoked 🚫', description: 'Fake payment rejected. User downgraded.' });
+    await supabase
+      .from('payments')
+      .update({ status: 'failed' })
+      .eq('id', paymentId);
+    await supabase
+      .from('profiles')
+      .update({ konnect_tier: 0, kritic_unlimited: false })
+      .eq('id', userId);
+    setKonnectPayments((prev) =>
+      prev.map((p) => (p.id === paymentId ? { ...p, status: 'failed' } : p))
+    );
+    toast({
+      title: 'Access Revoked',
+      description: 'Invalid payment rejected.',
+    });
   };
 
   if (!isAdmin) {
     return (
       <div className="fixed inset-0 z-[8000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-        <div className="bg-red-950/30 border border-red-900 rounded-3xl p-8 flex flex-col items-center text-center gap-3 max-w-[300px]">
+        <div className="bg-surface border border-red-500/40 rounded-3xl p-8 flex flex-col items-center text-center gap-3 max-w-[300px]">
           <ShieldAlert className="w-12 h-12 text-red-500" />
           <h2 className="text-white font-black text-xl">Access Denied</h2>
-          <p className="text-red-300 text-xs">You do not have administrative privileges to view the Kampus Command Center.</p>
-          <button onClick={onClose} className="mt-4 bg-red-600 text-white font-bold py-2 px-6 rounded-full active:scale-95 transition-transform">Go Back</button>
+          <p className="text-sage text-xs">
+            You do not have administrative privileges.
+          </p>
+          <button
+            onClick={onClose}
+            className="mt-4 bg-pine text-black font-bold py-2 px-6 rounded-full active:scale-95 transition-transform"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );
@@ -161,72 +246,156 @@ export default function AdminDashboard({
 
   return (
     <div className="fixed inset-0 z-[8000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-midnight rounded-3xl border border-orange-500/30 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
-        
-        {/* HEADER */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-orange-500/10 shrink-0">
+      <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-midnight rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
+        <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-surface shrink-0">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-orange-500" strokeWidth={2.5} />
-            <span className="text-orange-500 font-black text-lg tracking-tight">Kampus Admin</span>
+            <ShieldAlert className="w-5 h-5 text-pine" strokeWidth={2.5} />
+            <span className="text-white font-black text-lg tracking-tight">
+              Kampus Admin
+            </span>
           </div>
-          <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors"
+          >
             <X className="w-5 h-5" strokeWidth={1.5} />
           </button>
         </div>
 
-        {/* 🔥 SYSTEM CONTROLS (GLOBAL FEATURE FLAGS) */}
         <div className="flex items-center justify-between p-4 bg-ink border-b border-gray-800 shrink-0">
           <div className="flex flex-col">
             <span className="text-white text-sm font-bold flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-[#FFDE4D]" /> Free Weekend Pass
+              <Zap className="w-4 h-4 text-pine" /> Free Weekend Pass
             </span>
-            <span className="text-sage text-[10px] mt-0.5">Toggle the Konnect paywall bypass globally</span>
+            <span className="text-sage text-[10px] mt-0.5">
+              Toggle the Konnect paywall bypass globally
+            </span>
           </div>
-          <button 
+          <button
             onClick={toggleFreeWeekend}
-            className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-wider transition-colors shadow-lg active:scale-95 ${
-              isFreeWeekend ? 'bg-pine text-black shadow-pine/20' : 'bg-surface border border-gray-700 text-sage hover:text-white'
+            className={`px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-wider transition-colors active:scale-95 ${
+              isFreeWeekend
+                ? 'bg-pine text-black'
+                : 'bg-surface border border-gray-700 text-sage hover:text-white'
             }`}
           >
             {isFreeWeekend ? 'Live / Active' : 'Off / Paywall'}
           </button>
         </div>
 
-        {/* NAVIGATION TABS */}
         <div className="flex bg-ink border-b border-gray-800 shrink-0">
-          <button onClick={() => setActiveTab('subs')} className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'subs' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}><Users className="w-3.5 h-3.5" /> Subs</button>
-          <button onClick={() => setActiveTab('gigs')} className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'gigs' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}><Briefcase className="w-3.5 h-3.5" /> Gigs</button>
-          <button onClick={() => setActiveTab('escrow')} className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'escrow' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}><Lock className="w-3.5 h-3.5" /> Vault</button>
-          <button onClick={() => setActiveTab('konnect')} className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${activeTab === 'konnect' ? 'text-orange-400 border-b-2 border-orange-500 bg-surface' : 'text-sage hover:text-white'}`}><MapPin className="w-3.5 h-3.5" /> Map</button>
+          <button
+            onClick={() => setActiveTab('subs')}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
+              activeTab === 'subs'
+                ? 'text-pine border-b-2 border-pine bg-surface'
+                : 'text-sage hover:text-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" /> Subs
+          </button>
+          <button
+            onClick={() => setActiveTab('gigs')}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
+              activeTab === 'gigs'
+                ? 'text-pine border-b-2 border-pine bg-surface'
+                : 'text-sage hover:text-white'
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5" /> Gigs
+          </button>
+          <button
+            onClick={() => setActiveTab('escrow')}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
+              activeTab === 'escrow'
+                ? 'text-pine border-b-2 border-pine bg-surface'
+                : 'text-sage hover:text-white'
+            }`}
+          >
+            <Lock className="w-3.5 h-3.5" /> Vault
+          </button>
+          <button
+            onClick={() => setActiveTab('konnect')}
+            className={`flex-1 py-3 text-[11px] font-bold flex items-center justify-center gap-1 transition-colors ${
+              activeTab === 'konnect'
+                ? 'text-pine border-b-2 border-pine bg-surface'
+                : 'text-sage hover:text-white'
+            }`}
+          >
+            <MapPin className="w-3.5 h-3.5" /> Payments
+          </button>
         </div>
 
-        {/* CONTENT AREA */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 no-scrollbar">
           {loading ? (
-            <div className="flex-1 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-pine" />
+            </div>
           ) : (
             <>
-              {/* TAB 1: SUBSCRIPTIONS */}
               {activeTab === 'subs' && (
                 <div className="flex flex-col gap-3">
-                  {premiumUsers.length === 0 ? <p className="text-sage text-center text-sm py-10">No premium upgrades to review.</p> : (
+                  {premiumUsers.length === 0 ? (
+                    <p className="text-sage text-center text-sm py-10">
+                      No premium upgrades to review.
+                    </p>
+                  ) : (
                     premiumUsers.map((user) => (
-                      <div key={user.id} className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+                      <div
+                        key={user.id}
+                        className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
-                            <div className="text-white font-bold">{user.email}</div>
-                            <div className="text-sage text-[10px] mt-0.5">Tier: <span className="text-yellow-500 font-bold uppercase">{user.tier || 'pro'}</span></div>
+                            <div className="text-white font-bold">
+                              {user.email}
+                            </div>
+                            <div className="text-sage text-[10px] mt-0.5">
+                              Tier:{' '}
+                              <span className="text-pine font-bold uppercase">
+                                {user.tier || 'pro'}
+                              </span>
+                            </div>
                           </div>
-                          {user.payment_ref_code === 'VERIFIED' ? <span className="bg-pine/20 text-pine text-[10px] font-black px-2 py-1 rounded">VERIFIED</span> : <span className="bg-orange-500/20 text-orange-400 text-[10px] font-black px-2 py-1 rounded animate-pulse">PENDING AUDIT</span>}
+                          {user.payment_ref_code === 'VERIFIED' ? (
+                            <span className="bg-pine/20 text-pine text-[10px] font-black px-2 py-1 rounded">
+                              VERIFIED
+                            </span>
+                          ) : (
+                            <span className="bg-ink border border-pine/40 text-pine text-[10px] font-black px-2 py-1 rounded">
+                              PENDING AUDIT
+                            </span>
+                          )}
                         </div>
                         <div className="bg-ink rounded p-2 text-xs flex flex-col gap-1 border border-gray-800">
-                          <span className="text-sage">Ref Code: <strong className="text-white">{user.payment_ref_code || 'N/A'}</strong></span>
-                          <span className="text-sage">SMS ID: <strong className="text-white">{user.payment_ref_id || 'N/A'}</strong></span>
+                          <span className="text-sage">
+                            Ref Code:{' '}
+                            <strong className="text-white">
+                              {user.payment_ref_code || 'N/A'}
+                            </strong>
+                          </span>
+                          <span className="text-sage">
+                            SMS ID:{' '}
+                            <strong className="text-white">
+                              {user.payment_ref_id || 'N/A'}
+                            </strong>
+                          </span>
                         </div>
                         {user.payment_ref_code !== 'VERIFIED' && (
                           <div className="flex gap-2 pt-1">
-                            <button onClick={() => verifyPremium(user.id)} className="flex-1 bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"><CheckCircle className="w-3.5 h-3.5" /> Confirm Payment</button>
-                            <button onClick={() => revokePremium(user.id)} className="flex-1 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"><XCircle className="w-3.5 h-3.5" /> Fake (Revoke)</button>
+                            <button
+                              onClick={() => verifyPremium(user.id)}
+                              className="flex-1 bg-pine text-black rounded-lg py-2 text-xs font-black flex items-center justify-center gap-1 active:scale-95 transition-transform"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Confirm
+                            </button>
+                            <button
+                              onClick={() => revokePremium(user.id)}
+                              className="flex-1 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"
+                            >
+                              <XCircle className="w-3.5 h-3.5" /> Revoke
+                            </button>
                           </div>
                         )}
                       </div>
@@ -235,30 +404,75 @@ export default function AdminDashboard({
                 </div>
               )}
 
-              {/* TAB 2: GIGS */}
               {activeTab === 'gigs' && (
                 <div className="flex flex-col gap-3">
-                  {gigs.length === 0 ? <p className="text-sage text-center text-sm py-10">No gigs listed.</p> : (
+                  {gigs.length === 0 ? (
+                    <p className="text-sage text-center text-sm py-10">
+                      No gigs listed.
+                    </p>
+                  ) : (
                     gigs.map((gig) => (
-                      <div key={gig.id} className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+                      <div
+                        key={gig.id}
+                        className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3"
+                      >
                         <div className="flex justify-between items-start">
                           <div className="max-w-[70%]">
-                            <div className="text-white font-bold truncate">{gig.title}</div>
-                            <div className="text-sage text-[10px] mt-0.5">By: @{gig.seller_name}</div>
+                            <div className="text-white font-bold truncate">
+                              {gig.title}
+                            </div>
+                            <div className="text-sage text-[10px] mt-0.5">
+                              By: {gig.seller_name}
+                            </div>
                           </div>
-                          <span className={`text-[10px] font-black px-2 py-1 rounded ${gig.status === 'active' ? 'bg-pine/20 text-pine' : 'bg-red-950 border border-red-500/50 text-red-400'}`}>{gig.status === 'active' ? 'LIVE' : 'SUSPENDED'}</span>
+                          <span
+                            className={`text-[10px] font-black px-2 py-1 rounded ${
+                              gig.status === 'active'
+                                ? 'bg-pine/20 text-pine'
+                                : 'bg-red-950 border border-red-500/50 text-red-400'
+                            }`}
+                          >
+                            {gig.status === 'active' ? 'LIVE' : 'SUSPENDED'}
+                          </span>
                         </div>
                         <div className="bg-ink rounded p-2 text-xs flex flex-col gap-1 border border-gray-800">
-                          <span className="text-sage">Gig Code: <strong className="text-white">{gig.reference_code || 'N/A'}</strong></span>
-                          <span className="text-sage">SMS ID: <strong className="text-white">{gig.payment_ref_id || 'N/A'}</strong></span>
+                          <span className="text-sage">
+                            Gig Code:{' '}
+                            <strong className="text-white">
+                              {gig.reference_code || 'N/A'}
+                            </strong>
+                          </span>
+                          <span className="text-sage">
+                            SMS ID:{' '}
+                            <strong className="text-white">
+                              {gig.payment_ref_id || 'N/A'}
+                            </strong>
+                          </span>
                         </div>
                         <div className="flex gap-2 pt-1">
                           {gig.status !== 'active' ? (
-                            <button onClick={() => updateGigStatus(gig.id, 'active')} className="flex-1 bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"><CheckCircle className="w-3.5 h-3.5" /> Approve</button>
+                            <button
+                              onClick={() => updateGigStatus(gig.id, 'active')}
+                              className="flex-1 bg-pine text-black rounded-lg py-2 text-xs font-black flex items-center justify-center gap-1 active:scale-95 transition-transform"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Approve
+                            </button>
                           ) : (
-                            <button onClick={() => updateGigStatus(gig.id, 'unpaid_suspended')} className="flex-1 bg-orange-950/40 border border-orange-600/50 text-orange-400 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"><XCircle className="w-3.5 h-3.5" /> Suspend</button>
+                            <button
+                              onClick={() =>
+                                updateGigStatus(gig.id, 'unpaid_suspended')
+                              }
+                              className="flex-1 bg-ink border border-gray-800 text-sage rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"
+                            >
+                              <XCircle className="w-3.5 h-3.5" /> Suspend
+                            </button>
                           )}
-                          <button onClick={() => deleteGig(gig.id)} className="w-10 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg flex items-center justify-center active:scale-95 transition-transform"><Trash2 className="w-4 h-4" /></button>
+                          <button
+                            onClick={() => deleteGig(gig.id)}
+                            className="w-10 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg flex items-center justify-center active:scale-95 transition-transform"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))
@@ -266,58 +480,174 @@ export default function AdminDashboard({
                 </div>
               )}
 
-              {/* TAB 3: ESCROW */}
               {activeTab === 'escrow' && (
                 <div className="flex flex-col gap-3">
                   {escrowTrades.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 gap-2"><Lock className="w-10 h-10 text-orange-500/50" /><p className="text-sage text-center text-sm">No pending escrow trades.</p></div>
+                    <div className="flex flex-col items-center justify-center py-10 gap-2">
+                      <Lock className="w-10 h-10 text-sage" />
+                      <p className="text-sage text-center text-sm">
+                        No pending escrow trades.
+                      </p>
+                    </div>
                   ) : (
                     escrowTrades.map((trade) => (
-                      <div key={trade.id} className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+                      <div
+                        key={trade.id}
+                        className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
-                            <div className="text-white font-bold">{trade.item_name}</div>
-                            <div className="text-sage text-[10px] mt-0.5">Buyer: {trade.buyer_email}</div>
-                            <div className="text-sage text-[10px]">Seller: {trade.seller_email}</div>
+                            <div className="text-white font-bold">
+                              {trade.item_name}
+                            </div>
+                            <div className="text-sage text-[10px] mt-0.5">
+                              Buyer: {trade.buyer_email}
+                            </div>
+                            <div className="text-sage text-[10px]">
+                              Seller: {trade.seller_email}
+                            </div>
                           </div>
-                          <span className={`text-[10px] font-black px-2 py-1 rounded ${trade.status === 'verified' ? 'bg-pine/20 text-pine' : 'bg-orange-500/20 text-orange-400 animate-pulse'}`}>{trade.status.toUpperCase()}</span>
+                          <span
+                            className={`text-[10px] font-black px-2 py-1 rounded ${
+                              trade.status === 'verified'
+                                ? 'bg-pine/20 text-pine'
+                                : 'bg-ink border border-pine/40 text-pine'
+                            }`}
+                          >
+                            {trade.status.toUpperCase()}
+                          </span>
                         </div>
                         <div className="bg-ink rounded p-2 text-xs flex flex-col gap-1 border border-gray-800">
-                          <div className="flex justify-between items-center"><span className="text-sage">Amount: <strong className="text-white">P {trade.amount}</strong></span><span className="text-sage">SMS ID: <strong className="text-white">{trade.payment_ref_id || 'N/A'}</strong></span></div>
-                          <div className="flex justify-between items-center pt-1 border-t border-gray-800/50"><span className="text-sage">Escrow Code:</span><strong className="text-pine font-mono tracking-wider">{trade.escrow_ref_code || 'N/A'}</strong></div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sage">
+                              Amount:{' '}
+                              <strong className="text-white">
+                                P {trade.amount}
+                              </strong>
+                            </span>
+                            <span className="text-sage">
+                              SMS ID:{' '}
+                              <strong className="text-white">
+                                {trade.payment_ref_id || 'N/A'}
+                              </strong>
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-gray-800/50">
+                            <span className="text-sage">Escrow Code:</span>
+                            <strong className="text-pine font-mono tracking-wider">
+                              {trade.escrow_ref_code || 'N/A'}
+                            </strong>
+                          </div>
                         </div>
-                        {trade.status === 'pending' && <button onClick={() => verifyEscrow(trade.id)} className="w-full bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform mt-1"><CheckCircle className="w-3.5 h-3.5" /> Confirm Funds Received</button>}
+                        {trade.status === 'pending' && (
+                          <button
+                            onClick={() => verifyEscrow(trade.id)}
+                            className="w-full bg-pine text-black rounded-lg py-2 text-xs font-black flex items-center justify-center gap-1 active:scale-95 transition-transform mt-1"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" /> Confirm
+                            Funds Received
+                          </button>
+                        )}
                       </div>
                     ))
                   )}
                 </div>
               )}
 
-              {/* TAB 4: KONNECT */}
               {activeTab === 'konnect' && (
                 <div className="flex flex-col gap-3">
                   {konnectPayments.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 gap-2"><MapPin className="w-10 h-10 text-orange-500/50" /><p className="text-sage text-center text-sm">No map unlock requests.</p></div>
+                    <div className="flex flex-col items-center justify-center py-10 gap-2">
+                      <MapPin className="w-10 h-10 text-sage" />
+                      <p className="text-sage text-center text-sm">
+                        No payment requests.
+                      </p>
+                    </div>
                   ) : (
                     konnectPayments.map((payment) => (
-                      <div key={payment.id} className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+                      <div
+                        key={payment.id}
+                        className="bg-surface border border-gray-800 rounded-xl p-4 flex flex-col gap-3"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
                             <div className="text-white font-bold flex items-center gap-1.5">
-                              {payment.feature === 'konnect_ghost' ? <><Ghost className="w-4 h-4 text-gray-400" /> Ghost Mode (P30)</> : <><MapPin className="w-4 h-4 text-pine" /> Base Unlock (P20)</>}
+                              {payment.feature === 'konnect_ghost' ? (
+                                <>
+                                  <Ghost className="w-4 h-4 text-sage" /> Ghost
+                                  Mode (P30)
+                                </>
+                              ) : payment.feature === 'kritic_unlimited_p50' ? (
+                                <>
+                                  <Zap className="w-4 h-4 text-pine" /> Kritic
+                                  Unlimited (P50)
+                                </>
+                              ) : (
+                                <>
+                                  <MapPin className="w-4 h-4 text-pine" /> Base
+                                  Unlock (P20)
+                                </>
+                              )}
                             </div>
-                            <div className="text-sage text-[10px] mt-0.5">User: {payment.profiles?.email || 'Unknown'}</div>
+                            <div className="text-sage text-[10px] mt-0.5">
+                              User: {payment.profiles?.email || 'Unknown'}
+                            </div>
                           </div>
-                          {payment.status === 'verified' ? <span className="bg-pine/20 text-pine text-[10px] font-black px-2 py-1 rounded">VERIFIED</span> : payment.status === 'failed' ? <span className="bg-red-950 border border-red-500/50 text-red-400 text-[10px] font-black px-2 py-1 rounded">REJECTED</span> : <span className="bg-orange-500/20 text-orange-400 text-[10px] font-black px-2 py-1 rounded animate-pulse">PENDING AUDIT</span>}
+                          {payment.status === 'verified' ? (
+                            <span className="bg-pine/20 text-pine text-[10px] font-black px-2 py-1 rounded">
+                              VERIFIED
+                            </span>
+                          ) : payment.status === 'failed' ? (
+                            <span className="bg-red-950 border border-red-500/50 text-red-400 text-[10px] font-black px-2 py-1 rounded">
+                              REJECTED
+                            </span>
+                          ) : (
+                            <span className="bg-ink border border-pine/40 text-pine text-[10px] font-black px-2 py-1 rounded">
+                              PENDING AUDIT
+                            </span>
+                          )}
                         </div>
                         <div className="bg-ink rounded p-2 text-xs flex flex-col gap-1 border border-gray-800">
-                          <div className="flex justify-between items-center"><span className="text-sage">Amount: <strong className="text-white">P{payment.amount}</strong></span><span className="text-sage">SMS ID: <strong className="text-white">{payment.payment_ref_id || 'N/A'}</strong></span></div>
-                          <div className="flex justify-between items-center pt-1 border-t border-gray-800/50"><span className="text-sage">Ref Code:</span><strong className="text-pine font-mono tracking-wider">{payment.reference_code || 'N/A'}</strong></div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sage">
+                              Amount:{' '}
+                              <strong className="text-white">
+                                P{payment.amount}
+                              </strong>
+                            </span>
+                            <span className="text-sage">
+                              SMS ID:{' '}
+                              <strong className="text-white">
+                                {payment.payment_ref_id || 'N/A'}
+                              </strong>
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-gray-800/50">
+                            <span className="text-sage">Ref Code:</span>
+                            <strong className="text-pine font-mono tracking-wider">
+                              {payment.reference_code || 'N/A'}
+                            </strong>
+                          </div>
                         </div>
                         {payment.status === 'pending' && (
                           <div className="flex gap-2 pt-1">
-                            <button onClick={() => verifyKonnectPayment(payment.id)} className="flex-1 bg-pine/20 border border-pine/40 text-pine rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"><CheckCircle className="w-3.5 h-3.5" /> Approve</button>
-                            <button onClick={() => rejectKonnectPayment(payment.id, payment.user_id)} className="flex-1 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"><XCircle className="w-3.5 h-3.5" /> Reject</button>
+                            <button
+                              onClick={() => verifyKonnectPayment(payment.id)}
+                              className="flex-1 bg-pine text-black rounded-lg py-2 text-xs font-black flex items-center justify-center gap-1 active:scale-95 transition-transform"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Approve
+                            </button>
+                            <button
+                              onClick={() =>
+                                rejectKonnectPayment(
+                                  payment.id,
+                                  payment.user_id
+                                )
+                              }
+                              className="flex-1 bg-red-950/40 border border-red-600/50 text-red-400 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-1 active:scale-95 transition-transform"
+                            >
+                              <XCircle className="w-3.5 h-3.5" /> Reject
+                            </button>
                           </div>
                         )}
                       </div>
