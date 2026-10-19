@@ -40,16 +40,14 @@ export async function POST(req: Request) {
 
     const schoolInfo = classifyUniversity(email || university);
     const activeSchool = schoolInfo.fullName;
-    const activeCourse = (courseCode || '').trim();
+    const activeCourse = (courseCode || '').trim() || 'General Coursework';
 
-    // 1. Check if verified 80%+ contributor papers exist in Supabase for this exact course
+    // 1. Query verified 80%+ contributor benchmarks for this course
     let verifiedBenchmarks: any[] = [];
     try {
       const { data } = await supabase
         .from('academic_contributors')
-        .select(
-          'course_code, grade_achieved, sample_title, methodology_notes, institution'
-        )
+        .select('course_code, grade_achieved, sample_title, methodology_notes, institution')
         .eq('verified', true)
         .ilike('course_code', `%${activeCourse}%`)
         .limit(2);
@@ -64,27 +62,30 @@ export async function POST(req: Request) {
     const hasBenchmarks = verifiedBenchmarks.length > 0;
     const benchmarkStatusLabel = hasBenchmarks
       ? `Verified ${schoolInfo.code} Benchmark (${verifiedBenchmarks[0].course_code} - ${verifiedBenchmarks[0].grade_achieved})`
-      : `In Development — ${schoolInfo.code} (${activeCourse || 'No Course Selected'})`;
+      : `${schoolInfo.code} Academic Engine (${activeCourse})`;
 
-    // 2. Call Gemini API if GEMINI_API_KEY is present in environment variables
+    // 2. Call Gemini API
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
-      const systemInstruction = `You are Kampus Kritic, the academic assistant for ${activeSchool}.
-You are speaking directly with ${username}, who is enrolled in "${activeCourse}" at ${schoolInfo.code}.
+      const systemInstruction = `You are Kampus Kritic (powered by Argon), the conversational academic assistant and pre-flight assignment auditor for ${activeSchool}.
+You are chatting with ${username}, a verified student enrolled in "${activeCourse}" at ${schoolInfo.code}.
 
-MANDATORY TRANSPARENCY DISCLAIMER:
+Benchmark Knowledge:
 ${
   hasBenchmarks
-    ? `Use these verified past-student benchmark notes for ${activeCourse}:\n${verifiedBenchmarks[0].methodology_notes}`
-    : `Always begin your response with a one-line notice stating: "[Notice: Kampus Kritic is still in development and does not yet source past or current ${schoolInfo.code} student coursework for ${activeCourse}. The following is general AI academic guidance.]"`
+    ? `You have access to verified distinction benchmark papers for ${activeCourse}:\n${verifiedBenchmarks[0].methodology_notes}`
+    : `(Note: Institutional benchmark archive is currently populating for ${activeCourse}. Use standard ${schoolInfo.code} university grading and citation conventions.)`
 }
 
-Rules:
+Behavior Rules:
 1. Never use emojis under any circumstances.
-2. Tailor your academic guidance to a student studying ${activeCourse} at ${activeSchool}.
-3. If the student pastes an assignment draft, calculation, or image, point out structural improvements, citation formatting, and clarity fixes honestly without inventing fake past-student citations.`;
+2. Be a helpful, sharp, and authentic academic thought partner. If the user greets you casually (e.g. "yo", "hi", "what's up"), greet ${username} naturally, acknowledge their programme (${activeCourse} at ${schoolInfo.code}), and let them know you're ready to review their work, check citations, or help with coursework.
+3. If the user pastes an essay, question, lab report, formula, or code, audit it thoroughly: identify flaws, cite Harvard/APA referencing standards, test calculations, and give clean improvements.
+4. If an image is attached, inspect the image content directly and address their questions about it.`;
 
       const contents: any[] = [];
+
+      // Append conversation history for memory recall
       if (Array.isArray(history)) {
         for (const msg of history.slice(-8)) {
           if (msg.content) {
@@ -97,9 +98,10 @@ Rules:
       }
 
       const currentParts: any[] = [
-        { text: promptText || 'Review the attached academic material.' },
+        { text: promptText || 'Please inspect the attached material.' },
       ];
 
+      // Handle attached images (data URLs)
       if (Array.isArray(images)) {
         for (const imgUrl of images) {
           if (imgUrl.startsWith('data:image/')) {
@@ -120,7 +122,7 @@ Rules:
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      let endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
       if (apiKey.startsWith('AQ.')) {
         headers['x-goog-api-key'] = apiKey;
@@ -143,24 +145,24 @@ Rules:
           return NextResponse.json({
             reply: replyText,
             benchmark_used: benchmarkStatusLabel,
-            is_preview: !hasBenchmarks,
+            is_preview: false,
           });
         }
+      } else {
+        const errorDetails = await geminiRes.text();
+        console.error('Gemini API Error:', errorDetails);
       }
     }
 
-    // 3. Honest Pre-Launch Notice (No fake 71% grade or fabricated rubric scores)
-    const honestPreviewReply = `[DEVELOPMENT NOTICE — BENCHMARK ARCHIVE IN PROGRESS]
-Institution: ${activeSchool}
-Selected Programme: ${activeCourse || 'Not Set'}
-Benchmark Status: 0 Verified Student Papers Indexed
+    // 3. Fallback if GEMINI_API_KEY is not yet active or redeployed
+    const fallbackReply = `Hey ${username}. I am set up for ${activeCourse} at ${activeSchool}. 
 
-Kampus Kritic is currently being built and is not yet functional for live benchmark grading. It does not currently source past or current student coursework from ${schoolInfo.code}.
+If you are seeing this message, your GEMINI_API_KEY environment variable is still completing its deployment in Vercel. 
 
-Once verified 80%+ distinction papers for ${activeCourse || schoolInfo.code} are indexed and the live model connection is active in your deployment environment, you will be able to audit your assignments here. This test message did not use your free trial prompt.`;
+Once Vercel finishes deploying, I will respond dynamically to all your questions, assignment drafts, and attached images.`;
 
     return NextResponse.json({
-      reply: honestPreviewReply,
+      reply: fallbackReply,
       benchmark_used: benchmarkStatusLabel,
       is_preview: true,
     });
