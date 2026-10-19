@@ -82,7 +82,7 @@ export default function ProfileReviews({
 
     toast({
       title: 'Review Submitted',
-      description: 'Your anonymous peer review is live.',
+      description: 'Your peer review is live.',
     });
     setComment('');
     setRating(5);
@@ -98,30 +98,30 @@ export default function ProfileReviews({
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      <div className="flex items-center justify-between bg-zinc-950/60 ring-1 ring-white/[0.06] p-3.5 rounded-2xl">
+      <div className="flex items-center justify-between bg-ink border border-gray-800 p-3.5 rounded-2xl">
         <div className="flex flex-col">
-          <span className="text-zinc-100 font-semibold text-xs">
+          <span className="text-white font-bold text-xs">
             Peer Trust Rating
           </span>
-          <span className="text-zinc-500 text-[11px]">
-            {reviews.length} Anonymous Reviews
+          <span className="text-sage text-[11px]">
+            {reviews.length} Student Reviews
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-lg font-bold font-mono text-amber-300">
+          <span className="text-lg font-black font-mono text-pine">
             {avgRating}
           </span>
-          <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+          <Star className="w-4 h-4 text-pine fill-pine" />
         </div>
       </div>
 
       {currentUserId && currentUserId !== targetUserId && (
         <form
           onSubmit={handleSubmit}
-          className="bg-zinc-950/60 ring-1 ring-white/[0.06] p-4 rounded-2xl flex flex-col gap-3"
+          className="bg-ink border border-gray-800 p-4 rounded-2xl flex flex-col gap-3"
         >
-          <span className="text-zinc-400 text-xs font-medium">
-            Leave an Anonymous Review
+          <span className="text-sage text-xs font-bold uppercase tracking-wider">
+            Leave a Peer Review
           </span>
 
           <div className="flex gap-1.5">
@@ -134,9 +134,7 @@ export default function ProfileReviews({
               >
                 <Star
                   className={`w-5 h-5 ${
-                    rating >= star
-                      ? 'text-amber-400 fill-amber-400'
-                      : 'text-zinc-700'
+                    rating >= star ? 'text-pine fill-pine' : 'text-gray-700'
                   }`}
                 />
               </button>
@@ -149,13 +147,13 @@ export default function ProfileReviews({
             placeholder="Share your experience trading or interacting with this student..."
             required
             maxLength={250}
-            className="w-full bg-zinc-900/90 ring-1 ring-white/[0.07] rounded-xl p-3 text-white placeholder:text-zinc-500 text-xs outline-none focus:ring-emerald-700/50 resize-none h-20"
+            className="w-full bg-surface border border-gray-800 rounded-xl p-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine resize-none h-20"
           />
 
           <button
             type="submit"
             disabled={submitting || !comment.trim()}
-            className="w-full h-10 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-xs active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+            className="w-full h-10 rounded-xl bg-pine text-black font-black text-xs active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
           >
             {submitting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -170,24 +168,24 @@ export default function ProfileReviews({
       <div className="flex flex-col gap-2.5">
         {loading ? (
           <div className="flex justify-center p-4">
-            <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+            <Loader2 className="w-5 h-5 text-pine animate-spin" />
           </div>
         ) : reviews.length === 0 ? (
-          <div className="text-center p-5 text-zinc-500 text-xs bg-zinc-950/40 ring-1 ring-white/[0.05] rounded-2xl">
+          <div className="text-center p-5 text-sage text-xs bg-ink border border-gray-800 rounded-2xl">
             No peer reviews yet.
           </div>
         ) : (
           reviews.map((rev, i) => (
             <div
               key={i}
-              className="bg-zinc-950/60 ring-1 ring-white/[0.06] p-3.5 rounded-2xl flex flex-col gap-1.5"
+              className="bg-ink border border-gray-800 p-3.5 rounded-2xl flex flex-col gap-1.5"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center">
-                    <MessageSquare className="w-2.5 h-2.5 text-emerald-400" />
+                  <div className="w-5 h-5 rounded-full bg-surface border border-pine/40 flex items-center justify-center">
+                    <MessageSquare className="w-2.5 h-2.5 text-pine" />
                   </div>
-                  <span className="text-zinc-200 text-xs font-medium">
+                  <span className="text-white text-xs font-bold">
                     Verified Student
                   </span>
                 </div>
@@ -197,16 +195,14 @@ export default function ProfileReviews({
                       key={idx}
                       className={`w-3 h-3 ${
                         idx < rev.rating
-                          ? 'text-amber-400 fill-amber-400'
-                          : 'text-zinc-700'
+                          ? 'text-pine fill-pine'
+                          : 'text-gray-700'
                       }`}
                     />
                   ))}
                 </div>
               </div>
-              <p className="text-zinc-400 text-xs leading-relaxed">
-                {rev.comment}
-              </p>
+              <p className="text-sage text-xs leading-relaxed">{rev.comment}</p>
             </div>
           ))
         )}
