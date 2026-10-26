@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { classifyUniversity } from '@/lib/utils';
 
+const ACTIVE_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-flash-latest',
+  'gemini-2.5-flash',
+];
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -64,8 +70,8 @@ ${
 
 Rules:
 1. Never use emojis.
-2. Be an authentic, helpful academic collaborator. If the student greets you casually (e.g. "yo", "what can you do"), answer naturally, state that you are Kampus Kritic calibrated for ${activeCourse} at ${schoolInfo.code}, and offer to audit drafts, explain concepts, check citations, or review attached screenshots.
-3. If the student submits assignments or formulas, audit them rigorously.`;
+2. Be an authentic, helpful academic collaborator. If the student greets you casually (e.g. "yo", "what can you do"), answer naturally, state that you are Kampus Kritic calibrated for ${activeCourse} at ${schoolInfo.code}, and ask how you can assist with their coursework or assignments.
+3. If the student submits drafts, questions, code, or formulas, audit them rigorously according to university rubrics.`;
 
     const contents: any[] = [];
 
@@ -100,39 +106,44 @@ Rules:
 
     contents.push({ role: 'user', parts: currentParts });
 
-    // Using stable v1 endpoint
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const requestPayload = {
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents,
+    };
 
-    const geminiRes = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents,
-      }),
-    });
+    let lastError = '';
 
-    if (geminiRes.ok) {
-      const geminiJson = await geminiRes.json();
-      const replyText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (replyText) {
-        return NextResponse.json({
-          reply: replyText,
-          benchmark_used: benchmarkStatusLabel,
-          is_preview: false,
-        });
+    // Loop through active model aliases to handle Google Studio deprecation/renaming
+    for (const modelName of ACTIVE_MODELS) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+      const geminiRes = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify(requestPayload),
+      });
+
+      if (geminiRes.ok) {
+        const geminiJson = await geminiRes.json();
+        const replyText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (replyText) {
+          return NextResponse.json({
+            reply: replyText,
+            benchmark_used: benchmarkStatusLabel,
+            is_preview: false,
+          });
+        }
       }
+
+      lastError = await geminiRes.text();
+      console.warn(`Model ${modelName} failed (${geminiRes.status}):`, lastError);
     }
 
-    // Capture the exact status and error message from Google's servers
-    const errText = await geminiRes.text();
-    console.error('Gemini API Error from Google:', geminiRes.status, errText);
-
     return NextResponse.json({
-      reply: `Gemini API Error (HTTP ${geminiRes.status}): ${errText}`,
+      reply: `Gemini API Error: ${lastError}`,
       benchmark_used: benchmarkStatusLabel,
       is_preview: true,
     });
