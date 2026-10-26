@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     if (!apiKey) {
       return NextResponse.json({
-        reply: `Configuration Error: GEMINI_API_KEY is not set in Vercel Environment Variables. Please add GEMINI_API_KEY under Vercel Project Settings -> Environment Variables and redeploy.`,
+        reply: `Configuration Error: GEMINI_API_KEY is not set in Vercel Environment Variables. Please add GEMINI_API_KEY under Vercel Settings -> Environment Variables and redeploy.`,
         benchmark_used: benchmarkStatusLabel,
         is_preview: true,
       });
@@ -63,8 +63,8 @@ ${
 }
 
 Rules:
-1. Never use emojis under any circumstances.
-2. Be an authentic, helpful academic collaborator. If the student greets you casually (e.g. "yo", "what can you do"), answer naturally, state what you can do for their ${activeCourse} programme at ${schoolInfo.code}, and offer to audit drafts, explain concepts, check citations, or review attached screenshots.
+1. Never use emojis.
+2. Be an authentic, helpful academic collaborator. If the student greets you casually (e.g. "yo", "what can you do"), answer naturally, state that you are Kampus Kritic calibrated for ${activeCourse} at ${schoolInfo.code}, and offer to audit drafts, explain concepts, check citations, or review attached screenshots.
 3. If the student submits assignments or formulas, audit them rigorously.`;
 
     const contents: any[] = [];
@@ -100,8 +100,8 @@ Rules:
 
     contents.push({ role: 'user', parts: currentParts });
 
-    // Official v1beta endpoint for gemini-1.5-flash
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Using stable v1 endpoint
+    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const geminiRes = await fetch(endpoint, {
       method: 'POST',
