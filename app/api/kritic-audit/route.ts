@@ -13,6 +13,28 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
+    // Automated SMS webhook handler for FNB Pay2Cell / eWallet
+    if (body.action === 'auto_verify_sms') {
+      const { smsText } = body;
+      const refMatch = (smsText || '').match(/KRT-\d{4}/i);
+      if (refMatch) {
+        const matchedRef = refMatch[0].toUpperCase();
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        await supabase
+          .from('profiles')
+          .update({
+            kritic_unlimited: true,
+            is_premium: true,
+            kritic_sub_until: nextMonth.toISOString(),
+            payment_ref_code: 'VERIFIED',
+          })
+          .eq('payment_ref_code', matchedRef);
+        return NextResponse.json({ verified: true, reference: matchedRef });
+      }
+      return NextResponse.json({ verified: false });
+    }
+
     const {
       promptText = '',
       images = [],
@@ -32,7 +54,9 @@ export async function POST(req: Request) {
     try {
       const { data } = await supabase
         .from('academic_contributors')
-        .select('course_code, grade_achieved, sample_title, methodology_notes, institution')
+        .select(
+          'course_code, grade_achieved, sample_title, methodology_notes, institution'
+        )
         .eq('verified', true)
         .ilike('course_code', `%${activeCourse}%`)
         .limit(2);
@@ -71,17 +95,19 @@ You are chatting with ${username}, a verified student enrolled in "${activeCours
 ${
   hasBenchmarks
     ? `Verified distinction benchmark notes for ${activeCourse}:\n${verifiedBenchmarks[0].methodology_notes}`
-    : `(Note: The past-student benchmark archive for ${activeCourse} is still being populated. Provide rigorous, standard ${schoolInfo.code} academic guidance, Harvard/APA citation checks, and coursework support.)`
+    : `(Note: The past-student benchmark archive for ${activeCourse} is currently being populated and does not yet pull live student records. Provide rigorous, standard ${schoolInfo.code} academic guidance, Harvard/APA citation checks, and coursework support.)`
 }
 
 Rules:
-1. Never use emojis.
-2. Be an authentic, sharp academic collaborator. If the student greets you casually (e.g. "yo", "what can you do"), greet ${username} naturally, acknowledge their ${activeCourse} programme at ${schoolInfo.code}, and explain how you can help audit drafts, check citations, verify calculations, or review pasted screenshots.
-3. If the student submits drafts, questions, code, or formulas, audit them thoroughly.`;
+1. Never use emojis under any circumstances.
+2. Be an authentic, sharp academic collaborator. If the student greets you casually (e.g. "yo", "what can you do"), greet ${username} naturally, acknowledge their ${activeCourse} programme at ${schoolInfo.code}, and explain how you can help audit drafts, check citations, verify calculations, or review attached PDFs and screenshots.
+3. If the student submits drafts, questions, PDFs, code, or formulas, audit them thoroughly with clear section headings.`;
 
-    // 3. Build clean alternating conversation history (excluding the current user turn which KampusKritic already appended)
+    // 3. Build clean alternating conversation history
     const contents: any[] = [];
-    const priorHistory = Array.isArray(history) ? history.slice(0, -1).slice(-6) : [];
+    const priorHistory = Array.isArray(history)
+      ? history.slice(0, -1).slice(-6)
+      : [];
 
     for (const msg of priorHistory) {
       if (
@@ -91,7 +117,6 @@ Rules:
         !msg.content.startsWith('Gemini API Error')
       ) {
         const role = msg.role === 'assistant' ? 'model' : 'user';
-        // Ensure first message is 'user' and roles alternate
         if (contents.length === 0 && role === 'model') continue;
         if (contents.length > 0 && contents[contents.length - 1].role === role) {
           contents[contents.length - 1].parts[0].text += `\n${msg.content}`;
@@ -105,13 +130,22 @@ Rules:
     }
 
     const currentParts: any[] = [
-      { text: promptText || 'Please inspect the attached coursework.' },
+      {
+        text:
+          promptText ||
+          'Please inspect and audit the attached academic document or image.',
+      },
     ];
 
+    // Support both base64 images (data:image/...) and PDFs (data:application/pdf...)
     if (Array.isArray(images)) {
-      for (const imgUrl of images) {
-        if (typeof imgUrl === 'string' && imgUrl.startsWith('data:image/')) {
-          const [meta, base64Data] = imgUrl.split(',');
+      for (const fileDataUrl of images) {
+        if (
+          typeof fileDataUrl === 'string' &&
+          (fileDataUrl.startsWith('data:image/') ||
+            fileDataUrl.startsWith('data:application/pdf'))
+        ) {
+          const [meta, base64Data] = fileDataUrl.split(',');
           const mimeType = meta.split(':')[1]?.split(';')[0] || 'image/png';
           currentParts.push({
             inlineData: { mimeType, data: base64Data },
@@ -131,7 +165,7 @@ Rules:
       contents,
     };
 
-    // 4. Discover available models directly from Google's ListModels endpoint if needed
+    // 4. Discover available models from ListModels endpoint
     let modelsToTry = [...PREFERRED_MODELS];
     try {
       const listRes = await fetch(
@@ -158,11 +192,14 @@ Rules:
           .map((m: any) => m.name);
 
         if (available.length > 0) {
-          // Prioritize flash models from the live list, then append the rest
           const flashModels = available.filter((n) => n.includes('flash'));
           const otherModels = available.filter((n) => !n.includes('flash'));
           modelsToTry = Array.from(
-            new Set([...PREFERRED_MODELS.filter((p) => available.includes(p)), ...flashModels, ...otherModels])
+            new Set([
+              ...PREFERRED_MODELS.filter((p) => available.includes(p)),
+              ...flashModels,
+              ...otherModels,
+            ])
           );
         }
       }
