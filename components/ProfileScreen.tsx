@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   User,
-  ShieldCheck,
   ChevronRight,
   Lock,
   Bell,
@@ -20,6 +19,10 @@ import {
   BookOpen,
   GraduationCap,
   PauseCircle,
+  Search,
+  Check,
+  Award,
+  FileText,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { classifyUniversity } from '@/lib/utils';
@@ -70,13 +73,22 @@ export default function ProfileScreen({
   const [resubmitId, setResubmitId] = useState<string | null>(null);
   const [resubmitRef, setResubmitRef] = useState('');
 
+  // Edit Profile & Official Course Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editUsername, setEditUsername] = useState(
     profile?.username || profile?.email?.split('@')[0] || ''
   );
   const [editCourse, setEditCourse] = useState(profile?.course_code || '');
+  const [courseSearch, setCourseSearch] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Contributor Benchmark Portal Modal
+  const [showContributorModal, setShowContributorModal] = useState(false);
+  const [contribTitle, setContribTitle] = useState('');
+  const [contribGrade, setContribGrade] = useState('85%');
+  const [contribNotes, setContribNotes] = useState('');
+  const [submittingContrib, setSubmittingContrib] = useState(false);
 
   const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(
     profile?.avatar_url || null
@@ -209,16 +221,23 @@ export default function ProfileScreen({
 
   const handleSaveProfile = async () => {
     if (!profile || !editUsername.trim()) return;
-    setIsSavingProfile(true);
+    if (!editCourse || !schoolInfo.courses.includes(editCourse)) {
+      toast({
+        title: 'Select Official Programme',
+        description: `Please select a valid degree programme offered at ${schoolInfo.code}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
+    setIsSavingProfile(true);
     const cleanUsername = editUsername.trim().replace(/^@/, '');
-    const cleanCourse = editCourse.trim().toUpperCase();
 
     const { error } = await supabase
       .from('profiles')
       .update({
         username: cleanUsername,
-        course_code: cleanCourse || null,
+        course_code: editCourse,
         university: schoolInfo.fullName,
       })
       .eq('id', profile.id);
@@ -233,19 +252,55 @@ export default function ProfileScreen({
       });
     } else {
       setLocalUsername(cleanUsername);
-      setLocalCourse(cleanCourse);
+      setLocalCourse(editCourse);
       setIsEditModalOpen(false);
       if (onProfileUpdate) {
         onProfileUpdate({
           ...profile,
           username: cleanUsername,
-          course_code: cleanCourse || null,
+          course_code: editCourse,
           university: schoolInfo.fullName,
         });
       }
       toast({
         title: 'Profile Updated',
-        description: 'Your username and course settings are now active.',
+        description: `Saved @${cleanUsername} (${editCourse}).`,
+      });
+    }
+  };
+
+  const handleSubmitContribution = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || !contribTitle.trim() || !contribNotes.trim()) return;
+    setSubmittingContrib(true);
+
+    const { error } = await supabase.from('academic_contributors').insert({
+      user_id: profile.id,
+      email: profile.email,
+      institution: schoolInfo.code,
+      course_code: localCourse || schoolInfo.code,
+      grade_achieved: contribGrade.trim(),
+      sample_title: contribTitle.trim(),
+      methodology_notes: contribNotes.trim(),
+      verified: false,
+    });
+
+    setSubmittingContrib(false);
+
+    if (error) {
+      toast({
+        title: 'Submission Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      setContribTitle('');
+      setContribNotes('');
+      setShowContributorModal(false);
+      toast({
+        title: 'Benchmark Submitted for Verification',
+        description:
+          'Once verified, your anonymized work will earn passive royalties.',
       });
     }
   };
@@ -291,21 +346,25 @@ export default function ProfileScreen({
     }
   };
 
+  const filteredCourses = schoolInfo.courses.filter((c) =>
+    c.toLowerCase().includes(courseSearch.trim().toLowerCase())
+  );
+
   return (
     <div className="flex-1 bg-midnight flex flex-col items-center overflow-y-auto px-4 pb-32 pt-5 relative">
       <PushNotificationBanner userId={profile?.id ?? ''} />
 
-      {/* Edit Profile & Course Modal */}
+      {/* Edit Profile & Official School Course Modal */}
       {isEditModalOpen && (
-        <div className="absolute inset-0 z-[2000] flex items-end">
+        <div className="fixed inset-0 z-[6000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
             onClick={() => setIsEditModalOpen(false)}
           />
-          <div className="relative w-full bg-surface border-t border-gray-800 rounded-t-3xl p-6 flex flex-col gap-5 animate-slide-up pb-10">
+          <div className="relative w-full max-w-[430px] max-h-[88dvh] bg-surface border-t sm:border border-gray-800 rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4 animate-slide-up overflow-y-auto no-scrollbar pb-10">
             <div className="flex items-center justify-between">
               <span className="text-white font-black text-base">
-                Edit Student Profile
+                Edit Student Profile &amp; Programme
               </span>
               <button
                 onClick={() => setIsEditModalOpen(false)}
@@ -315,9 +374,9 @@ export default function ProfileScreen({
               </button>
             </div>
 
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-2">
               <div
-                className="relative w-24 h-24 rounded-full bg-ink border-2 border-pine/50 p-1 cursor-pointer group"
+                className="relative w-20 h-20 rounded-full bg-ink border-2 border-pine/50 p-1 cursor-pointer group"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden relative">
@@ -328,13 +387,13 @@ export default function ProfileScreen({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="w-10 h-10 text-sage" />
+                    <User className="w-8 h-8 text-sage" />
                   )}
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     {uploadingAvatar ? (
-                      <Loader2 className="w-5 h-5 text-pine animate-spin" />
+                      <Loader2 className="w-4 h-4 text-pine animate-spin" />
                     ) : (
-                      <Camera className="w-5 h-5 text-white" />
+                      <Camera className="w-4 h-4 text-white" />
                     )}
                   </div>
                 </div>
@@ -346,8 +405,8 @@ export default function ProfileScreen({
                   className="hidden"
                 />
               </div>
-              <span className="text-sage text-xs">
-                Tap photo to upload a new avatar
+              <span className="text-sage text-[11px]">
+                Tap photo to change avatar
               </span>
             </div>
 
@@ -360,35 +419,166 @@ export default function ProfileScreen({
                 value={editUsername}
                 onChange={(e) => setEditUsername(e.target.value)}
                 placeholder="Enter your campus username"
-                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-sm"
+                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-xs font-bold"
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sage text-xs font-bold uppercase tracking-wider">
-                Active Course / Programme (Used by Kampus Kritic)
-              </label>
-              <input
-                type="text"
-                value={editCourse}
-                onChange={(e) => setEditCourse(e.target.value)}
-                placeholder="e.g. CSE311 / BSc Computer Systems / ACC201"
-                className="bg-ink rounded-xl h-11 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-sm"
-              />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sage text-xs font-bold uppercase tracking-wider">
+                  Official {schoolInfo.code} Programme
+                </label>
+                <span className="text-pine text-[10px] font-bold">
+                  {schoolInfo.code} Catalogue
+                </span>
+              </div>
+
+              <div className="relative flex items-center">
+                <Search className="absolute left-3 w-3.5 h-3.5 text-sage" />
+                <input
+                  type="text"
+                  value={courseSearch}
+                  onChange={(e) => setCourseSearch(e.target.value)}
+                  placeholder={`Search ${schoolInfo.code} courses (e.g. Law, Computer, Finance)...`}
+                  className="bg-ink rounded-xl h-10 w-full pl-9 pr-3 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-xs"
+                />
+              </div>
+
+              <div className="max-h-44 overflow-y-auto rounded-xl bg-ink border border-gray-800 divide-y divide-gray-800/70 no-scrollbar">
+                {filteredCourses.length === 0 ? (
+                  <div className="p-3 text-center text-sage text-xs">
+                    No matching course offered at {schoolInfo.code}.
+                  </div>
+                ) : (
+                  filteredCourses.map((c) => {
+                    const isSelected = editCourse === c;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setEditCourse(c)}
+                        className={`w-full px-3 py-2.5 text-left text-xs flex items-center justify-between transition-colors ${
+                          isSelected
+                            ? 'bg-pine text-black font-black'
+                            : 'text-white hover:bg-surface font-medium'
+                        }`}
+                      >
+                        <span className="pr-2">{c}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             <button
               onClick={handleSaveProfile}
-              disabled={isSavingProfile || !editUsername.trim()}
-              className="w-full h-12 mt-1 rounded-xl bg-pine text-black font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+              disabled={isSavingProfile || !editUsername.trim() || !editCourse}
+              className="w-full h-11 mt-1 rounded-xl bg-pine text-black font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
             >
               {isSavingProfile ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                'Save Profile & Course'
+                'Save Profile & Programme'
               )}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Contributor Benchmark Submission Drawer */}
+      {showContributorModal && (
+        <div className="fixed inset-0 z-[6000] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => setShowContributorModal(false)}
+          />
+          <form
+            onSubmit={handleSubmitContribution}
+            className="relative w-full max-w-[430px] max-h-[88dvh] bg-surface border-t sm:border border-gray-800 rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4 animate-slide-up overflow-y-auto no-scrollbar pb-10"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-pine" />
+                <span className="text-white font-black text-base">
+                  Submit 80%+ Course Benchmark
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContributorModal(false)}
+                className="text-sage hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sage text-xs leading-relaxed">
+              Lend your anonymized distinction assignments or test solutions for{' '}
+              <strong className="text-white">
+                {localCourse || schoolInfo.code}
+              </strong>
+              . Every time Kampus Kritic references your benchmark to audit a
+              junior student, passive royalties are logged to your eWallet.
+            </p>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="col-span-2 flex flex-col gap-1">
+                <label className="text-sage text-[10px] font-bold uppercase">
+                  Assignment / Module Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={contribTitle}
+                  onChange={(e) => setContribTitle(e.target.value)}
+                  placeholder="e.g. BIS302 Database Design Project"
+                  className="bg-ink rounded-xl h-10 px-3 border border-gray-800 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sage text-[10px] font-bold uppercase">
+                  Grade Scored
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={contribGrade}
+                  onChange={(e) => setContribGrade(e.target.value)}
+                  placeholder="e.g. 88% / A"
+                  className="bg-ink rounded-xl h-10 px-3 border border-gray-800 text-pine font-black text-xs outline-none focus:border-pine"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sage text-[10px] font-bold uppercase">
+                Paste Assignment Text, Methodology, or Rubric Breakdown
+              </label>
+              <textarea
+                rows={5}
+                required
+                value={contribNotes}
+                onChange={(e) => setContribNotes(e.target.value)}
+                placeholder="Paste your high-scoring essay structure, methodology, or key marking criteria..."
+                className="bg-ink rounded-xl p-3 border border-gray-800 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine resize-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submittingContrib}
+              className="w-full h-11 rounded-xl bg-pine text-black font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {submittingContrib ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileText className="w-4 h-4" />
+              )}
+              <span>Submit Anonymized Benchmark</span>
+            </button>
+          </form>
         </div>
       )}
 
@@ -545,26 +735,49 @@ export default function ProfileScreen({
         </div>
       </div>
 
-      {/* Dedicated Course & Academic Calibration Card */}
-      <div className="w-full mt-5 bg-surface border border-gray-800 rounded-2xl p-4 flex items-center justify-between">
+      {/* Official Degree Programme Card */}
+      <div className="w-full mt-5 bg-surface border border-gray-800 rounded-2xl p-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-ink border border-pine/30 flex items-center justify-center shrink-0">
             <BookOpen className="w-5 h-5 text-pine" strokeWidth={1.75} />
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
-              Course / Programme
+              {schoolInfo.code} Degree Programme
             </span>
-            <span className="text-white font-bold text-sm truncate">
-              {localCourse || 'Not set — tap Edit to configure Kritic'}
+            <span className="text-white font-bold text-xs truncate">
+              {localCourse || `Select your official ${schoolInfo.code} course`}
             </span>
           </div>
         </div>
         <button
           onClick={() => setIsEditModalOpen(true)}
-          className="px-3 py-1.5 rounded-xl bg-pine text-black text-xs font-black shrink-0 active:scale-95 transition-transform"
+          className="px-3 py-2 rounded-xl bg-pine text-black text-xs font-black shrink-0 active:scale-95 transition-transform"
         >
-          {localCourse ? 'Edit' : 'Set Course'}
+          {localCourse ? 'Change' : 'Select'}
+        </button>
+      </div>
+
+      {/* Contributor Benchmark Card (For High-Scoring Students) */}
+      <div className="w-full mt-3 bg-surface border border-pine/30 rounded-2xl p-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-ink border border-pine/40 flex items-center justify-center shrink-0">
+            <Award className="w-5 h-5 text-pine" strokeWidth={1.75} />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-pine text-[10px] font-black uppercase tracking-wider">
+              Passive Royalty Program
+            </span>
+            <span className="text-white font-bold text-xs truncate">
+              Lend 80%+ Coursework to Kritic Vault
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowContributorModal(true)}
+          className="px-3 py-2 rounded-xl bg-ink border border-pine/40 text-pine text-xs font-black shrink-0 active:scale-95 transition-transform"
+        >
+          Submit
         </button>
       </div>
 
