@@ -20,6 +20,7 @@ import {
   Trash2,
   Search,
   ChevronRight,
+  FileText,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadImages } from '@/lib/payment';
@@ -56,6 +57,79 @@ const PROMPT_STARTERS = [
   'Draft a formal email to my lecturer regarding my continuous assessment mark:',
 ];
 
+function renderInlineBold(text: string, isUser: boolean) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong
+          key={i}
+          className={isUser ? 'font-black text-black' : 'font-bold text-pine'}
+        >
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+function renderFormattedContent(content: string, isUser: boolean) {
+  const lines = content.split('\n');
+  return (
+    <div className="flex flex-col gap-1.5">
+      {lines.map((rawLine, idx) => {
+        const line = rawLine.trimEnd();
+        if (!line.trim()) {
+          return <div key={idx} className="h-1" />;
+        }
+        if (/^#{1,3}\s+/.test(line)) {
+          const cleanHeading = line.replace(/^#{1,3}\s+/, '').replace(/\*\*/g, '');
+          return (
+            <h4
+              key={idx}
+              className={`text-xs font-black uppercase tracking-wider mt-1.5 ${
+                isUser ? 'text-black' : 'text-pine'
+              }`}
+            >
+              {cleanHeading}
+            </h4>
+          );
+        }
+        if (/^[-*]\s+/.test(line)) {
+          const bulletBody = line.replace(/^[-*]\s+/, '');
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-1">
+              <span
+                className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
+                  isUser ? 'bg-black' : 'bg-pine'
+                }`}
+              />
+              <span
+                className={`text-xs leading-relaxed ${
+                  isUser ? 'text-black font-semibold' : 'text-white'
+                }`}
+              >
+                {renderInlineBold(bulletBody, isUser)}
+              </span>
+            </div>
+          );
+        }
+        return (
+          <p
+            key={idx}
+            className={`text-xs leading-relaxed whitespace-pre-wrap ${
+              isUser ? 'text-black font-semibold' : 'text-white'
+            }`}
+          >
+            {renderInlineBold(line, isUser)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function KampusKritic({
   profile,
   onProfileUpdate,
@@ -80,7 +154,7 @@ export default function KampusKritic({
     profile?.email || profile?.university
   );
 
-  // Course Gate Search State (for users who haven't set a valid school course yet)
+  // Course Gate Search State
   const [courseSearch, setCourseSearch] = useState('');
   const [selectedGateCourse, setSelectedGateCourse] = useState('');
   const [savingCourse, setSavingCourse] = useState(false);
@@ -129,6 +203,7 @@ export default function KampusKritic({
     }
   }, [profile?.kritic_prompts_used]);
 
+  // Load saved chat history from localStorage + Supabase
   useEffect(() => {
     if (!profile?.id) return;
     const storageKey = `kampus_kritic_sessions_${profile.id}`;
@@ -152,6 +227,54 @@ export default function KampusKritic({
         // Ignore malformed cache
       }
     }
+
+    // Background sync with Supabase kritic_chats & kritic_messages
+    (async () => {
+      try {
+        const { data: chatRows } = await supabase
+          .from('kritic_chats')
+          .select('*')
+          .eq('user_id', profile.id)
+          .order('updated_at', { ascending: false })
+          .limit(20);
+
+        if (chatRows && chatRows.length > 0) {
+          const chatIds = chatRows.map((c: any) => c.id);
+          const { data: msgRows } = await supabase
+            .from('kritic_messages')
+            .select('*')
+            .in('chat_id', chatIds)
+            .order('created_at', { ascending: true });
+
+          const hydrated: KriticChatSession[] = chatRows.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            course_code: c.course_code || profile.course_code || schoolInfo.code,
+            university: c.university || schoolInfo.code,
+            created_at: c.created_at,
+            messages: (msgRows || [])
+              .filter((m: any) => m.chat_id === c.id)
+              .map((m: any) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                images: m.images || [],
+                benchmark_used: m.benchmark_used,
+                created_at: m.created_at,
+              })),
+          }));
+
+          setSessions(hydrated);
+          localStorage.setItem(storageKey, JSON.stringify(hydrated));
+          if (!activeSessionId && hydrated.length > 0) {
+            setActiveSessionId(hydrated[0].id);
+            setMessages(hydrated[0].messages);
+          }
+        }
+      } catch {
+        // Fallback to localStorage
+      }
+    })();
   }, [profile?.id]);
 
   useEffect(() => {
@@ -216,13 +339,14 @@ export default function KampusKritic({
       const dataUrls = await Promise.all(base64Promises);
       setPendingImages((prev) => [...prev, ...dataUrls]);
 
-      if (profile?.id) {
-        uploadImages(files, profile.id).catch(() => {});
+      const imageOnlyFiles = files.filter((f) => f.type.startsWith('image/'));
+      if (profile?.id && imageOnlyFiles.length > 0) {
+        uploadImages(imageOnlyFiles, profile.id).catch(() => {});
       }
     } catch {
       toast({
-        title: 'Image attachment error',
-        description: 'Could not read the selected image.',
+        title: 'Attachment error',
+        description: 'Could not read the selected file.',
         variant: 'destructive',
       });
     } finally {
@@ -235,7 +359,10 @@ export default function KampusKritic({
     if (!items) return;
     const files: File[] = [];
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
+      if (
+        items[i].type.startsWith('image/') ||
+        items[i].type === 'application/pdf'
+      ) {
         const f = items[i].getAsFile();
         if (f) files.push(f);
       }
@@ -244,8 +371,8 @@ export default function KampusKritic({
       e.preventDefault();
       handleFilesSelected(files);
       toast({
-        title: 'Image Attached',
-        description: `${files.length} image(s) attached to prompt.`,
+        title: 'File Attached',
+        description: `${files.length} file(s) attached to prompt.`,
       });
     }
   };
@@ -293,7 +420,7 @@ export default function KampusKritic({
     const userMsg: KriticMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: textToSend || 'Attached image for review.',
+      content: textToSend || 'Attached file for academic review.',
       images: attachedImages,
       created_at: new Date().toISOString(),
     };
@@ -304,13 +431,41 @@ export default function KampusKritic({
     let currentSessionId = activeSessionId;
     const sessionTitle =
       textToSend.slice(0, 48) ||
-      `${profile?.course_code || schoolInfo.code} Session`;
+      `${profile?.course_code || schoolInfo.code} Audit`;
 
     if (!currentSessionId) {
       currentSessionId = crypto.randomUUID
         ? crypto.randomUUID()
         : `chat-${Date.now()}`;
       setActiveSessionId(currentSessionId);
+
+      if (profile?.id) {
+        try {
+          await supabase.from('kritic_chats').insert({
+            id: currentSessionId,
+            user_id: profile.id,
+            title: sessionTitle,
+            course_code: profile.course_code || schoolInfo.code,
+            university: schoolInfo.code,
+          });
+        } catch {
+          // Handled by localStorage
+        }
+      }
+    }
+
+    if (profile?.id) {
+      try {
+        await supabase.from('kritic_messages').insert({
+          chat_id: currentSessionId,
+          user_id: profile.id,
+          role: 'user',
+          content: userMsg.content,
+          images: attachedImages,
+        });
+      } catch {
+        // Handled by localStorage
+      }
     }
 
     try {
@@ -381,6 +536,20 @@ export default function KampusKritic({
         ];
       }
       persistSessions(nextSessions);
+
+      if (profile?.id) {
+        try {
+          await supabase.from('kritic_messages').insert({
+            chat_id: currentSessionId,
+            user_id: profile.id,
+            role: 'assistant',
+            content: assistantMsg.content,
+            benchmark_used: assistantMsg.benchmark_used,
+          });
+        } catch {
+          // Local storage updated
+        }
+      }
     } catch {
       toast({
         title: 'Connection Error',
@@ -460,7 +629,7 @@ export default function KampusKritic({
     c.toLowerCase().includes(courseSearch.trim().toLowerCase())
   );
 
-  // MANDATORY COURSE GATE: Prompts any new or existing student to select from their school's official course list
+  // MANDATORY COURSE GATE
   if (!hasValidCourse) {
     return (
       <div className="flex-1 bg-midnight flex flex-col overflow-y-auto px-4 py-6 pb-28">
@@ -546,7 +715,7 @@ export default function KampusKritic({
 
   return (
     <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
-      {/* Minimal, Clean Sub-Row: Shows School + Course on left, History & New on right */}
+      {/* Minimal, Clean Sub-Row */}
       <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
         <button
           onClick={onOpenProfile}
@@ -683,8 +852,8 @@ export default function KampusKritic({
             </div>
 
             <p className="text-sage text-xs leading-relaxed">
-              Paste an assignment paragraph, calculation, or image below, or tap
-              a prompt starter to populate your message box.
+              Paste an assignment paragraph, calculation, PDF, or image below,
+              or tap a prompt starter to populate your message box.
             </p>
 
             {!isLockedByPaywall && (
@@ -748,24 +917,28 @@ export default function KampusKritic({
 
                 {m.images && m.images.length > 0 && (
                   <div className="grid grid-cols-2 gap-2">
-                    {m.images.map((img, i) => (
-                      <img
-                        key={i}
-                        src={img}
-                        alt="Attached work"
-                        className="w-full h-28 object-cover rounded-xl border border-black/20"
-                      />
-                    ))}
+                    {m.images.map((fileUrl, i) =>
+                      fileUrl.startsWith('data:application/pdf') ? (
+                        <div
+                          key={i}
+                          className="col-span-2 p-2.5 rounded-xl bg-ink border border-gray-800 flex items-center gap-2 text-white text-xs font-bold"
+                        >
+                          <FileText className="w-4 h-4 text-pine shrink-0" />
+                          <span>Attached PDF Document</span>
+                        </div>
+                      ) : (
+                        <img
+                          key={i}
+                          src={fileUrl}
+                          alt="Attached work"
+                          className="w-full h-28 object-cover rounded-xl border border-black/20"
+                        />
+                      )
+                    )}
                   </div>
                 )}
 
-                <p
-                  className={`text-xs leading-relaxed whitespace-pre-wrap ${
-                    isUser ? 'text-black font-semibold' : 'text-white'
-                  }`}
-                >
-                  {m.content}
-                </p>
+                {renderFormattedContent(m.content, isUser)}
               </div>
               <span className="text-sage text-[10px] px-1">
                 {isUser ? displayUsername : 'Kampus Kritic'} ·{' '}
@@ -786,7 +959,7 @@ export default function KampusKritic({
           </div>
         )}
 
-        {/* P50 / Month Paywall Card (Enforced after 1 Free Prompt) */}
+        {/* P50 / Month Paywall Card */}
         {isLockedByPaywall && (
           <div className="bg-surface border border-pine/50 rounded-2xl p-5 flex flex-col gap-4 animate-slide-up">
             <div className="flex items-start justify-between gap-3">
@@ -801,8 +974,8 @@ export default function KampusKritic({
                   Unlock Kampus Kritic Unlimited
                 </h3>
                 <p className="text-sage text-xs leading-relaxed">
-                  Continue auditing assignments, pasting images, and recalling
-                  chat history for{' '}
+                  Continue auditing assignments, pasting images/PDFs, and
+                  recalling chat history for{' '}
                   <strong className="text-white">{profile?.course_code}</strong>
                   .
                 </p>
@@ -947,20 +1120,27 @@ export default function KampusKritic({
         <div ref={bottomRef} />
       </div>
 
-      {/* Clean Bottom Chat & Image Paste Bar (Zero Scrollbar Clutter) */}
+      {/* Bottom Chat, Image & PDF Composer */}
       <div className="p-3 bg-surface border-t border-gray-800 flex flex-col gap-2 shrink-0">
         {pendingImages.length > 0 && (
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {pendingImages.map((img, idx) => (
+            {pendingImages.map((fileUrl, idx) => (
               <div
                 key={idx}
-                className="relative w-14 h-14 rounded-xl overflow-hidden border border-pine/50 shrink-0"
+                className="relative w-14 h-14 rounded-xl overflow-hidden border border-pine/50 bg-ink flex items-center justify-center shrink-0"
               >
-                <img
-                  src={img}
-                  alt="Upload preview"
-                  className="w-full h-full object-cover"
-                />
+                {fileUrl.startsWith('data:application/pdf') ? (
+                  <div className="flex flex-col items-center gap-0.5 text-pine">
+                    <FileText className="w-5 h-5" />
+                    <span className="text-[9px] font-black">PDF</span>
+                  </div>
+                ) : (
+                  <img
+                    src={fileUrl}
+                    alt="Upload preview"
+                    className="w-full h-full object-cover"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -979,7 +1159,7 @@ export default function KampusKritic({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             className="hidden"
             onChange={(e) => {
@@ -993,7 +1173,7 @@ export default function KampusKritic({
             type="button"
             disabled={isLockedByPaywall || uploadingImage}
             onClick={() => fileInputRef.current?.click()}
-            title="Attach or paste image"
+            title="Attach image or PDF"
             className="w-11 h-11 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-sage hover:text-pine flex items-center justify-center shrink-0 active:scale-95 transition-all disabled:opacity-40"
           >
             {uploadingImage ? (
@@ -1018,7 +1198,7 @@ export default function KampusKritic({
             placeholder={
               isLockedByPaywall
                 ? 'Unlock P50/month Unlimited above to continue...'
-                : 'Message Kampus Kritic or Ctrl+V paste images...'
+                : 'Message Kampus Kritic or attach PDF / images...'
             }
             className="flex-1 h-11 max-h-24 rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none overflow-hidden no-scrollbar"
           />
