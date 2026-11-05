@@ -170,7 +170,7 @@ export type HazardRow = {
 export type AppNotification = {
   id: string;
   user_id: string;
-  type: 'message' | 'comment' | 'sos';
+  type: 'message' | 'comment' | 'sos' | 'announcement' | 'push_test';
   title: string;
   body: string;
   reference_id: string | null;
