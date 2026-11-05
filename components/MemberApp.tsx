@@ -42,6 +42,7 @@ import KampusKritic from '@/components/KampusKritic';
 import HustleHub from '@/components/HustleHub';
 import CommunityHub from '@/components/CommunityHub';
 import ProfileScreen from '@/components/ProfileScreen';
+import PushNotificationBanner from '@/components/PushNotificationBanner';
 import BottomNav from '@/components/BottomNav';
 import CommentThread from '@/components/CommentThread';
 import PublicProfileModal from '@/components/PublicProfileModal';
@@ -178,9 +179,9 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
           if (notif.user_id === profile.id) {
             setDbNotifications((prev) => [notif, ...prev]);
             const title =
-              notif.type === 'message' ? 'New Message' : 'New Reply';
+              notif.type === 'message' ? 'New Message' : notif.type === 'comment' ? 'New Reply' : notif.title;
             toast({ title, description: notif.body });
-            fireSystemNotification(title, notif.body);
+            if (notif.type !== 'push_test') fireSystemNotification(title, notif.body);
           }
         }
       )
@@ -685,6 +686,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
 
         {/* Main Viewport */}
         <main className="flex-1 relative flex flex-col overflow-y-auto overscroll-y-contain pb-28">
+          {profile && activeView !== 'profile' && <div className="px-4"><PushNotificationBanner userId={profile.id}/></div>}
           {activeView === 'kritic' && (
             <KampusKritic
               sourcePostId={destination.source}
