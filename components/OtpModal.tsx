@@ -79,7 +79,7 @@ export default function OtpModal({
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token: code,
-        type: 'signup',
+        type: 'email',
       });
 
       if (error) throw error;
