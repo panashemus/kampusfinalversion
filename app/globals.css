@@ -135,3 +135,12 @@
     display: none;
   }
 }
+
+@layer components {
+  .foundation-input { @apply w-full min-h-12 rounded-xl bg-ink border border-gray-700 px-4 py-3 text-sm text-white placeholder:text-sage; }
+  .foundation-primary { @apply min-h-11 px-5 py-3 rounded-xl bg-pine text-black text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors hover:brightness-110 disabled:opacity-50; }
+  .foundation-action { @apply min-h-11 px-4 py-2 rounded-xl border border-gray-700 bg-surface text-sm text-white inline-flex items-center justify-center gap-2 hover:border-pine/60 disabled:opacity-40; }
+  .foundation-card { @apply rounded-2xl border border-white/10 bg-surface p-5 sm:p-6; }
+}
+:focus-visible { outline: 2px solid #FFDE4D; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
