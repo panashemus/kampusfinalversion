@@ -1,4 +1,5 @@
 'use client';
+import SecureImage from './SecureImage';
 
 import { useState, useEffect, useRef } from 'react';
 import {
@@ -22,8 +23,8 @@ import {
   ChevronRight,
   FileText,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { uploadImages } from '@/lib/payment';
+import { supabase,authHeaders } from '@/lib/supabase';
+
 import {
   classifyUniversity,
   isValidCourseForSchool,
@@ -131,12 +132,14 @@ function renderFormattedContent(content: string, isUser: boolean) {
 }
 
 export default function KampusKritic({
-  profile,
+  profile, sourcePostId, onReturnToSource,
   onProfileUpdate,
   onOpenTerms,
   onOpenProfile,
 }: {
   profile: Profile | null;
+  sourcePostId?: string;
+  onReturnToSource?: (id:string)=>void;
   onProfileUpdate?: (updated: Profile) => void;
   onOpenTerms?: () => void;
   onOpenProfile?: () => void;
@@ -166,36 +169,19 @@ export default function KampusKritic({
   const [showHistory, setShowHistory] = useState(false);
 
   // Composer State
-  const [input, setInput] = useState('');
+  const [input,setInput]=useState('');
+  const [sourceError,setSourceError]=useState('');
+  useEffect(()=>{if(!sourcePostId)return;const controller=new AbortController();setSourceError('');
+  (async()=>{try{const res=await fetch('/api/interconnect/source?post='+sourcePostId,{headers:await authHeaders(),signal:controller.signal});const body=await res.json();if(!res.ok)throw new Error(body.error);setInput(body.text);setActiveSessionId(null);setMessages([]);}catch(e){if(!controller.signal.aborted)setSourceError(e instanceof Error?e.message:'Source unavailable.');}})();return()=>controller.abort();},[sourcePostId]);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [sending, setSending] = useState(false);
 
-  // Paywall State (1 Free Prompt -> P50/month Unlimited)
-  const [promptsUsed, setPromptsUsed] = useState<number>(
-    profile?.kritic_prompts_used ?? 0
-  );
-  const [payMethod, setPayMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
-  const [referenceCode, setReferenceCode] = useState('');
-  const [paymentRefId, setPaymentRefId] = useState('');
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedNum, setCopiedNum] = useState(false);
-  const [submittingPayment, setSubmittingPayment] = useState(false);
+  // Free to use with server-enforced daily and platform-wide AI budgets.
+  const [promptsUsed, setPromptsUsed] = useState<number>(profile?.kritic_prompts_used ?? 0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  const hasUnlimited =
-    Boolean(profile?.is_admin) ||
-    Boolean(profile?.kritic_unlimited) ||
-    (Boolean(profile?.kritic_sub_until) &&
-      new Date(profile!.kritic_sub_until!) > new Date());
-
-  const isLockedByPaywall = !hasUnlimited && promptsUsed >= 1;
-
-  useEffect(() => {
-    setReferenceCode(`KRT-${Math.floor(1000 + Math.random() * 9000)}`);
-  }, []);
 
   useEffect(() => {
     if (typeof profile?.kritic_prompts_used === 'number') {
@@ -203,18 +189,18 @@ export default function KampusKritic({
     }
   }, [profile?.kritic_prompts_used]);
 
-  // Load saved chat history from localStorage + Supabase
+  // Load saved chat history from sessionStorage + Supabase
   useEffect(() => {
     if (!profile?.id) return;
     const storageKey = `kampus_kritic_sessions_${profile.id}`;
     const usedKey = `kampus_kritic_used_${profile.id}`;
 
-    const localUsed = Number(localStorage.getItem(usedKey) || '0');
+    const localUsed = Number(sessionStorage.getItem(usedKey) || '0');
     if (localUsed > (profile.kritic_prompts_used || 0)) {
       setPromptsUsed(localUsed);
     }
 
-    const savedRaw = localStorage.getItem(storageKey);
+    const savedRaw = sessionStorage.getItem(storageKey);
     if (savedRaw) {
       try {
         const parsed = JSON.parse(savedRaw) as KriticChatSession[];
@@ -265,14 +251,14 @@ export default function KampusKritic({
           }));
 
           setSessions(hydrated);
-          localStorage.setItem(storageKey, JSON.stringify(hydrated));
+          sessionStorage.setItem(storageKey, JSON.stringify(hydrated));
           if (!activeSessionId && hydrated.length > 0) {
             setActiveSessionId(hydrated[0].id);
             setMessages(hydrated[0].messages);
           }
         }
       } catch {
-        // Fallback to localStorage
+        // Fallback to sessionStorage
       }
     })();
   }, [profile?.id]);
@@ -284,7 +270,7 @@ export default function KampusKritic({
   const persistSessions = (updated: KriticChatSession[]) => {
     setSessions(updated);
     if (profile?.id) {
-      localStorage.setItem(
+      sessionStorage.setItem(
         `kampus_kritic_sessions_${profile.id}`,
         JSON.stringify(updated)
       );
@@ -325,6 +311,7 @@ export default function KampusKritic({
 
   const handleFilesSelected = async (files: File[]) => {
     if (!files.length) return;
+    if(files.length+pendingImages.length>2 || files.some(f=>!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)||f.size>262144)){toast({title:'Attachment limit',description:'Attach up to two JPEG, PNG, WebP or PDF files, each 256 KB or smaller.',variant:'destructive'});return;}
     setUploadingImage(true);
 
     try {
@@ -338,11 +325,6 @@ export default function KampusKritic({
       );
       const dataUrls = await Promise.all(base64Promises);
       setPendingImages((prev) => [...prev, ...dataUrls]);
-
-      const imageOnlyFiles = files.filter((f) => f.type.startsWith('image/'));
-      if (profile?.id && imageOnlyFiles.length > 0) {
-        uploadImages(imageOnlyFiles, profile.id).catch(() => {});
-      }
     } catch {
       toast({
         title: 'Attachment error',
@@ -402,15 +384,6 @@ export default function KampusKritic({
     const textToSend = input.trim();
     if ((!textToSend && pendingImages.length === 0) || sending) return;
 
-    if (isLockedByPaywall) {
-      toast({
-        title: 'Free Trial Completed',
-        description:
-          'Unlock Kampus Kritic Unlimited (P50/mo) to continue auditing.',
-        variant: 'destructive',
-      });
-      return;
-    }
 
     const attachedImages = [...pendingImages];
     setInput('');
@@ -449,7 +422,7 @@ export default function KampusKritic({
             university: schoolInfo.code,
           });
         } catch {
-          // Handled by localStorage
+          // Handled by sessionStorage
         }
       }
     }
@@ -464,26 +437,25 @@ export default function KampusKritic({
           images: attachedImages,
         });
       } catch {
-        // Handled by localStorage
+        // Handled by sessionStorage
       }
     }
 
     try {
       const res = await fetch('/api/kritic-audit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json',...await authHeaders() },
         body: JSON.stringify({
           promptText: textToSend,
           images: attachedImages,
           history: updatedMessages,
-          email: profile?.email,
-          username: displayUsername,
-          university: schoolInfo.fullName,
+          sourcePostId,
           courseCode: profile?.course_code || '',
         }),
       });
 
       const data = await res.json();
+      if(!res.ok)throw new Error(data.error || "Kritic could not complete this request.");
       const assistantMsg: KriticMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -502,7 +474,7 @@ export default function KampusKritic({
         const nextUsed = promptsUsed + 1;
         setPromptsUsed(nextUsed);
         if (profile?.id) {
-          localStorage.setItem(
+          sessionStorage.setItem(
             `kampus_kritic_used_${profile.id}`,
             String(nextUsed)
           );
@@ -550,10 +522,11 @@ export default function KampusKritic({
           // Local storage updated
         }
       }
-    } catch {
+    } catch (error) {
+      setInput(textToSend);setPendingImages(attachedImages);
       toast({
-        title: 'Connection Error',
-        description: 'Could not reach Kampus Kritic.',
+        title: 'Kritic unavailable',
+        description: error instanceof Error?error.message:'Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -561,160 +534,15 @@ export default function KampusKritic({
     }
   };
 
-  const handleUnlockUnlimited = async () => {
-    if (!profile || paymentRefId.trim().length < 4) return;
-    setSubmittingPayment(true);
-
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-    try {
-      await supabase
-        .from('profiles')
-        .update({
-          kritic_unlimited: true,
-          is_premium: true,
-          kritic_sub_until: nextMonth.toISOString(),
-          subscribed_until: nextMonth.toISOString(),
-          tier: 'kritic_unlimited',
-          payment_ref_code: referenceCode,
-          payment_ref_id: paymentRefId.trim(),
-        })
-        .eq('id', profile.id);
-
-      await supabase.from('payments').insert({
-        user_id: profile.id,
-        amount: 50,
-        reference_code: referenceCode,
-        payment_ref_id: paymentRefId.trim(),
-        feature: 'kritic_unlimited_p50',
-        status: 'pending',
-      });
-
-      if (onProfileUpdate) {
-        onProfileUpdate({
-          ...profile,
-          kritic_unlimited: true,
-          is_premium: true,
-          kritic_sub_until: nextMonth.toISOString(),
-        });
-      }
-
-      toast({
-        title: 'Kampus Kritic Unlimited Activated',
-        description: `Ref ${referenceCode} logged.`,
-      });
-    } catch {
-      toast({
-        title: 'Verification Logged',
-        description: 'Your reference has been submitted for activation.',
-      });
-    } finally {
-      setSubmittingPayment(false);
-    }
-  };
-
-  const copyText = (text: string, isCode: boolean) => {
-    navigator.clipboard.writeText(text);
-    if (isCode) {
-      setCopiedCode(true);
-      setTimeout(() => setCopiedCode(false), 2000);
-    } else {
-      setCopiedNum(true);
-      setTimeout(() => setCopiedNum(false), 2000);
-    }
-  };
-
   const filteredSchoolCourses = schoolInfo.courses.filter((c) =>
     c.toLowerCase().includes(courseSearch.trim().toLowerCase())
   );
 
-  // MANDATORY COURSE GATE
-  if (!hasValidCourse) {
-    return (
-      <div className="flex-1 bg-midnight flex flex-col overflow-y-auto px-4 py-6 pb-28">
-        <div className="bg-surface border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 animate-slide-up">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-ink border border-pine/40 flex items-center justify-center text-pine shrink-0">
-              <GraduationCap className="w-5 h-5" strokeWidth={2} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-pine text-[10px] font-black uppercase tracking-wider">
-                Profile Setup Required
-              </span>
-              <h2 className="text-white font-black text-base">
-                Hi, {displayUsername} — Select Your Course
-              </h2>
-            </div>
-          </div>
-
-          <p className="text-sage text-xs leading-relaxed">
-            Your account is registered under{' '}
-            <strong className="text-white">{schoolInfo.fullName}</strong>.
-            Please select your official degree programme offered at{' '}
-            <strong className="text-white">{schoolInfo.code}</strong> before
-            using Kampus Kritic. You can change this anytime in your Profile
-            tab.
-          </p>
-
-          <div className="relative flex items-center">
-            <Search className="absolute left-3.5 w-4 h-4 text-sage" />
-            <input
-              type="text"
-              value={courseSearch}
-              onChange={(e) => setCourseSearch(e.target.value)}
-              placeholder={`Search ${schoolInfo.code} courses (e.g. Law, Computer, Accounting)...`}
-              className="w-full h-11 rounded-xl bg-ink border border-gray-800 pl-10 pr-4 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine"
-            />
-          </div>
-
-          <div className="max-h-56 overflow-y-auto rounded-xl bg-ink border border-gray-800 divide-y divide-gray-800/70 no-scrollbar">
-            {filteredSchoolCourses.length === 0 ? (
-              <div className="p-4 text-center text-sage text-xs">
-                No matching degree programme offered at {schoolInfo.code} for
-                &quot;{courseSearch}&quot;.
-              </div>
-            ) : (
-              filteredSchoolCourses.map((course) => {
-                const isSelected = selectedGateCourse === course;
-                return (
-                  <button
-                    key={course}
-                    type="button"
-                    onClick={() => setSelectedGateCourse(course)}
-                    className={`w-full px-3.5 py-3 text-left text-xs flex items-center justify-between transition-colors ${
-                      isSelected
-                        ? 'bg-pine text-black font-black'
-                        : 'text-white hover:bg-surface font-medium'
-                    }`}
-                  >
-                    <span className="pr-2">{course}</span>
-                    {isSelected && <Check className="w-4 h-4 shrink-0" />}
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={handleLockInCourse}
-            disabled={!selectedGateCourse || savingCourse}
-            className="w-full h-11 rounded-xl bg-pine text-black font-black text-xs active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-          >
-            {savingCourse ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <span>Save Programme &amp; Open Kampus Kritic</span>
-            )}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
+      {sourcePostId&&<div className="p-4 border-b border-gray-800 text-sm"><button className="text-pine min-h-11" onClick={()=>onReturnToSource?.(sourcePostId)}>← Return to the original discussion</button><p className="text-sage">Review the question before sending. Your critique stays private.</p>{sourceError&&<p role="alert" className="text-red-300">{sourceError}</p>}</div>}
+      <p className="px-4 py-2 text-xs text-sage">Service safety limit: up to 5 requests per account per UTC day, subject to the shared service budget and your current plan. Attachments: 2 files, 256 KB each.</p>
       {/* Minimal, Clean Sub-Row */}
       <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
         <button
@@ -856,7 +684,7 @@ export default function KampusKritic({
               or tap a prompt starter to populate your message box.
             </p>
 
-            {!isLockedByPaywall && (
+            {(
               <div className="flex flex-col gap-2 pt-1">
                 <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
                   Prompt Starters
@@ -927,7 +755,7 @@ export default function KampusKritic({
                           <span>Attached PDF Document</span>
                         </div>
                       ) : (
-                        <img
+                        <SecureImage
                           key={i}
                           src={fileUrl}
                           alt="Attached work"
@@ -959,164 +787,6 @@ export default function KampusKritic({
           </div>
         )}
 
-        {/* P50 / Month Paywall Card */}
-        {isLockedByPaywall && (
-          <div className="bg-surface border border-pine/50 rounded-2xl p-5 flex flex-col gap-4 animate-slide-up">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <Lock className="w-4 h-4 text-pine" />
-                  <span className="text-pine text-xs font-black uppercase tracking-wider">
-                    Free Trial Prompt Completed
-                  </span>
-                </div>
-                <h3 className="text-white font-black text-lg">
-                  Unlock Kampus Kritic Unlimited
-                </h3>
-                <p className="text-sage text-xs leading-relaxed">
-                  Continue auditing assignments, pasting images/PDFs, and
-                  recalling chat history for{' '}
-                  <strong className="text-white">{profile?.course_code}</strong>
-                  .
-                </p>
-              </div>
-              <div className="bg-ink border border-pine/40 px-3 py-2 rounded-xl text-right shrink-0">
-                <span className="text-pine font-black text-lg block leading-none">
-                  P 50
-                </span>
-                <span className="text-sage text-[10px] font-bold">/ month</span>
-              </div>
-            </div>
-
-            <div className="bg-ink border border-gray-800 rounded-xl p-3.5 flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase font-bold text-sage">
-                  Your Reference Code
-                </div>
-                <div className="text-xl font-black text-pine tracking-wider mt-0.5">
-                  {referenceCode}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => copyText(referenceCode, true)}
-                className="px-3 py-2 rounded-lg bg-surface border border-pine/30 text-pine text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform"
-              >
-                {copiedCode ? (
-                  <Check className="w-3.5 h-3.5" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-                {copiedCode ? 'Copied' : 'Copy Code'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setPayMethod('pay2cell')}
-                className={`py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                  payMethod === 'pay2cell'
-                    ? 'bg-pine text-black border-pine'
-                    : 'bg-ink border-gray-800 text-sage'
-                }`}
-              >
-                <CreditCard className="w-4 h-4" /> FNB Pay2Cell
-              </button>
-              <button
-                type="button"
-                onClick={() => setPayMethod('ewallet')}
-                className={`py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                  payMethod === 'ewallet'
-                    ? 'bg-pine text-black border-pine'
-                    : 'bg-ink border-gray-800 text-sage'
-                }`}
-              >
-                <Wallet className="w-4 h-4" /> eWallet
-              </button>
-            </div>
-
-            <div className="bg-ink border border-gray-800 rounded-xl p-3.5 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-sage block">
-                    {payMethod === 'pay2cell'
-                      ? 'FNB Pay2Cell Number'
-                      : 'eWallet Number'}
-                  </span>
-                  <span className="text-white font-black text-base">
-                    {payMethod === 'pay2cell' ? '77037168' : '71321163'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    copyText(
-                      payMethod === 'pay2cell' ? '77037168' : '71321163',
-                      false
-                    )
-                  }
-                  className="text-pine text-xs font-bold flex items-center gap-1"
-                >
-                  {copiedNum ? (
-                    <Check className="w-3.5 h-3.5" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                  {copiedNum ? 'Copied' : 'Copy Number'}
-                </button>
-              </div>
-              <p className="text-sage text-xs leading-relaxed">
-                Send <strong className="text-white">P 50</strong> to{' '}
-                <strong className="text-white">
-                  {payMethod === 'pay2cell' ? '77037168' : '71321163'}
-                </strong>{' '}
-                using reference{' '}
-                <strong className="text-pine">{referenceCode}</strong>, then
-                paste your SMS confirmation ID below.
-              </p>
-            </div>
-
-            <input
-              type="text"
-              value={paymentRefId}
-              onChange={(e) => setPaymentRefId(e.target.value)}
-              placeholder="Paste FNB inContact or SMS Confirmation ID"
-              className="h-11 rounded-xl bg-ink border border-gray-800 px-3.5 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine"
-            />
-
-            <button
-              type="button"
-              onClick={handleUnlockUnlimited}
-              disabled={submittingPayment || paymentRefId.trim().length < 4}
-              className="w-full h-12 rounded-xl bg-pine text-black font-black text-sm active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-            >
-              {submittingPayment ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Check className="w-4 h-4" strokeWidth={2.5} />
-              )}
-              <span>
-                {submittingPayment
-                  ? 'Activating...'
-                  : 'Confirm P50 Payment & Unlock Unlimited'}
-              </span>
-            </button>
-
-            <p className="text-sage text-[10px] text-center">
-              Subject to Fair Use Policy in the{' '}
-              <button
-                type="button"
-                onClick={onOpenTerms}
-                className="text-white underline hover:text-pine"
-              >
-                Terms of Service
-              </button>
-              .
-            </p>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -1135,7 +805,7 @@ export default function KampusKritic({
                     <span className="text-[9px] font-black">PDF</span>
                   </div>
                 ) : (
-                  <img
+                  <SecureImage
                     src={fileUrl}
                     alt="Upload preview"
                     className="w-full h-full object-cover"
@@ -1171,7 +841,7 @@ export default function KampusKritic({
           />
           <button
             type="button"
-            disabled={isLockedByPaywall || uploadingImage}
+            disabled={uploadingImage}
             onClick={() => fileInputRef.current?.click()}
             title="Attach image or PDF"
             className="w-11 h-11 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-sage hover:text-pine flex items-center justify-center shrink-0 active:scale-95 transition-all disabled:opacity-40"
@@ -1193,12 +863,10 @@ export default function KampusKritic({
                 handleSend();
               }
             }}
-            disabled={isLockedByPaywall}
+
             rows={1}
             placeholder={
-              isLockedByPaywall
-                ? 'Unlock P50/month Unlimited above to continue...'
-                : 'Message Kampus Kritic or attach PDF / images...'
+              'Message Kampus Kritic or attach PDF / images...'
             }
             className="flex-1 h-11 max-h-24 rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none overflow-hidden no-scrollbar"
           />
@@ -1207,7 +875,6 @@ export default function KampusKritic({
             type="button"
             onClick={handleSend}
             disabled={
-              isLockedByPaywall ||
               sending ||
               (!input.trim() && pendingImages.length === 0)
             }

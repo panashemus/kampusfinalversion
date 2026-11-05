@@ -1,4 +1,5 @@
 'use client';
+import SecureImage from './SecureImage';
 
 import {
   MapContainer,
@@ -28,7 +29,6 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import PaymentModal from '@/components/PaymentModal';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -172,7 +172,7 @@ function LocationTracker({
 
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
-    const watchId = navigator.geolocation.watchPosition(
+    const watchId = navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         const next: [number, number] = [latitude, longitude];
@@ -187,7 +187,7 @@ function LocationTracker({
       () => {},
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
-    return () => navigator.geolocation.clearWatch(watchId);
+
   }, [map, onLocate]);
 
   if (!pos) return null;
@@ -231,7 +231,9 @@ export default function RadarMap({
   onMessageUser?: (userId: string, username: string) => void;
 }) {
   const { toast } = useToast();
-  const [isMounted, setIsMounted] = useState(false);
+  const [isMounted,setIsMounted]=useState(false);
+  const [locateRequested,setLocateRequested]=useState(false);
+  const personLocationAvailable=false; // Deferred: recipient consent, expiry and revocation required.
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
   const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
@@ -240,15 +242,6 @@ export default function RadarMap({
   >([]);
   const [selectedLocation, setSelectedLocation] =
     useState<PromotedLocation | null>(null);
-
-  const [isFreeWeekend, setIsFreeWeekend] = useState(false);
-
-  const [userTier, setUserTier] = useState<0 | 1 | 2>(0);
-  const [showUpgradeModal, setShowUpgradeModal] = useState<
-    'base' | 'ghost' | null
-  >(null);
-  const [pendingTier, setPendingTier] = useState<1 | 2 | null>(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const [isGhostMode, setIsGhostMode] = useState(false);
   const [myStatus, setMyStatus] = useState('');
@@ -264,13 +257,6 @@ export default function RadarMap({
 
   useEffect(() => {
     const loadData = async () => {
-      const { data: settings } = await supabase
-        .from('platform_settings')
-        .select('is_free_weekend')
-        .eq('id', 1)
-        .maybeSingle();
-      if (settings) setIsFreeWeekend(settings.is_free_weekend);
-
       const { data: hData } = await supabase
         .from('hazards')
         .select('*')
@@ -292,7 +278,7 @@ export default function RadarMap({
 
       const { data: kData } = await supabase
         .from('konnect_locations')
-        .select('*');
+        .select('*').eq('user_id',profile?.id || '00000000-0000-4000-8000-000000000000');
       if (kData) setKonnectUsers(kData as KonnectUser[]);
 
       const { data: pData } = await supabase
@@ -301,9 +287,6 @@ export default function RadarMap({
       if (pData) setPromotedLocations(pData as PromotedLocation[]);
 
       if (profile) {
-        if ((profile as any).konnect_tier) {
-          setUserTier((profile as any).konnect_tier as 0 | 1 | 2);
-        }
         const { data: myLoc } = await supabase
           .from('konnect_locations')
           .select('is_ghost_mode, status_text')
@@ -319,15 +302,6 @@ export default function RadarMap({
 
     const channel = supabase
       .channel('public:radar_map')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'platform_settings' },
-        (payload) => {
-          if (payload.new && payload.new.id === 1) {
-            setIsFreeWeekend(payload.new.is_free_weekend);
-          }
-        }
-      )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'hazards' },
@@ -352,7 +326,7 @@ export default function RadarMap({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'konnect_locations' },
         async () => {
-          const { data } = await supabase.from('konnect_locations').select('*');
+          const { data } = await supabase.from('konnect_locations').select('*').eq('user_id',profile?.id || '00000000-0000-4000-8000-000000000000');
           if (data) setKonnectUsers(data as KonnectUser[]);
         }
       )
@@ -377,100 +351,10 @@ export default function RadarMap({
     async (pos: [number, number]) => {
       onLocate(pos);
 
-      if (profile && userTier >= 1) {
-        await supabase.from('konnect_locations').upsert({
-          user_id: profile.id,
-          username: profile.username || profile.email.split('@')[0],
-          lat: pos[0],
-          lng: pos[1],
-          status_text: myStatus || null,
-          is_ghost_mode: isGhostMode,
-          updated_at: new Date().toISOString(),
-          is_free_trial_pin: isFreeWeekend,
-        } as any);
-      }
+
     },
-    [onLocate, profile, isGhostMode, myStatus, userTier, isFreeWeekend]
+    [onLocate]
   );
-
-  const handleGhostModeToggle = async () => {
-    if (userTier < 2) {
-      setShowUpgradeModal('ghost');
-      return;
-    }
-    const newGhostState = !isGhostMode;
-    setIsGhostMode(newGhostState);
-    if (profile) {
-      await supabase
-        .from('konnect_locations')
-        .update({
-          is_ghost_mode: newGhostState,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', profile.id);
-    }
-  };
-
-  const updateStatus = async () => {
-    setShowStatusInput(false);
-    if (profile) {
-      await supabase
-        .from('konnect_locations')
-        .update({
-          status_text: myStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', profile.id);
-    }
-  };
-
-  const handleInitiatePayment = async (tier: 1 | 2) => {
-    if (isFreeWeekend && tier === 1) {
-      if (!profile) return;
-
-      await supabase
-        .from('profiles')
-        .update({ konnect_tier: 1 })
-        .eq('id', profile.id);
-
-      setUserTier(1);
-      setShowUpgradeModal(null);
-      toast({
-        title: 'Weekend Pass Claimed',
-        description:
-          'Kampus Konnect is free until Sunday midnight. Dropping your pin.',
-      });
-      return;
-    }
-
-    setPendingTier(tier);
-    setShowUpgradeModal(null);
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentConfirm = async (
-    referenceCode: string,
-    paymentRefId: string
-  ) => {
-    if (!profile || !pendingTier) return;
-    setUserTier(pendingTier);
-    setShowPaymentModal(false);
-
-    await supabase.from('payments').insert({
-      user_id: profile.id,
-      amount: pendingTier === 2 ? 30 : 20,
-      reference_code: referenceCode,
-      payment_ref_id: paymentRefId,
-      feature: pendingTier === 2 ? 'konnect_ghost' : 'konnect_base',
-      status: 'pending',
-    });
-
-    toast({
-      title: 'Kampus Konnect Unlocked',
-      description: 'Your live map is active.',
-    });
-    setPendingTier(null);
-  };
 
   const handleEnterCampusMode = () => {
     if (!nearbyCampus || !mapInstance) return;
@@ -547,7 +431,7 @@ export default function RadarMap({
         />
 
         <CampusDetector onNearbyCampus={setNearbyCampus} />
-        <LocationTracker onLocate={handleLocate} />
+        {locateRequested&&<LocationTracker onLocate={handleLocate} />}
 
         {hazards.map((h) => (
           <Marker
@@ -567,7 +451,7 @@ export default function RadarMap({
           />
         ))}
 
-        {userTier >= 1 &&
+        {personLocationAvailable &&
           konnectUsers.map((user) => {
             if (user.user_id === profile?.id) return null;
             if (user.is_ghost_mode) return null;
@@ -588,7 +472,7 @@ export default function RadarMap({
             );
           })}
 
-        {userTier >= 1 &&
+        {
           promotedLocations.map((loc) => (
             <Marker
               key={loc.id}
@@ -599,139 +483,7 @@ export default function RadarMap({
           ))}
       </MapContainer>
 
-      {/* Bottom-Left Konnect Controls */}
-      <div className="absolute bottom-28 left-4 z-[1000] flex flex-col gap-2.5 items-start pointer-events-none">
-        {userTier === 0 ? (
-          <button
-            onClick={() => setShowUpgradeModal('base')}
-            className="bg-zinc-900/90 backdrop-blur-md ring-1 ring-white/10 text-white rounded-2xl px-4 py-2.5 flex flex-col items-start pointer-events-auto shadow-xl active:scale-[0.98] transition-all"
-          >
-            <div className="flex items-center gap-1.5 font-semibold text-xs text-amber-300">
-              <Lock className="w-3.5 h-3.5" />
-              <span>
-                {isFreeWeekend ? 'Claim Free Pass' : 'Unlock Konnect'}
-              </span>
-            </div>
-            <span className="text-[10px] text-zinc-400 mt-0.5">
-              {isFreeWeekend
-                ? 'Free until Sunday midnight'
-                : 'See live campus pins · P 20'}
-            </span>
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={handleGhostModeToggle}
-              className={`w-11 h-11 rounded-full flex items-center justify-center pointer-events-auto shadow-lg transition-all ring-1 ${
-                userTier < 2
-                  ? 'bg-zinc-900/90 text-zinc-500 ring-white/[0.08]'
-                  : isGhostMode
-                  ? 'bg-zinc-800 text-zinc-300 ring-white/10'
-                  : 'bg-emerald-950/80 text-emerald-300 ring-emerald-700/50'
-              }`}
-            >
-              {userTier < 2 ? (
-                <Lock className="w-4 h-4" />
-              ) : isGhostMode ? (
-                <Ghost className="w-4 h-4" />
-              ) : (
-                <Eye className="w-4 h-4" />
-              )}
-            </button>
-
-            {showStatusInput ? (
-              <div className="bg-zinc-900/95 backdrop-blur-xl ring-1 ring-white/10 rounded-2xl p-1.5 flex items-center gap-1.5 pointer-events-auto shadow-2xl">
-                <input
-                  type="text"
-                  value={myStatus}
-                  onChange={(e) => setMyStatus(e.target.value)}
-                  placeholder="Set your campus status..."
-                  className="bg-zinc-950 rounded-xl h-8 px-3 text-xs text-white placeholder-zinc-500 outline-none w-44"
-                  maxLength={40}
-                />
-                <button
-                  onClick={updateStatus}
-                  className="w-8 h-8 rounded-xl bg-amber-400 text-zinc-950 flex items-center justify-center shrink-0"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowStatusInput(true)}
-                className="bg-zinc-900/85 backdrop-blur-md ring-1 ring-white/[0.08] rounded-full px-3.5 py-2 text-xs font-medium text-zinc-200 pointer-events-auto hover:text-white transition-colors shadow-lg"
-              >
-                {myStatus ? `"${myStatus}"` : '+ Set Map Status'}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Upgrade Konnect Modal */}
-      {showUpgradeModal && (
-        <div className="absolute inset-0 z-[3000] flex items-center justify-center pointer-events-auto p-4">
-          <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setShowUpgradeModal(null)}
-          />
-          <div className="relative w-full max-w-[330px] bg-[#121816] ring-1 ring-white/[0.08] rounded-3xl p-6 flex flex-col gap-5 text-center shadow-2xl">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-950/60 border border-emerald-800/40 text-emerald-400 flex items-center justify-center mx-auto">
-              {showUpgradeModal === 'ghost' ? (
-                <Ghost className="w-6 h-6" />
-              ) : (
-                <Unlock className="w-6 h-6" />
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <h3 className="text-white font-semibold tracking-tight text-lg">
-                {showUpgradeModal === 'ghost' ? 'Ghost Mode' : 'Kampus Konnect'}
-              </h3>
-              <p className="text-zinc-400 text-xs leading-relaxed">
-                {showUpgradeModal === 'ghost'
-                  ? 'Browse campus hotspots and statuses invisibly without sharing your live pin.'
-                  : 'See where campus is active, view peer statuses, and drop your own live pin.'}
-              </p>
-            </div>
-            <div className="bg-zinc-950/80 rounded-2xl ring-1 ring-white/[0.06] p-4">
-              <span className="text-2xl font-bold font-mono text-amber-300">
-                {isFreeWeekend && showUpgradeModal === 'base'
-                  ? 'FREE'
-                  : `P ${showUpgradeModal === 'ghost' ? '30' : '20'}`}
-              </span>
-              <span className="text-zinc-500 text-xs ml-1">
-                {isFreeWeekend && showUpgradeModal === 'base'
-                  ? '/ weekend pass'
-                  : '/ one-time'}
-              </span>
-            </div>
-            <button
-              onClick={() =>
-                handleInitiatePayment(showUpgradeModal === 'ghost' ? 2 : 1)
-              }
-              className="w-full h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-semibold text-xs active:scale-[0.98] transition-all"
-            >
-              {isFreeWeekend && showUpgradeModal === 'base'
-                ? 'Claim Weekend Pass'
-                : 'Continue to Checkout'}
-            </button>
-            <button
-              onClick={() => setShowUpgradeModal(null)}
-              className="text-zinc-500 text-xs hover:text-zinc-300"
-            >
-              Maybe later
-            </button>
-          </div>
-        </div>
-      )}
-
-      <PaymentModal
-        open={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        onConfirm={handlePaymentConfirm}
-        amount={pendingTier === 2 ? 30 : 20}
-        ctaLabel="Unlock Konnect"
-      />
+      <div className="absolute bottom-28 left-4 z-[1000] pointer-events-none"><div className="foundation-card text-xs text-sage pointer-events-auto">Person-to-person location sharing is paused until privacy controls are ready.<button className="foundation-action mt-2" onClick={()=>setLocateRequested(true)}>Locate me on this map</button></div></div>
 
       {/* Selected Promoted Location Sheet */}
       {selectedLocation && (
@@ -743,7 +495,7 @@ export default function RadarMap({
           <div className="relative w-full bg-[#121816] ring-1 ring-white/[0.08] rounded-t-3xl p-6 pb-[max(64px,calc(64px+env(safe-area-inset-bottom)))] flex flex-col gap-4 animate-slide-up shadow-2xl max-h-[85dvh] overflow-y-auto no-scrollbar">
             {selectedLocation.image_url && (
               <div className="relative w-full h-44 rounded-2xl overflow-hidden ring-1 ring-white/[0.06] shrink-0 bg-zinc-950">
-                <img
+                <SecureImage
                   src={selectedLocation.image_url}
                   alt={selectedLocation.title}
                   className="w-full h-full object-cover"

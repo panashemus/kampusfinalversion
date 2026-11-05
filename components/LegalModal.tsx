@@ -73,28 +73,13 @@ export default function LegalModal({
             </section>
             <section>
               <h3 className="text-white font-bold text-sm mb-1">
-                4. Escrow &amp; Payments
+                4. Free Access and Paused Payments
               </h3>
-              <p>
-                Escrow services and reference codes are provided for transaction
-                verification. Listings or subscriptions may be suspended if
-                payment references cannot be verified against bank records.
-              </p>
+              <p>Kampus does not currently charge for accounts, posting listings, or accessing core features. Payments, escrow deposits, subscriptions and purchases of additional access are paused. Listing prices are amounts chosen by sellers, not fees payable to Kampus. Earlier financial obligations are not cancelled and should be resolved directly with the Kampus team.</p>
             </section>
             <section>
-              <h3 className="text-white font-bold text-sm mb-1">
-                5. Kampus Kritic Unlimited &amp; Fair Use Policy
-              </h3>
-              <p>
-                Each verified student account receives one (1) complimentary
-                Kampus Kritic prompt. The P50/month Unlimited Kritic membership
-                grants ongoing access for individual academic coursework
-                auditing. Under our Fair Use Policy, &quot;Unlimited&quot; usage
-                is subject to a standard fair-use compute ceiling of 150 deep
-                assignment audits or 350,000 tokens per 30-day billing cycle to
-                prevent automated scraping, commercial resale, or multi-user
-                account sharing.
-              </p>
+              <h3 className="text-white font-bold text-sm mb-1">5. AI Usage Limits</h3>
+              <p>Kampus Kritic is free for verified students, subject to daily per-account and shared service limits. Requests may be refused once the limits are reached. No unlimited-use membership is sold.</p>
             </section>
             <section>
               <h3 className="text-white font-bold text-sm mb-1">

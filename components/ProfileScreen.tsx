@@ -1,4 +1,5 @@
 'use client';
+import SecureImage from './SecureImage';
 
 import { useState, useEffect, useRef } from 'react';
 import {
@@ -28,6 +29,7 @@ import { supabase } from '@/lib/supabase';
 import { classifyUniversity } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
+import StudentPreferences from './StudentPreferences';
 import PushNotificationBanner from '@/components/PushNotificationBanner';
 
 function fmtDate(iso: string | null) {
@@ -45,34 +47,19 @@ export default function ProfileScreen({
   profile,
   onProfileUpdate,
   onDisconnect,
-  onOpenSubscription,
   onOpenAdminQueue,
 }: {
   profile: Profile | null;
   onProfileUpdate?: (updated: Profile) => void;
   onDisconnect: () => void;
-  onOpenSubscription: () => void;
   onOpenAdminQueue?: () => void;
 }) {
   const { toast } = useToast();
   const schoolInfo = classifyUniversity(profile?.email || profile?.university);
 
   const [signingOut, setSigningOut] = useState(false);
-  const [ewallet, setEwallet] = useState(profile?.ewallet_number ?? '');
-  const [isSavingEwallet, setIsSavingEwallet] = useState(false);
   const [activeListings, setActiveListings] = useState(0);
   const [safetyAlerts, setSafetyAlerts] = useState(0);
-  const [suspendedGigs, setSuspendedGigs] = useState<
-    Array<{
-      id: string;
-      title: string;
-      reference_code: string | null;
-      payment_ref_id: string | null;
-    }>
-  >([]);
-  const [resubmitId, setResubmitId] = useState<string | null>(null);
-  const [resubmitRef, setResubmitRef] = useState('');
-
   // Edit Profile & Official Course Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editUsername, setEditUsername] = useState(
@@ -124,28 +111,9 @@ export default function ProfileScreen({
         .eq('user_id', profile.id);
       setSafetyAlerts(alerts ?? 0);
 
-      const { data: suspended } = await supabase
-        .from('hustles')
-        .select('id, title, reference_code, payment_ref_id')
-        .eq('seller_id', profile.id)
-        .eq('status', 'unpaid_suspended');
-      setSuspendedGigs(
-        (suspended as Array<{
-          id: string;
-          title: string;
-          reference_code: string | null;
-          payment_ref_id: string | null;
-        }>) ?? []
-      );
+
     })();
   }, [profile]);
-
-  const active =
-    !!profile?.is_admin ||
-    !!profile?.is_premium ||
-    !!profile?.kritic_unlimited ||
-    (!!profile?.subscribed_until &&
-      new Date(profile.subscribed_until) > new Date());
 
   const stats = [
     { label: 'Active Listings', value: String(activeListings) },
@@ -195,28 +163,6 @@ export default function ProfileScreen({
       });
       setSigningOut(false);
     }
-  };
-
-  const handleSaveEwallet = async () => {
-    if (!profile || !ewallet.trim()) return;
-    setIsSavingEwallet(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ ewallet_number: ewallet.trim() })
-      .eq('id', profile.id);
-    setIsSavingEwallet(false);
-
-    if (error)
-      toast({
-        title: 'Error Saving',
-        description: 'Could not update your eWallet number.',
-        variant: 'destructive',
-      });
-    else
-      toast({
-        title: 'eWallet Saved',
-        description: 'Your payout number has been securely updated.',
-      });
   };
 
   const handleSaveProfile = async () => {
@@ -300,7 +246,7 @@ export default function ProfileScreen({
       toast({
         title: 'Benchmark Submitted for Verification',
         description:
-          'Once verified, your anonymized work will earn passive royalties.',
+          'Your contribution will be reviewed for possible educational use, subject to consent.',
       });
     }
   };
@@ -352,6 +298,7 @@ export default function ProfileScreen({
 
   return (
     <div className="flex-1 bg-midnight flex flex-col items-center overflow-y-auto px-4 pb-32 pt-5 relative">
+      {profile&&<StudentPreferences profile={profile}/>}
       <PushNotificationBanner userId={profile?.id ?? ''} />
 
       {/* Edit Profile & Official School Course Modal */}
@@ -381,7 +328,7 @@ export default function ProfileScreen({
               >
                 <div className="w-full h-full rounded-full bg-surface flex items-center justify-center overflow-hidden relative">
                   {localAvatarUrl ? (
-                    <img
+                    <SecureImage
                       src={localAvatarUrl}
                       alt="Avatar"
                       className="w-full h-full object-cover"
@@ -519,8 +466,7 @@ export default function ProfileScreen({
               <strong className="text-white">
                 {localCourse || schoolInfo.code}
               </strong>
-              . Every time Kampus Kritic references your benchmark to audit a
-              junior student, passive royalties are logged to your eWallet.
+              . Submissions can help improve Kritic only after review and appropriate consent. No payments or royalties are currently offered.
             </p>
 
             <div className="grid grid-cols-3 gap-2.5">
@@ -582,88 +528,6 @@ export default function ProfileScreen({
         </div>
       )}
 
-      {/* Suspended Listings Warning Cards */}
-      {suspendedGigs.length > 0 && (
-        <div className="w-full flex flex-col gap-3 mb-4">
-          {suspendedGigs.map((gig) => (
-            <div
-              key={gig.id}
-              className="bg-red-950/30 border border-red-500/40 rounded-2xl p-4 flex flex-col gap-3 w-full"
-            >
-              <div className="flex items-center gap-2">
-                <PauseCircle className="w-4 h-4 text-red-400" />
-                <span className="text-red-300 font-bold text-xs">
-                  Listing Paused
-                </span>
-              </div>
-              <p className="text-white text-xs leading-relaxed">
-                Payment verification needed for reference{' '}
-                <span className="text-pine font-mono font-bold">
-                  {gig.reference_code}
-                </span>
-                .
-              </p>
-              {resubmitId === gig.id ? (
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="text"
-                    value={resubmitRef}
-                    onChange={(e) => setResubmitRef(e.target.value)}
-                    placeholder="Enter payment reference ID"
-                    className="bg-ink rounded-xl h-10 px-3 border border-gray-800 text-white placeholder:text-sage/60 text-xs outline-none"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={async () => {
-                        if (resubmitRef.trim().length < 3) return;
-                        await supabase
-                          .from('hustles')
-                          .update({
-                            payment_ref_id: resubmitRef.trim(),
-                            status: 'active',
-                          })
-                          .eq('id', gig.id);
-                        setSuspendedGigs((prev) =>
-                          prev.filter((g) => g.id !== gig.id)
-                        );
-                        setResubmitId(null);
-                        setResubmitRef('');
-                        toast({
-                          title: 'Payment re-submitted',
-                          description: 'Your listing is back online.',
-                        });
-                      }}
-                      disabled={resubmitRef.trim().length < 3}
-                      className="flex-1 h-9 rounded-xl bg-pine text-black text-xs font-black active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} />{' '}
-                      Reactivate
-                    </button>
-                    <button
-                      onClick={() => setResubmitId(null)}
-                      className="h-9 px-4 rounded-xl bg-surface border border-gray-800 text-sage text-xs font-bold"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => {
-                    setResubmitId(gig.id);
-                    setResubmitRef('');
-                  }}
-                  className="w-full h-9 rounded-xl bg-ink border border-pine/40 text-pine text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />{' '}
-                  Submit Payment Ref
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
       {profile?.is_admin && onOpenAdminQueue && (
         <button
           onClick={onOpenAdminQueue}
@@ -679,7 +543,7 @@ export default function ProfileScreen({
         <div className="w-24 h-24 rounded-full bg-surface border-2 border-gray-800 p-1 shadow-lg">
           <div className="w-full h-full rounded-full bg-ink flex items-center justify-center overflow-hidden">
             {localAvatarUrl ? (
-              <img
+              <SecureImage
                 src={localAvatarUrl}
                 alt="PFP"
                 className="w-full h-full object-cover"
@@ -710,28 +574,7 @@ export default function ProfileScreen({
             </span>
           </div>
 
-          {active ? (
-            <div className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold bg-pine/15 text-pine border border-pine/40">
-              <Crown className="w-3.5 h-3.5" strokeWidth={1.75} />
-              <span>
-                {profile?.is_admin
-                  ? 'Admin Access'
-                  : profile?.kritic_unlimited
-                  ? 'Kritic Unlimited'
-                  : profile?.is_premium
-                  ? 'Pro Member'
-                  : `Active until ${fmtDate(profile?.subscribed_until ?? null)}`}
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={onOpenSubscription}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black bg-pine text-black active:scale-95 transition-all"
-            >
-              <Crown className="w-3.5 h-3.5" strokeWidth={2} />
-              <span>Upgrade Plan</span>
-            </button>
-          )}
+          <span className="text-xs text-pine font-bold">Free student account</span>
         </div>
       </div>
 
@@ -766,7 +609,7 @@ export default function ProfileScreen({
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-pine text-[10px] font-black uppercase tracking-wider">
-              Passive Royalty Program
+              Contribute Academic Work
             </span>
             <span className="text-white font-bold text-xs truncate">
               Lend 80%+ Coursework to Kritic Vault
@@ -864,39 +707,6 @@ export default function ProfileScreen({
               </button>
             );
           })}
-        </div>
-      </div>
-
-      {/* Payout Methods */}
-      <div className="w-full mt-6">
-        <span className="text-sage text-xs font-bold uppercase tracking-wider px-1">
-          Escrow &amp; Benchmark Payout Number
-        </span>
-        <div className="bg-surface border border-gray-800 rounded-2xl mt-2.5 p-4 flex flex-col gap-3">
-          <label className="text-white text-xs font-bold">
-            eWallet / Mobile Money Number
-          </label>
-          <input
-            type="tel"
-            value={ewallet}
-            onChange={(e) => setEwallet(e.target.value)}
-            placeholder="+267 7X XXX XXX"
-            className="bg-ink rounded-xl h-10 w-full px-3.5 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine transition-colors text-xs font-mono"
-          />
-          <p className="text-sage text-[11px] leading-snug">
-            Used for disbursing your verified Escrow payouts and 80%+ benchmark
-            royalties.
-          </p>
-          <button
-            onClick={handleSaveEwallet}
-            disabled={isSavingEwallet || !ewallet.trim()}
-            className="self-end flex items-center justify-center gap-1.5 rounded-xl bg-pine text-black text-xs font-black px-4 h-9 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {isSavingEwallet && (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
-            )}
-            <span>{isSavingEwallet ? 'Saving...' : 'Save Number'}</span>
-          </button>
         </div>
       </div>
 
