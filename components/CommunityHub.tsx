@@ -454,7 +454,7 @@ export default function CommunityHub({
           <span className="text-sage/70">Page {page + 1}</span>
           {posts.length === 40 && <button className="min-h-9 rounded-full border border-gray-700 px-3 text-white hover:border-pine" onClick={() => setPage(v => v + 1)}>Older posts →</button>}
         </nav>
-      )
+      )}
       {askModalType !== null && (
         <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
