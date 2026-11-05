@@ -32,6 +32,12 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
         const existing = await navigator.serviceWorker.getRegistration('/');
         const subscription = await existing?.pushManager.getSubscription();
         if (!subscription) return;
+        const response = await fetch('/api/push/config', {cache:'no-store'});
+        if (!response.ok) return;
+        const config = await response.json() as {publicKey:string};
+        const expected = decodeVapidKey(config.publicKey);
+        const actual = subscription.options.applicationServerKey ? new Uint8Array(subscription.options.applicationServerKey) : null;
+        if (!actual || expected.length !== actual.length || actual.some((v,i)=>v!==expected[i])) return;
         const { data, error: queryError } = await supabase.from('push_subscriptions')
           .select('id').eq('user_id', userId).eq('endpoint', subscription.endpoint).maybeSingle();
         if (alive && !queryError && data) setSubscribed(true);
@@ -45,8 +51,10 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
     setBusy(true); setError(''); setTestStatus('');
     try {
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Web push is unavailable in this browser. On iPhone, install KAMPUS to your Home Screen first.');
-      const publicKey = process.env.NEXT_PUBLIC_VAPID_KEY;
-      if (!publicKey) throw new Error('KAMPUS push notifications are being configured. Please try later.');
+      const configResponse = await fetch('/api/push/config', {cache:'no-store'});
+      if (!configResponse.ok) throw new Error('KAMPUS push signing key is not ready. Please try again later.');
+      const config = await configResponse.json() as {publicKey:string};
+      const publicKey = config.publicKey;
       const access = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
       setPermission(access);
       if (access !== 'granted') throw new Error('Allow notifications in your browser settings to receive campus alerts.');
@@ -59,7 +67,9 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
         const existingKey = subscription.options.applicationServerKey;
         const bytes = existingKey ? new Uint8Array(existingKey) : null;
         if (!bytes || bytes.length !== vapidBytes.length || bytes.some((v, i) => v !== vapidBytes[i])) {
+          const oldEndpoint = subscription.endpoint;
           await subscription.unsubscribe();
+          await supabase.from('push_subscriptions').delete().eq('user_id',userId).eq('endpoint',oldEndpoint);
           subscription = null;
         }
       }

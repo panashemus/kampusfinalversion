@@ -5,6 +5,15 @@ function fromB64url(data: string): Buffer { return Buffer.from(data, 'base64url'
 function hmac(key: Buffer, data: Buffer): Buffer { return createHmac('sha256', key).update(data).digest(); }
 function hkdfExpand(key: Buffer, info: Buffer, size: number): Buffer { return hmac(key, Buffer.concat([info, Buffer.from([1])])).subarray(0, size); }
 
+// Derive the public signing key from the private key rather than trusting a possibly mismatched env value.
+export function deriveVapidPublicKey(privateKey: string): string {
+  const ecdh = createECDH('prime256v1');
+  const raw = Buffer.from(privateKey, 'base64url');
+  if (raw.length !== 32) throw new Error('VAPID private key must be 32 bytes');
+  ecdh.setPrivateKey(raw);
+  return ecdh.getPublicKey(undefined, 'uncompressed').toString('base64url');
+}
+
 export function buildWebPushRequest(
   subscription: { endpoint: string; keys_p256dh: string; keys_auth: string },
   payload: { title: string; body: string; url: string; tag?: string },

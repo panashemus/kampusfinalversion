@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { buildWebPushRequest } from '@/lib/webpush';
+import { buildWebPushRequest, deriveVapidPublicKey } from '@/lib/webpush';
 export const runtime = 'nodejs';
 
 const allowedPushHost = (host: string) =>
@@ -13,8 +13,8 @@ export async function POST(req: Request) {
   try {
     const apiUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const publicKey = process.env.NEXT_PUBLIC_VAPID_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
+    const publicKey = privateKey ? deriveVapidPublicKey(privateKey) : undefined;
     const subject = process.env.VAPID_SUBJECT;
     if (!apiUrl || !key || !publicKey || !privateKey || !subject) return NextResponse.json({ error: 'Push service is not configured' }, { status: 503 });
     const bearer = req.headers.get('authorization')?.match(/^Bearer\s+([^\s]+)$/i)?.[1];
