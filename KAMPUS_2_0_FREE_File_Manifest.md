@@ -30,10 +30,10 @@ Compared to the supplied `KAMPUS_Pre_2.0_Production_Backup.zip`.
 - `pnpm-lock.yaml`
 - `public/apple-touch-icon.png`
 - `public/favicon.png`
-- `supabase/migrations/20261105000100_foundation_privacy.sql`
-- `supabase/migrations/20261105000200_interconnect.sql`
-- `supabase/migrations/20261105000300_media_and_moderation.sql`
-- `supabase/migrations/20261105000400_free_mode_finance_pause.sql`
+- `supabase/migrations/20261105181025_foundation_privacy.sql`
+- `supabase/migrations/20261105181039_interconnect.sql`
+- `supabase/migrations/20261105181052_media_and_moderation.sql`
+- `supabase/migrations/20261105181102_free_mode_finance_pause.sql`
 - `tests/database.mjs`
 - `tests/free-mode.test.cjs`
 - `tests/interconnect.test.cjs`
@@ -87,6 +87,6 @@ Compared to the supplied `KAMPUS_Pre_2.0_Production_Backup.zip`.
 - Preserve all legitimate environment variables in your deployment settings; never upload `.env` files, secrets, or provider credentials.
 - Seller-defined listing prices are intentionally kept: KAMPUS is free to use, but user merchandise is not necessarily free.
 - Previous payments and escrow records must remain in the database; deletion of old UI source files does **not** delete database data.
-- New policy/migration `supabase/migrations/20261105000400_free_mode_finance_pause.sql` has not been executed here.
+- New policy/migration `supabase/migrations/20261105181102_free_mode_finance_pause.sql` has been applied to production and registered in Supabase migration history.
 - The updated `supabase/functions/dpo-webhook/index.ts` must be deployed to Supabase separately; GitHub upload alone leaves the old deployed webhook live.
 - Do not push to a production-linked `main` branch before focused build/database verification, migration deployment, webhook disablement, and review of unsettled financial records.

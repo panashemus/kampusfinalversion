@@ -31,7 +31,7 @@ test('paid UI components are not shipped, and moderated public posts remain avai
 });
 
 test('database migration blocks entitlements and new transactions', () => {
-  const sql = read('supabase/migrations/20261105000400_free_mode_finance_pause.sql');
+  const sql = read('supabase/migrations/20261105181102_free_mode_finance_pause.sql');
   assert.match(sql, /BEFORE UPDATE ON public\.profiles/);
   assert.match(sql, /BEFORE INSERT ON public\.%I/);
   assert.match(sql, /REVOKE INSERT, UPDATE, DELETE/);
