@@ -116,6 +116,9 @@ export type SosAlert = {
 };
 
 export type Profile = {
+  public_profile?: boolean;
+  allow_messages?: boolean;
+  preferences?: {topics?: string[];institutionFirst?: boolean};
   id: string;
   email: string;
   username: string | null;

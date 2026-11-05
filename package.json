@@ -6,13 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint app components lib --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.cjs",
+    "test:db": "node tests/database.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
     "@netlify/plugin-nextjs": "^5.15.1",
-    "@next/swc-wasm-nodejs": "13.5.1",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -51,13 +52,13 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
     "eslint": "8.49.0",
-    "eslint-config-next": "13.5.1",
+    "eslint-config-next": "15.5.29",
     "input-otp": "^1.2.4",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.446.0",
-    "next": "13.5.1",
+    "next": "15.5.29",
     "next-themes": "^0.3.0",
-    "postcss": "8.4.30",
+    "postcss": "8.5.32",
     "react": "18.2.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "18.2.0",
@@ -75,6 +76,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.21"
-  }
+    "@types/leaflet": "^1.9.21",
+    "@electric-sql/pglite": "^0.3.14"
+  },
+  "packageManager": "pnpm@11.25.0"
 }
