@@ -448,7 +448,13 @@ export default function CommunityHub({
         )}
       </div>
 
-      {!selectedPostId&&<div className="flex justify-between px-4 pb-28"><button className="foundation-action" disabled={page===0} onClick={()=>setPage(v=>v-1)}>Previous</button><button className="foundation-action" disabled={posts.length<40} onClick={()=>setPage(v=>v+1)}>Next</button></div>}
+      {!selectedPostId && (page > 0 || posts.length === 40) && (
+        <nav aria-label="Feed pages" className="flex items-center justify-center gap-3 px-4 py-3 text-xs text-sage">
+          {page > 0 && <button className="min-h-9 rounded-full border border-gray-700 px-3 text-white hover:border-pine" onClick={() => setPage(v => Math.max(0, v - 1))}>← Newer</button>}
+          <span className="text-sage/70">Page {page + 1}</span>
+          {posts.length === 40 && <button className="min-h-9 rounded-full border border-gray-700 px-3 text-white hover:border-pine" onClick={() => setPage(v => v + 1)}>Older posts →</button>}
+        </nav>
+      )
       {askModalType !== null && (
         <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div

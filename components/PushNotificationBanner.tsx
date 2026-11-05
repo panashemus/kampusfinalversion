@@ -104,9 +104,8 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
 
   if (permission === 'unsupported') return null;
   if (subscribed) return (
-    <div className="rounded-xl border border-pine/30 bg-pine/10 px-4 py-3 my-2 text-sage text-xs">
-      <div className="flex gap-2 items-center"><CheckCircle2 className="text-pine w-4 h-4"/><strong className="text-white">Campus notifications enabled</strong></div>
-      <button type="button" onClick={test} disabled={busy} className="underline text-pine mt-2 min-h-9 disabled:opacity-60">{busy ? 'Sending…' : 'Send a test notification'}</button>
+    <div className="rounded-xl border border-pine/20 bg-pine/5 px-3 py-2 my-1 text-sage text-xs">
+      <div className="flex gap-2 items-center flex-wrap"><CheckCircle2 className="text-pine w-4 h-4"/><strong className="text-white">Alerts on</strong><button type="button" onClick={test} disabled={busy} className="ml-auto underline text-pine min-h-8 disabled:opacity-60">{busy ? 'Sending…' : 'Test notification'}</button></div>
       {testStatus && <p role="status" className="mt-1">{testStatus}</p>}
       {error && <p role="alert" className="text-red-300 mt-1">{error}</p>}
     </div>

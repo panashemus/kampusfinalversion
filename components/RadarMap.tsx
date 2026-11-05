@@ -163,12 +163,18 @@ function createLocationPin() {
 
 function LocationTracker({
   onLocate,
+  onError,
 }: {
   onLocate: (pos: [number, number]) => void;
+  onError: () => void;
 }) {
   const map = useMap();
   const [pos, setPos] = useState<[number, number] | null>(null);
   const hasCentered = useRef(false);
+  const onLocateRef = useRef(onLocate);
+  const onErrorRef = useRef(onError);
+  onLocateRef.current = onLocate;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
@@ -177,18 +183,18 @@ function LocationTracker({
         const { latitude, longitude } = position.coords;
         const next: [number, number] = [latitude, longitude];
         setPos(next);
-        onLocate(next);
+        onLocateRef.current(next);
 
         if (!hasCentered.current) {
           map.setView(next, map.getZoom(), { animate: true });
           hasCentered.current = true;
         }
       },
-      () => {},
+      () => onErrorRef.current(),
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
 
-  }, [map, onLocate]);
+  }, [map]);
 
   if (!pos) return null;
   return <Marker position={pos} icon={createUserPin()} />;
@@ -233,6 +239,7 @@ export default function RadarMap({
   const { toast } = useToast();
   const [isMounted,setIsMounted]=useState(false);
   const [locateRequested,setLocateRequested]=useState(false);
+  const [locationFixed,setLocationFixed]=useState(false);
   const personLocationAvailable=false; // Deferred: recipient consent, expiry and revocation required.
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
@@ -348,10 +355,9 @@ export default function RadarMap({
   }, [profile]);
 
   const handleLocate = useCallback(
-    async (pos: [number, number]) => {
+    (pos: [number, number]) => {
       onLocate(pos);
-
-
+      setLocationFixed(true);
     },
     [onLocate]
   );
@@ -431,7 +437,7 @@ export default function RadarMap({
         />
 
         <CampusDetector onNearbyCampus={setNearbyCampus} />
-        {locateRequested&&<LocationTracker onLocate={handleLocate} />}
+        {locateRequested && <LocationTracker onLocate={handleLocate} onError={() => { setLocateRequested(false); toast({ title: 'Location unavailable', description: 'Allow location access to center the map on your position.' }); }} />}
 
         {hazards.map((h) => (
           <Marker
@@ -483,7 +489,17 @@ export default function RadarMap({
           ))}
       </MapContainer>
 
-      <div className="absolute bottom-28 left-4 z-[1000] pointer-events-none"><div className="foundation-card text-xs text-sage pointer-events-auto">Person-to-person location sharing is paused until privacy controls are ready.<button className="foundation-action mt-2" onClick={()=>setLocateRequested(true)}>Locate me on this map</button></div></div>
+      {!locateRequested && !locationFixed && (
+        <button
+          type="button"
+          aria-label="Center map on my location"
+          title="Locate me (only visible to you)"
+          onClick={() => setLocateRequested(true)}
+          className="absolute bottom-28 left-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-full border border-pine/40 bg-surface/95 text-pine shadow-lg hover:bg-ink"
+        >
+          <Navigation className="h-5 w-5" aria-hidden="true" />
+        </button>
+      )}
 
       {/* Selected Promoted Location Sheet */}
       {selectedLocation && (
