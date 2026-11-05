@@ -33,7 +33,7 @@ export default function ChatInbox({
         .from('conversations')
         .select('*')
         .or(`participant_a.eq.${myId},participant_b.eq.${myId}`)
-        .order('last_message_at', { ascending: false });
+        .order('last_message_at', { ascending: false }).limit(50);
 
       if (data && mounted) {
         const convos = data as Conversation[];
@@ -48,7 +48,7 @@ export default function ChatInbox({
 
         if (peerIds.length > 0) {
           const { data: profiles } = await supabase
-            .from('profiles')
+            .from('profile_directory')
             .select('id, username')
             .in('id', peerIds);
 

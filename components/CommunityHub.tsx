@@ -1,10 +1,11 @@
 'use client';
+import SecureImage from './SecureImage';
 
 import { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
-import { uploadImages } from '@/lib/payment';
+import { uploadImages } from '@/lib/media-upload';
 import type { CommunityCategory, Comment, Profile } from '@/lib/types';
 import CommentThread from '@/components/CommentThread';
 import AdSlot from '@/components/AdSlot';
@@ -12,11 +13,14 @@ import PublicProfileModal from '@/components/PublicProfileModal';
 import ImageUploader from '@/components/ImageUploader';
 import Lightbox from '@/components/Lightbox';
 import ReportModal from '@/components/ReportModal';
+import ContextActions from './ContextActions';
+import type { Destination, Visibility } from '@/lib/interconnect';
 import { useToast } from '@/hooks/use-toast';
 
 const FILTERS: CommunityCategory[] = ['All Questions', 'Academic', 'Housing', 'Tech', 'General', 'Textbooks', 'Beauty'];
 
 type FeedPostRow = {
+  visibility: Visibility; public_approved: boolean; institution: string | null; is_owner: boolean;
   id: string;
   user_id: string;
   author_name: string | null;
@@ -41,6 +45,7 @@ type FeedCommentRow = {
 };
 
 type EnhancedCommunityPost = {
+  visibility: Visibility; approved: boolean; institution: string | null; isOwner: boolean;
   id: string;
   authorId: string;
   author: string;
@@ -58,15 +63,20 @@ type EnhancedCommunityPost = {
 export default function CommunityHub({ 
   profile, 
   searchQuery,
-  onMessageUser 
+  onMessageUser, selectedPostId, onNavigate
 }: { 
-  profile: Profile | null; 
+  profile: Profile | null;
+  selectedPostId?: string;
+  onNavigate: (destination: Destination) => void;
   searchQuery: string;
   onMessageUser: (peerId: string, peerUsername: string) => void;
 }) {
   const { toast } = useToast();
   const [posts, setPosts] = useState<EnhancedCommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError,setLoadError]=useState('');
+  const [page,setPage]=useState(0);
+  const [publicPost,setPublicPost]=useState(false);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
   
   const [askModalType, setAskModalType] = useState<'standard' | 'anonymous' | null>(null);
@@ -85,16 +95,19 @@ export default function CommunityHub({
   const myName = profile ? (profile.username ? `@${profile.username}` : profile.email.split('@')[0]) : 'student';
 
   const loadPosts = useCallback(async () => {
-    const { data } = await supabase
-      .from('feed_posts')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!data) return;
+    setLoading(true);setLoadError('');
+    let query=supabase.from('feed_preview').select('*').order('created_at',{ascending:false});
+    if(selectedPostId)query=query.eq('id',selectedPostId);
+    if(searchQuery.trim())query=query.ilike('text','%'+searchQuery.trim().replace(/[\%_]/g,'')+'%');
+    const {data,error}=await query.range(page*40,page*40+39);
+    if(error||!data){setLoadError('The feed could not be loaded. Please try again.');setLoading(false);return;}
     const postRows = data as FeedPostRow[];
 
     const { data: commentData } = await supabase
-      .from('feed_comments')
+      .from('comment_preview')
       .select('*')
+      .in('post_id',postRows.map(p=>p.id))
+      .limit(1000)
       .order('created_at', { ascending: true });
     const commentRows = (commentData as FeedCommentRow[]) ?? [];
 
@@ -102,6 +115,7 @@ export default function CommunityHub({
       const isPostAnon = p.is_anonymous || false;
       return {
         id: p.id,
+        visibility:p.visibility,approved:p.public_approved,institution:p.institution,isOwner:p.is_owner,
         authorId: p.user_id,
         author: p.author_name ?? p.user_id,
         time: timeAgo(p.created_at),
@@ -126,7 +140,7 @@ export default function CommunityHub({
     });
     setPosts(mapped);
     setLoading(false);
-  }, []);
+  }, [selectedPostId,searchQuery,page]);
 
   useEffect(() => {
     loadPosts();
@@ -135,11 +149,12 @@ export default function CommunityHub({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_posts' }, () => loadPosts())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feed_comments' }, () => loadPosts())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const timer=setInterval(()=>{if(!document.hidden)void loadPosts();},45000);
+    return () => { clearInterval(timer);supabase.removeChannel(channel); };
   }, [loadPosts]);
 
   const q = searchQuery.trim().toLowerCase();
-  const visible = posts.filter((p) => {
+  const visible = [...posts].sort((a,b)=>{const score=(p:EnhancedCommunityPost)=>(profile?.preferences?.institutionFirst!==false&&p.institution===profile?.university?2:0)+(profile?.preferences?.topics?.includes(p.category)?1:0);return score(b)-score(a);}).filter((p) => {
     const matchesCategory = filter === 'All Questions' || p.category === filter;
     const matchesSearch = !q || p.text.toLowerCase().includes(q) || p.author.toLowerCase().includes(q);
     return matchesCategory && matchesSearch;
@@ -164,29 +179,27 @@ export default function CommunityHub({
       const newCount = Math.max(0, post.upvotes - 1);
       setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p)));
       await supabase.from('feed_post_votes').delete().eq('id', existingVote.id);
-      await supabase.from('feed_posts').update({ upvotes: newCount }).eq('id', id);
     } else {
       const newCount = post.upvotes + 1;
       setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p)));
       await supabase.from('feed_post_votes').insert({ post_id: id, user_id: profile.id });
-      await supabase.from('feed_posts').update({ upvotes: newCount }).eq('id', id);
     }
   };
 
   const addComment = async (postId: string, comment: Comment) => {
-    setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: [...p.comments, comment] } : p));
     if (!profile) return;
     
     const targetPost = posts.find((p) => p.id === postId);
     const isPostAnon = targetPost?.is_anonymous ?? false;
 
-    await supabase.from('feed_comments').insert({
+    const {error}=await supabase.from('feed_comments').insert({
       post_id: postId,
       user_id: profile.id,
       author_name: isPostAnon ? 'Anonymous' : myName,
       is_anonymous: isPostAnon,
       text: comment.text,
     });
+    if(error)toast({title:"Reply not saved",description:"Please try again.",variant:"destructive"});else await loadPosts();
   };
 
   const deletePost = async (postId: string) => {
@@ -214,6 +227,8 @@ export default function CommunityHub({
       .from('feed_posts')
       .insert({
         user_id: profile.id,
+        visibility:publicPost ? "public" : "campus",
+        institution:profile.university,
         author_name: myName,
         category: newCategory,
         text,
@@ -229,6 +244,7 @@ export default function CommunityHub({
     if (data) {
       const post: EnhancedCommunityPost = {
         id: (data as FeedPostRow).id,
+        visibility:publicPost?"public":"campus",approved:false,institution:profile.university,isOwner:true,
         authorId: profile.id,
         author: myName,
         time: 'just now',
@@ -297,7 +313,7 @@ export default function CommunityHub({
 
         <AdSlot />
 
-        {loading ? (
+        {loadError ? <div role="alert" className="foundation-card text-sage">{loadError}<button className="foundation-action mt-3" onClick={()=>loadPosts()}>Try again</button></div> : loading ? (
           <span className="text-sage text-sm text-center mt-8">Loading feed...</span>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 pt-16">
@@ -325,7 +341,7 @@ export default function CommunityHub({
                     >
                       <Flag className="w-3.5 h-3.5" strokeWidth={1.5} /> Report Post
                     </button>
-                    {(profile?.id === post.authorId || profile?.is_admin) && (
+                    {(post.isOwner || profile?.is_admin) && (
                       <button
                         onClick={() => deletePost(post.id)}
                         className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
@@ -380,7 +396,8 @@ export default function CommunityHub({
                 )}
               </div>
 
-              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{post.text}</p>
+              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">{post.text}</p>
+              <ContextActions content={{id:post.id,type:post.category==="Academic"?"academic-question":"discussion",module:"community",visibility:post.visibility,approved:post.approved,available:true,category:post.category,text:post.text}} userId={profile?.id} onNavigate={onNavigate}/>
 
               {post.images.length > 0 && (
                 <div className={`grid gap-2 mt-1 ${post.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -390,7 +407,7 @@ export default function CommunityHub({
                       onClick={() => setLightboxImages(post.images)}
                       className="w-full aspect-video rounded-xl overflow-hidden border border-gray-800"
                     >
-                      <img src={img} alt={`post-img-${i}`} className="w-full h-full object-cover" />
+                      <SecureImage src={img} alt={`post-img-${i}`} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -431,6 +448,7 @@ export default function CommunityHub({
         )}
       </div>
 
+      {!selectedPostId&&<div className="flex justify-between px-4 pb-28"><button className="foundation-action" disabled={page===0} onClick={()=>setPage(v=>v-1)}>Previous</button><button className="foundation-action" disabled={posts.length<40} onClick={()=>setPage(v=>v+1)}>Next</button></div>}
       {askModalType !== null && (
         <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
@@ -471,6 +489,7 @@ export default function CommunityHub({
               </div>
             </div>
 
+            <label className="text-sm text-sage flex items-start gap-3"><input type="checkbox" checked={publicPost} onChange={e=>setPublicPost(e.target.checked)}/>Share this post publicly after moderator review. Leave unchecked for campus-only visibility.</label>
             <div className="flex flex-col gap-1.5 shrink-0">
               <label className="text-sage text-xs font-bold uppercase tracking-wider">
                 {askModalType === 'anonymous' ? 'Your Confession (Anonymous)' : 'Your Question'}

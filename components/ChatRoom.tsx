@@ -19,12 +19,13 @@ import type { Message } from '@/lib/types';
 import PublicProfileModal from '@/components/PublicProfileModal';
 
 export default function ChatRoom({
-  myId,
+  myId, listingId,
   peerId,
   peerUsername,
   onClose,
 }: {
   myId: string;
+  listingId?: string;
   peerId: string;
   peerUsername: string;
   onClose: () => void;
@@ -33,28 +34,36 @@ export default function ChatRoom({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [sending,setSending]=useState(false);
+  const [error,setError]=useState('');const [retry,setRetry]=useState(0);const [hasEarlier,setHasEarlier]=useState(false);
+  const [sources,setSources]=useState<{id:string;title:string;available:boolean}[]>([]);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setLoading(true);
-      const convo = await getOrCreateConversation(myId, peerId, peerUsername);
+      setLoading(true);setError('');setConversationId(null);setMessages([]);
+      try {
+      const convo = await getOrCreateConversation(myId, peerId, peerUsername,listingId);
       if (cancelled || !convo) {
         setLoading(false);
         return;
       }
       setConversationId(convo.id);
       const msgs = await fetchMessages(convo.id);
-      if (!cancelled) setMessages(msgs);
+      if (!cancelled){setMessages(msgs);setHasEarlier(msgs.length===50);}
+      const {data:refs}=await supabase.from('conversation_sources').select('listing_id').eq('conversation_id',convo.id).limit(20);
+      const ids=(refs||[]).map(r=>r.listing_id);
+      const {data:listings}=await supabase.from('listing_preview').select('id,title').in('id',ids).eq('status','active');
+      if(!cancelled)setSources(ids.map(id=>({id,title:listings?.find(l=>l.id===id)?.title||'Listing no longer available',available:!!listings?.find(l=>l.id===id)})));
+      }catch(e){if(!cancelled)setError(e instanceof Error?e.message:'Conversation unavailable.');}
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [myId, peerId, peerUsername]);
+  }, [myId, peerId, peerUsername,listingId,retry]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -69,7 +78,7 @@ export default function ChatRoom({
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+          setMessages(prev=>prev.some(m=>m.id===payload.new.id)?prev:[...prev,payload.new as Message]);
         }
       )
       .subscribe();
@@ -84,7 +93,8 @@ export default function ChatRoom({
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || !conversationId) return;
+    if (!text || !conversationId || sending || text.length>4000) return;
+    setError('');
     setSending(true);
     setInput('');
 
@@ -100,11 +110,11 @@ export default function ChatRoom({
     const msg = await sendMessage(conversationId, myId, text);
     if (msg) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === optimistic.id ? msg : m))
+        [...prev.filter(m=>m.id!==optimistic.id&&m.id!==msg.id),msg]
       );
-    }
+    }else{setMessages(prev=>prev.filter(m=>m.id!==optimistic.id));setInput(text);setError("Message was not sent. Check your connection or message permissions and try again.");}
     setSending(false);
-  }, [input, conversationId, myId]);
+  }, [input, conversationId, myId,sending]);
 
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -138,6 +148,9 @@ export default function ChatRoom({
           </button>
         </div>
 
+        {sources.length>0&&<div className="px-4 py-3 border-b border-gray-800 text-xs text-sage">Listing context{sources.map(source=><div key={source.id}>{source.available?<a className="text-pine block py-2" href={"#hustle?listing="+source.id} onClick={onClose}>{source.title}</a>:<span>{source.title}</span>}</div>)}</div>}
+        {error&&<div role="alert" className="px-4 py-3 text-sm text-red-300">{error}{!conversationId&&<button className="foundation-action mt-2" onClick={()=>setRetry(v=>v+1)}>Try again</button>}</div>}
+        {hasEarlier&&<button className="foundation-action" onClick={async()=>{if(!conversationId||!messages[0])return;try{const earlier=await fetchMessages(conversationId,messages[0].created_at);setMessages(prev=>[...earlier,...prev]);setHasEarlier(earlier.length===50);}catch{setError('Earlier messages could not be loaded.');}}}>Load earlier messages</button>}
         {/* Chat Stream */}
         <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar bg-[#0B0F0E]">
           <div className="p-3.5 shrink-0">
@@ -150,8 +163,7 @@ export default function ChatRoom({
                 <strong className="text-emerald-300 font-semibold">
                   Protected In-App Chat:
                 </strong>{' '}
-                Keep trades inside Kampus Escrow and inspect items in a public
-                campus spot before releasing funds.
+                Kampus is not processing payments or escrow transfers. Inspect items in a public campus spot, agree terms directly, and never treat chat messages as payment confirmation.
               </p>
             </div>
           </div>
@@ -209,6 +221,9 @@ export default function ChatRoom({
         {/* Sticky Input Bar */}
         <div className="p-3 bg-[#121816] border-t border-white/[0.06] flex items-center gap-2 shrink-0">
           <input
+            aria-label="Message"
+            maxLength={4000}
+            disabled={!conversationId}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -219,7 +234,8 @@ export default function ChatRoom({
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            aria-label="Send message"
+            disabled={!input.trim() || sending || !conversationId}
             className="w-10 h-10 rounded-full bg-amber-400 hover:bg-amber-300 flex items-center justify-center text-zinc-950 disabled:opacity-40 active:scale-[0.96] transition-all shrink-0"
           >
             {sending ? (

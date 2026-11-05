@@ -1,15 +1,18 @@
 'use client';
+import SecureImage from './SecureImage';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Laptop, Scissors, Book, Star, X, ShieldCheck, Copy, Check, Loader as Loader2, PackageOpen, MessageCircle, MoveVertical as MoreVertical, Flag, TriangleAlert as AlertTriangle, RefreshCw, Image as ImageIcon, CreditCard, Wallet, Send, Tag, Lock, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { uploadImages } from '@/lib/payment';
+import { uploadImages } from '@/lib/media-upload';
 import type { Comment, Profile, HustleStatus } from '@/lib/types';
 import AdSlot from '@/components/AdSlot';
 import PublicProfileModal from '@/components/PublicProfileModal';
 import ImageUploader from '@/components/ImageUploader';
 import Lightbox from '@/components/Lightbox';
 import ReportModal from '@/components/ReportModal';
+import ContextActions from './ContextActions';
+import type {Destination,Visibility} from '@/lib/interconnect';
 import { useToast } from '@/hooks/use-toast';
 
 type Category = 'All' | 'Tech' | 'Beauty' | 'Textbooks';
@@ -23,6 +26,7 @@ const CATEGORY_ICONS: Record<string, typeof Laptop> = {
 };
 
 type Gig = {
+  visibility: Visibility; approved: boolean;
   id: string;
   icon: typeof Laptop;
   title: string;
@@ -41,6 +45,7 @@ type Gig = {
 };
 
 type HustleRow = {
+  visibility: Visibility; public_approved: boolean;
   id: string;
   seller_id: string;
   seller_name: string | null;
@@ -56,13 +61,15 @@ type HustleRow = {
 };
 
 export default function HustleHub({
-  searchQuery,
+  searchQuery, selectedListingId, onNavigate,
   onMessageSeller,
   requireVerified,
   profile,
 }: {
+  selectedListingId?: string;
+  onNavigate: (destination: Destination) => void;
   searchQuery: string;
-  onMessageSeller: (peerId: string, peerUsername: string) => void;
+  onMessageSeller: (peerId: string, peerUsername: string, listingId?: string) => void;
   requireVerified: (action: () => void) => void;
   profile: Profile | null;
 }) {
@@ -70,7 +77,10 @@ export default function HustleHub({
   const [activeFilter, setActiveFilter] = useState<Category>('All');
   const [showModal, setShowModal] = useState(false);
   const [gigs, setGigs] = useState<Gig[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading,setLoading]=useState(true);
+  const [loadError,setLoadError]=useState('');
+  const [publicListing,setPublicListing]=useState(false);
+  const [page,setPage]=useState(0);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
   
   const [profileUser, setProfileUser] = useState<{ id: string; username: string } | null>(null);
@@ -78,20 +88,6 @@ export default function HustleHub({
   const [reportGig, setReportGig] = useState<Gig | null>(null);
   const [lightboxImages, setLightboxImages] = useState<string[] | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-
-  // 2-Step Checkout State for creating a gig
-  const [step, setStep] = useState<1 | 2>(1);
-  const [paymentMethod, setPaymentMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
-  const [referenceCode, setReferenceCode] = useState('');
-  const [incontactId, setIncontactId] = useState('');
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedNum, setCopiedNum] = useState(false);
-
-  // Escrow Checkout State
-  const [escrowGig, setEscrowGig] = useState<Gig | null>(null);
-  const [escrowPaymentMethod, setEscrowPaymentMethod] = useState<'pay2cell' | 'ewallet'>('pay2cell');
-  const [escrowRef, setEscrowRef] = useState('');
-  const [processingEscrow, setProcessingEscrow] = useState(false);
 
   // Form State
   const [newTitle, setNewTitle] = useState('');
@@ -105,16 +101,18 @@ export default function HustleHub({
   const isAdmin = !!profile?.is_admin;
   
   // 🔥 Super Admin Override for image manipulation
-  const isSuperAdmin = profile?.email === 'musungwa60@gmail.com';
+  const isSuperAdmin = !!profile?.is_admin;
 
   const loadGigs = useCallback(async () => {
-    const { data } = await supabase
-      .from('hustles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!data) return;
+    setLoading(true);setLoadError('');
+    let query=supabase.from('listing_preview').select('*').order('created_at',{ascending:false});
+    if(selectedListingId)query=query.eq('id',selectedListingId);
+    if(searchQuery.trim())query=query.ilike('title','%'+searchQuery.trim().replace(/[\%_]/g,'')+'%');
+    const {data,error}=await query.range(page*40,page*40+39);
+    if(error||!data){setLoadError('Listings could not be loaded. Please try again.');setLoading(false);return;}
     const mapped: Gig[] = (data as HustleRow[]).map((row) => ({
       id: row.id,
+      visibility:row.visibility,approved:row.public_approved,
       icon: CATEGORY_ICONS[row.category] ?? Laptop,
       title: row.title,
       price: `P ${row.price}`,
@@ -131,8 +129,9 @@ export default function HustleHub({
       images: row.images ?? [],
     }));
     setGigs(mapped);
+    if(selectedListingId)setSelectedGig(mapped.find(g=>g.id===selectedListingId)||null);
     setLoading(false);
-  }, []);
+  }, [selectedListingId,searchQuery,page]);
 
   useEffect(() => {
     loadGigs();
@@ -154,25 +153,12 @@ export default function HustleHub({
     return matchesCategory && matchesSearch;
   });
 
-  const mySuspendedGigs = gigs.filter(
-    (g) => g.status === 'unpaid_suspended' && g.sellerId === profile?.id
-  );
-
   const canPostGig =
     newTitle.trim().length >= 3 &&
     newPrice.trim() !== '' &&
     !isNaN(Number(newPrice)) &&
     Number(newPrice) > 0 &&
     newDescription.trim().length >= 10;
-
-  const handleProceedToPayment = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!canPostGig) return;
-    
-    const randomCode = `KMP-${Math.floor(1000 + Math.random() * 9000)}`;
-    setReferenceCode(randomCode);
-    setStep(2);
-  };
 
   const handlePublishGig = async () => {
     if (!profile || !canPostGig) return;
@@ -182,13 +168,13 @@ export default function HustleHub({
       .from('hustles')
       .insert({
         seller_id: profile.id,
+        visibility:publicListing?"public":"campus",
+        institution:profile.university,
         seller_name: myName,
         title: newTitle.trim(),
         price: Number(newPrice),
         category: newCategory,
         description: newDescription.trim(),
-        reference_code: referenceCode,
-        payment_ref_id: incontactId || null,
         status: 'active',
         images: newImages.length > 0 ? newImages : null,
       })
@@ -203,6 +189,7 @@ export default function HustleHub({
 
     const row = data as HustleRow;
     const gig: Gig = {
+      visibility: publicListing ? 'public' : 'campus', approved: false,
       id: row.id,
       icon: CATEGORY_ICONS[newCategory] ?? Laptop,
       title: newTitle.trim(),
@@ -214,8 +201,8 @@ export default function HustleHub({
       category: newCategory,
       description: newDescription.trim(),
       comments: [],
-      referenceCode: referenceCode,
-      paymentRefId: incontactId || null,
+      referenceCode: null,
+      paymentRefId: null,
       status: 'active',
       images: newImages,
     };
@@ -223,78 +210,29 @@ export default function HustleHub({
 
     toast({
       title: 'Gig published! 🚀',
-      description: `Your listing is instantly live on campus. Ref: ${referenceCode}`,
+      description: "Your listing is live for free. No listing fee is charged.",
     });
 
     setPosting(false);
     setShowModal(false);
-    setStep(1);
     setNewTitle('');
     setNewPrice('');
     setNewDescription('');
     setNewImages([]);
-    setIncontactId('');
-  };
-
-  const submitEscrowCheckout = async () => {
-    if (!escrowRef.trim() || !escrowGig || !profile) return;
-    setProcessingEscrow(true);
-    
-    setTimeout(() => {
-      setProcessingEscrow(false);
-      setEscrowGig(null);
-      setEscrowRef('');
-      toast({
-        title: 'Escrow Initiated 🔒',
-        description: 'Payment reference sent to Admin! Once manually verified, we will notify the seller to start the service.',
-      });
-    }, 1500);
-  };
-
-  const copyToClipboard = (text: string, isCode: boolean) => {
-    navigator.clipboard.writeText(text);
-    if (isCode) {
-      setCopiedCode(true);
-      setTimeout(() => setCopiedCode(false), 2000);
-    } else {
-      setCopiedNum(true);
-      setTimeout(() => setCopiedNum(false), 2000);
-    }
-  };
-
-  const flagAsUnpaid = async (gig: Gig) => {
-    await supabase
-      .from('hustles')
-      .update({ status: 'unpaid_suspended' })
-      .eq('id', gig.id);
-    setGigs((prev) =>
-      prev.map((g) => (g.id === gig.id ? { ...g, status: 'unpaid_suspended' } : g))
-    );
-    toast({ title: 'Flagged as unpaid', description: `Listing ${gig.referenceCode} suspended.` });
-    setMenuOpenId(null);
   };
 
   const deleteGig = async (gigId: string) => {
+    const { error } = await supabase.from('hustles').delete().eq('id', gigId);
+    if (error) {
+      toast({ title: 'Could not delete listing', description: error.message, variant: 'destructive' });
+      return;
+    }
     setMenuOpenId(null);
-    setGigs((prev) => prev.filter((g) => g.id !== gigId));
-    await supabase.from('hustles').delete().eq('id', gigId);
-    toast({ title: 'Gig deleted' });
+    setGigs(prev => prev.filter(g => g.id !== gigId));
+    toast({ title: 'Listing deleted' });
   };
 
-  const resubmitPayment = async (gig: Gig, newRefId: string) => {
-    await supabase
-      .from('hustles')
-      .update({ payment_ref_id: newRefId, status: 'active' })
-      .eq('id', gig.id);
-    setGigs((prev) =>
-      prev.map((g) =>
-        g.id === gig.id ? { ...g, paymentRefId: newRefId, status: 'active' } : g
-      )
-    );
-    toast({ title: 'Payment re-submitted', description: 'Your listing is back online.' });
-  };
-
-  // 🔥 Super Admin Image Handlers
+  // Admin image handlers
   const updateGigImages = async (gigId: string, updatedImages: string[]) => {
     const { error } = await supabase
       .from('hustles')
@@ -340,23 +278,14 @@ export default function HustleHub({
         
         {/* STATIC LIST GIG BUTTON */}
         <button
-          onClick={() => requireVerified(() => { setShowModal(true); setStep(1); })}
+          onClick={() => requireVerified(() => { setShowModal(true); })}
           className="w-full mb-5 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg"
         >
           <Plus className="w-5 h-5" strokeWidth={2.5} />
           <span className="font-bold text-sm">List a New Gig</span>
         </button>
 
-        {/* Suspended listings warning cards */}
-        {mySuspendedGigs.length > 0 && (
-          <div className="flex flex-col gap-3 mb-4">
-            {mySuspendedGigs.map((gig) => (
-              <SuspendedCard key={gig.id} gig={gig} onResubmit={resubmitPayment} />
-            ))}
-          </div>
-        )}
-
-        {loading ? (
+        {loadError ? <div role="alert" className="foundation-card">{loadError}<button className="foundation-action" onClick={()=>loadGigs()}>Try again</button></div> : loading ? (
           <span className="text-sage text-sm text-center mt-8 block">Loading gigs...</span>
         ) : visibleGigs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 pt-4">
@@ -396,14 +325,6 @@ export default function HustleHub({
                         >
                           <Flag className="w-3.5 h-3.5" strokeWidth={1.5} /> Report Post
                         </button>
-                        {isAdmin && gig.status === 'active' && (
-                          <button
-                            onClick={() => flagAsUnpaid(gig)}
-                            className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
-                          >
-                            <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.5} /> Flag as Unpaid
-                          </button>
-                        )}
                         {(profile?.id === gig.sellerId || isAdmin) && (
                           <button
                             onClick={() => deleteGig(gig.id)}
@@ -422,7 +343,7 @@ export default function HustleHub({
                   >
                     <div className="bg-ink h-24 flex items-center justify-center relative">
                       {gig.images.length > 0 ? (
-                        <img src={gig.images[0]} alt={gig.title} className="w-full h-full object-cover" />
+                        <SecureImage loading="lazy" src={gig.images[0]} alt={gig.title} className="w-full h-full object-cover" />
                       ) : (
                         <Icon className="w-10 h-10 text-sage" strokeWidth={1.5} />
                       )}
@@ -455,6 +376,7 @@ export default function HustleHub({
         </div>
       </div>
 
+      {!selectedListingId&&<div className="flex justify-between px-4 pb-28"><button className="foundation-action" disabled={page===0} onClick={()=>setPage(v=>v-1)}>Previous</button><button className="foundation-action" disabled={gigs.length<40} onClick={()=>setPage(v=>v+1)}>Next</button></div>}
       {/* 2-STEP CREATE GIG MODAL (Centered Floating Window) */}
       {showModal && (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -462,16 +384,17 @@ export default function HustleHub({
             
             <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
               <span className="text-white font-black text-lg">
-                {step === 1 ? 'List a New Gig' : 'Payment Checkout'}
+                List a New Gig
               </span>
               <button onClick={() => setShowModal(false)} aria-label="Close" className="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-sage hover:text-white transition-colors">
                 <X className="w-5 h-5" strokeWidth={1.5} />
               </button>
             </div>
 
-            {/* STEP 1: GIG DETAILS FORM */}
-            {step === 1 && (
+            {/* Free student listing form */}
+            {(
               <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 no-scrollbar">
+                <label className="text-sm text-sage flex gap-3"><input type="checkbox" checked={publicListing} onChange={e=>setPublicListing(e.target.checked)}/>Show this listing publicly after moderator review. Private contact details stay private.</label>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sage text-xs font-bold uppercase tracking-wider">Gig Title</label>
                   <input
@@ -563,136 +486,15 @@ export default function HustleHub({
                 )}
                 
                 <button
-                  onClick={handleProceedToPayment}
-                  disabled={!canPostGig}
+                  onClick={handlePublishGig}
+                  disabled={!canPostGig || posting}
                   className="w-full mt-4 h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center shrink-0"
                 >
-                  Proceed to Payment
+                  {posting ? "Publishing..." : "Publish Listing for Free"}
                 </button>
               </div>
             )}
 
-            {/* STEP 2: CHECKOUT & PAYMENT FLOW */}
-            {step === 2 && (
-              <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 no-scrollbar">
-                
-                {/* Reference Code Header */}
-                <div className="bg-ink border border-pine/30 rounded-xl p-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-sage font-bold">Your Reference Code</div>
-                    <div className="text-2xl font-extrabold text-pine tracking-wider mt-1">{referenceCode}</div>
-                  </div>
-                  <button
-                    onClick={() => copyToClipboard(referenceCode, true)}
-                    className="flex items-center gap-1.5 bg-pine/10 border border-pine/30 text-pine px-3 py-2 rounded-lg text-xs font-semibold hover:bg-pine/20 transition-colors"
-                  >
-                    {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {copiedCode ? 'Copied' : 'Copy Code'}
-                  </button>
-                </div>
-
-                {/* Listing Fee Info */}
-                <div className="bg-ink border border-gray-800 rounded-xl p-4 flex items-center justify-between">
-                  <span className="text-white font-semibold">Listing Fee</span>
-                  <span className="text-xl font-bold text-pine">P10</span>
-                </div>
-
-                {/* Payment Method Selector */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setPaymentMethod('pay2cell')}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
-                      paymentMethod === 'pay2cell'
-                        ? 'bg-pine text-black border-pine'
-                        : 'bg-ink text-sage border-gray-800'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4" /> Pay2Cell
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('ewallet')}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
-                      paymentMethod === 'ewallet'
-                        ? 'bg-pine text-black border-pine'
-                        : 'bg-ink text-sage border-gray-800'
-                    }`}
-                  >
-                    <Wallet className="w-4 h-4" /> eWallet
-                  </button>
-                </div>
-
-                {/* Instructions Box */}
-                {paymentMethod === 'pay2cell' ? (
-                  <div className="bg-ink border border-gray-800 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-[10px] uppercase font-bold text-sage">FNB Pay2Cell Number</div>
-                        <div className="text-lg font-extrabold text-white">77037168</div>
-                      </div>
-                      <button
-                        onClick={() => copyToClipboard('77037168', false)}
-                        className="flex items-center gap-1 text-pine text-xs font-bold"
-                      >
-                        {copiedNum ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        {copiedNum ? 'Copied' : 'Copy Number'}
-                      </button>
-                    </div>
-                    <div className="bg-black/50 p-3 rounded-lg text-xs text-sage leading-relaxed">
-                      Open FNB App &gt; Transact &gt; Pay2Cell (or dial *130*321#) &gt; Send payment to <strong className="text-white">77037168</strong> &gt; Set payment reference to <strong className="text-pine">{referenceCode}</strong>.
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-ink border border-gray-800 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-[10px] uppercase font-bold text-sage">eWallet Number</div>
-                        <div className="text-lg font-extrabold text-white">71321163</div>
-                      </div>
-                      <button
-                        onClick={() => copyToClipboard('71321163', false)}
-                        className="flex items-center gap-1 text-pine text-xs font-bold"
-                      >
-                        {copiedNum ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                        {copiedNum ? 'Copied' : 'Copy Number'}
-                      </button>
-                    </div>
-                    <div className="bg-black/50 p-3 rounded-lg text-xs text-sage leading-relaxed">
-                      Send eWallet payment to <strong className="text-white">71321163</strong> &gt; Include <strong className="text-pine">{referenceCode}</strong> in the message or keep your reference ID handy.
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="block text-[10px] uppercase font-bold text-sage">
-                    FNB inContact / SMS Confirmation ID (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Paste your confirmation ID"
-                    value={incontactId}
-                    onChange={(e) => setIncontactId(e.target.value)}
-                    className="bg-ink rounded-lg h-11 w-full px-3 border border-gray-800 text-white placeholder:text-sage text-sm outline-none focus:border-pine transition-colors"
-                  />
-                </div>
-
-                <div className="pt-2 space-y-2 mt-auto">
-                  <button
-                    onClick={handlePublishGig}
-                    disabled={posting}
-                    className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {posting ? <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} /> : <Tag className="w-5 h-5" strokeWidth={2} />}
-                    {posting ? 'Publishing...' : 'Publish Gig'}
-                  </button>
-                  <button
-                    onClick={() => setStep(1)}
-                    className="w-full text-center text-xs text-sage hover:text-white py-2 transition-colors"
-                  >
-                    ← Back to Gig Details
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -718,7 +520,7 @@ export default function HustleHub({
                       onClick={() => setLightboxImages(selectedGig.images)}
                       className="w-24 h-24 rounded-lg overflow-hidden border border-gray-800 shrink-0"
                     >
-                      <img src={img} alt={`gig-img-${i}`} className="w-full h-full object-cover" />
+                      <SecureImage loading="lazy" src={img} alt={`gig-img-${i}`} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -744,27 +546,10 @@ export default function HustleHub({
                   {selectedGig.description || 'No description provided.'}
                 </p>
                 <span className="text-pine text-2xl font-black mt-1">{selectedGig.price}</span>
+                <ContextActions content={{id:selectedGig.id,type:"listing",module:"hustle",ownerId:selectedGig.sellerId,visibility:selectedGig.visibility,approved:selectedGig.approved,available:selectedGig.status==="active"}} userId={profile?.id} onNavigate={onNavigate}/>
               </div>
 
-              {isAdmin && (
-                <div className="bg-ink rounded-xl border border-gray-800 p-4 flex flex-col gap-2">
-                  <span className="text-sage text-[10px] font-bold uppercase tracking-wider">Admin Audit</span>
-                  <div className="flex items-center justify-between">
-                    <span className="text-white text-xs">Reference: <span className="text-pine font-bold">{selectedGig.referenceCode ?? 'N/A'}</span></span>
-                    <span className="text-white text-xs">Ref ID: <span className="text-sage">{selectedGig.paymentRefId ?? 'None'}</span></span>
-                  </div>
-                  {selectedGig.status === 'active' && (
-                    <button
-                      onClick={() => flagAsUnpaid(selectedGig)}
-                      className="w-full h-10 mt-2 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 text-xs font-bold active:scale-95 transition-transform flex items-center justify-center gap-1.5"
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5" strokeWidth={2} /> Flag as Unpaid
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* 🔥 Super Admin Exclusive: Quick Edit Images */}
+              {/* Admin image editing */}
               {isSuperAdmin && profile && (
                 <div className="bg-[#111] rounded-xl border border-yellow-500/30 p-4 flex flex-col gap-3 shadow-[0_0_15px_rgba(234,179,8,0.05)]">
                   <span className="text-yellow-500 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
@@ -775,7 +560,7 @@ export default function HustleHub({
                     <div className="flex gap-2 overflow-x-auto pb-2">
                       {selectedGig.images.map((img, i) => (
                         <div key={i} className="relative w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-gray-800">
-                          <img src={img} alt="thumb" className="w-full h-full object-cover" />
+                          <SecureImage loading="lazy" src={img} alt="thumb" className="w-full h-full object-cover" />
                           <button
                             onClick={() => removeImageFromGig(selectedGig.id, i)}
                             className="absolute top-1 right-1 w-6 h-6 bg-black/80 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500 hover:text-white transition-colors"
@@ -802,121 +587,13 @@ export default function HustleHub({
 
               <div className="flex flex-col gap-3 mt-4">
                 <button
-                  onClick={() => requireVerified(() => {
-                    setEscrowGig(selectedGig);
-                    setSelectedGig(null);
-                  })}
-                  className="w-full h-12 rounded-lg bg-pine text-black font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
-                >
-                  <ShieldCheck className="w-5 h-5" strokeWidth={2} />
-                  Start Secure Escrow Trade
-                </button>
-
-                <button
-                  onClick={() => onMessageSeller(selectedGig.sellerId, selectedGig.seller)}
+                  onClick={() => onMessageSeller(selectedGig.sellerId, selectedGig.seller,selectedGig.id)}
                   className="w-full h-12 rounded-lg bg-transparent border border-pine text-pine font-bold text-base active:scale-95 transition-transform flex items-center justify-center gap-2"
                 >
                   <MessageCircle className="w-5 h-5" strokeWidth={2} />
                   Message Seller
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW SECURE ESCROW CHECKOUT MODAL (Centered Floating Window) */}
-      {escrowGig && (
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-[420px] max-h-[85dvh] bg-surface rounded-3xl border border-gray-800 flex flex-col shadow-2xl overflow-hidden animate-slide-up">
-            
-            <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-pine/5 shrink-0">
-              <div className="flex items-center gap-2">
-                <Lock className="w-5 h-5 text-pine" strokeWidth={2} />
-                <span className="text-pine font-black text-lg">Escrow Checkout</span>
-              </div>
-              <button onClick={() => setEscrowGig(null)} aria-label="Close" className="text-sage hover:text-white transition-colors">
-                <X className="w-6 h-6" strokeWidth={1.5} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 no-scrollbar">
-              <div className="flex flex-col gap-1 text-center">
-                <span className="text-sage text-xs uppercase font-bold tracking-wider">Total Escrow Amount</span>
-                <span className="text-white font-black text-4xl">{escrowGig.price}</span>
-                <span className="text-gray-400 text-sm mt-1">For: <strong className="text-white">{escrowGig.title}</strong></span>
-              </div>
-
-              {/* Payment Method Selector */}
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setEscrowPaymentMethod('pay2cell')}
-                  className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
-                    escrowPaymentMethod === 'pay2cell'
-                      ? 'bg-pine text-black border-pine'
-                      : 'bg-ink text-sage border-gray-800'
-                  }`}
-                >
-                  <CreditCard className="w-4 h-4" /> Pay2Cell
-                </button>
-                <button
-                  onClick={() => setEscrowPaymentMethod('ewallet')}
-                  className={`flex items-center justify-center gap-2 py-3 rounded-xl border text-xs font-bold transition-colors ${
-                    escrowPaymentMethod === 'ewallet'
-                      ? 'bg-pine text-black border-pine'
-                      : 'bg-ink text-sage border-gray-800'
-                  }`}
-                >
-                  <Wallet className="w-4 h-4" /> eWallet
-                </button>
-              </div>
-
-              {escrowPaymentMethod === 'pay2cell' ? (
-                <div className="bg-orange-950/20 border border-orange-900/30 rounded-xl p-4 flex flex-col gap-3">
-                  <span className="text-orange-400 font-bold text-xs uppercase tracking-wider flex items-center gap-1">
-                    <ShieldCheck className="w-4 h-4" /> Admin Instructions
-                  </span>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Send exactly <strong className="text-white">{escrowGig.price}</strong> via FNB Pay2Cell to the Kampus Admin number below. We hold it until you get your item!
-                  </p>
-                  <div className="bg-black/50 rounded-lg py-3 flex flex-col items-center justify-center border border-gray-800 mt-1 gap-1">
-                    <span className="text-sage text-[10px] uppercase font-bold tracking-wider">FNB Pay2Cell</span>
-                    <span className="text-pine font-black text-xl tracking-widest">77037168</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-orange-950/20 border border-orange-900/30 rounded-xl p-4 flex flex-col gap-3">
-                  <span className="text-orange-400 font-bold text-xs uppercase tracking-wider flex items-center gap-1">
-                    <ShieldCheck className="w-4 h-4" /> Admin Instructions
-                  </span>
-                  <p className="text-gray-300 text-xs leading-relaxed">
-                    Send an eWallet for exactly <strong className="text-white">{escrowGig.price}</strong> to the Kampus Admin number below. We hold the cash until you're happy!
-                  </p>
-                  <div className="bg-black/50 rounded-lg py-3 flex flex-col items-center justify-center border border-gray-800 mt-1 gap-1">
-                    <span className="text-sage text-[10px] uppercase font-bold tracking-wider">eWallet Number</span>
-                    <span className="text-pine font-black text-xl tracking-widest">71321163</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sage text-xs font-bold uppercase tracking-wider">Your Payment Reference</label>
-                <input
-                  value={escrowRef}
-                  onChange={(e) => setEscrowRef(e.target.value)}
-                  placeholder="e.g. Phone number used or Tx ID"
-                  className="bg-ink rounded-xl w-full h-12 px-4 border border-gray-800 text-white placeholder:text-gray-600 text-sm outline-none focus:border-pine transition-colors text-center font-medium"
-                />
-              </div>
-
-              <button
-                onClick={submitEscrowCheckout}
-                disabled={!escrowRef.trim() || processingEscrow}
-                className="w-full h-12 rounded-xl bg-pine text-black font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg mt-auto"
-              >
-                {processingEscrow ? <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} /> : <Send className="w-4 h-4" strokeWidth={2} />}
-                {processingEscrow ? 'Verifying...' : 'Confirm Payment Sent'}
-              </button>
             </div>
           </div>
         </div>
@@ -951,53 +628,3 @@ export default function HustleHub({
   );
 }
 
-function SuspendedCard({ gig, onResubmit }: { gig: Gig; onResubmit: (gig: Gig, refId: string) => void }) {
-  const [refId, setRefId] = useState('');
-  const [showResubmit, setShowResubmit] = useState(false);
-
-  return (
-    <div className="bg-red-950/40 border border-red-600/50 rounded-2xl p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <span className="text-2xl">⏸️</span>
-        <span className="text-red-400 font-black text-sm">Post Suspended</span>
-      </div>
-      <p className="text-white text-xs leading-relaxed">
-        C&apos;mon dude, pay up! 💸 We couldn&apos;t verify payment for reference code{' '}
-        <span className="text-pine font-bold">{gig.referenceCode}</span>. Send P10 via FNB/eWallet to get back online.
-      </p>
-      {showResubmit ? (
-        <div className="flex flex-col gap-2">
-          <input
-            type="text"
-            value={refId}
-            onChange={(e) => setRefId(e.target.value)}
-            placeholder="Enter new payment ref ID"
-            className="bg-ink rounded-lg h-11 px-3 border border-gray-800 text-white placeholder:text-sage/60 text-sm outline-none focus:border-pine"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => onResubmit(gig, refId.trim())}
-              disabled={refId.trim().length < 3}
-              className="flex-1 h-10 rounded-lg bg-pine text-black text-xs font-bold active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} /> Re-activate
-            </button>
-            <button
-              onClick={() => setShowResubmit(false)}
-              className="h-10 px-4 rounded-lg bg-surface border border-gray-800 text-sage text-xs font-bold"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowResubmit(true)}
-          className="w-full h-10 rounded-lg bg-pine/20 border border-pine/50 text-pine text-xs font-bold active:scale-95 transition-transform flex items-center justify-center gap-1.5"
-        >
-          <RefreshCw className="w-3.5 h-3.5" strokeWidth={2} /> Re-submit Payment Ref
-        </button>
-      )}
-    </div>
-  );
-}

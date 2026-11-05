@@ -1,8 +1,9 @@
 'use client';
+import SecureImage from './SecureImage';
 
 import { useState, useRef, useCallback } from 'react';
 import { ImagePlus, X } from 'lucide-react';
-import { uploadImages } from '@/lib/payment';
+import { uploadImages } from '@/lib/media-upload';
 
 export default function ImageUploader({
   userId,
@@ -82,7 +83,7 @@ export default function ImageUploader({
         <div className="flex gap-2 flex-wrap">
           {previews.map((src, i) => (
             <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-800">
-              <img src={src} alt={`upload-${i}`} className="w-full h-full object-cover" />
+              <SecureImage src={src} alt={`upload-${i}`} className="w-full h-full object-cover" />
               <button
                 type="button"
                 onClick={() => removePreview(i)}
