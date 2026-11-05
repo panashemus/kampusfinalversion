@@ -9,6 +9,7 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      minHeight: { '11': '2.75rem', '12': '3rem', '16': '4rem' },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic':
