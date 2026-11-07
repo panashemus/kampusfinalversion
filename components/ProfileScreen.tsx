@@ -13,6 +13,7 @@ import {
   LogOut,
   Loader as Loader2,
   ShieldAlert,
+  ShieldCheck,
   RefreshCw,
   Camera,
   Edit3,
