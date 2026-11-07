@@ -167,7 +167,7 @@ export default function ProfileScreen({
 
   const handleSaveProfile = async () => {
     if (!profile || !editUsername.trim()) return;
-    if (!editCourse || !schoolInfo.courses.includes(editCourse)) {
+    if (editCourse && !schoolInfo.courses.includes(editCourse)) {
       toast({
         title: 'Select Official Programme',
         description: `Please select a valid degree programme offered at ${schoolInfo.code}.`,
@@ -183,7 +183,7 @@ export default function ProfileScreen({
       .from('profiles')
       .update({
         username: cleanUsername,
-        course_code: editCourse,
+        course_code: editCourse || null,
         university: schoolInfo.fullName,
       })
       .eq('id', profile.id);
@@ -297,9 +297,8 @@ export default function ProfileScreen({
   );
 
   return (
-    <div className="flex-1 bg-midnight flex flex-col items-center overflow-y-auto px-4 pb-32 pt-5 relative">
-      {profile&&<StudentPreferences profile={profile}/>}
-      <PushNotificationBanner userId={profile?.id ?? ''} />
+    <div className="flex-1 w-full bg-midnight flex flex-col items-center overflow-y-auto px-4 sm:px-6 pb-32 pt-5 relative">
+      <div className="w-full max-w-2xl flex flex-col items-center">
 
       {/* Edit Profile & Official School Course Modal */}
       {isEditModalOpen && (
@@ -421,7 +420,7 @@ export default function ProfileScreen({
 
             <button
               onClick={handleSaveProfile}
-              disabled={isSavingProfile || !editUsername.trim() || !editCourse}
+              disabled={isSavingProfile || !editUsername.trim()}
               className="w-full h-11 mt-1 rounded-xl bg-pine text-black font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
             >
               {isSavingProfile ? (
@@ -538,68 +537,48 @@ export default function ProfileScreen({
         </button>
       )}
 
-      {/* Avatar & Identity Header */}
-      <div className="relative">
-        <div className="w-24 h-24 rounded-full bg-surface border-2 border-gray-800 p-1 shadow-lg">
-          <div className="w-full h-full rounded-full bg-ink flex items-center justify-center overflow-hidden">
-            {localAvatarUrl ? (
-              <SecureImage
-                src={localAvatarUrl}
-                alt="PFP"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="w-10 h-10 text-sage" strokeWidth={1.5} />
-            )}
-          </div>
-        </div>
-        <button
-          onClick={() => setIsEditModalOpen(true)}
-          className="absolute bottom-0 right-0 w-8 h-8 bg-pine rounded-full flex items-center justify-center border-2 border-midnight active:scale-95 transition-transform shadow-md"
-        >
-          <Edit3 className="w-3.5 h-3.5 text-black" strokeWidth={2.25} />
-        </button>
-      </div>
-
-      <div className="flex flex-col items-center gap-2 mt-3.5">
-        <span className="text-white font-black tracking-tight text-xl">
-          @{localUsername.replace(/^@/, '')}
-        </span>
-
-        <div className="flex items-center gap-2 flex-wrap justify-center">
-          <div className="flex items-center gap-1.5 rounded-full bg-surface border border-pine/40 px-3 py-1">
-            <GraduationCap className="w-3.5 h-3.5 text-pine" strokeWidth={2} />
-            <span className="text-white text-[11px] font-bold">
-              {schoolInfo.fullName}
+      {/* Student identity */}
+      <section className="relative w-full overflow-hidden rounded-[28px] border border-pine/30 bg-gradient-to-br from-[#214833] via-[#142b21] to-[#0a1712] shadow-2xl shadow-black/30">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-20 h-64 w-64 rounded-full border border-pine/20 bg-pine/5" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 right-16 h-48 w-48 rounded-full border border-white/5" />
+        <div className="relative p-5 sm:p-8">
+          <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-pine">KAMPUS / Student identity</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/20 px-3 py-1.5 text-[11px] font-semibold text-white">
+              <ShieldCheck className="h-3.5 w-3.5 text-pine" aria-hidden="true" />
+              {profile?.verified && profile?.email_verified ? 'Verified student' : 'Student account'}
             </span>
           </div>
-
-          <span className="text-xs text-pine font-bold">Free student account</span>
-        </div>
-      </div>
-
-      {/* Official Degree Programme Card */}
-      <div className="w-full mt-5 bg-surface border border-gray-800 rounded-2xl p-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-ink border border-pine/30 flex items-center justify-center shrink-0">
-            <BookOpen className="w-5 h-5 text-pine" strokeWidth={1.75} />
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-5">
+            <div className="relative shrink-0">
+              <div className="h-24 w-24 overflow-hidden rounded-2xl border-2 border-white/25 bg-midnight/80 p-1 shadow-xl">
+                <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-xl bg-surface">
+                  {localAvatarUrl ? <SecureImage src={localAvatarUrl} alt="Your profile photo" className="h-full w-full object-cover" /> : <User className="h-10 w-10 text-sage" strokeWidth={1.5} />}
+                </div>
+              </div>
+              <button type="button" onClick={() => setIsEditModalOpen(true)} aria-label="Edit profile photo"
+                className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#142b21] bg-pine text-black shadow-lg transition-transform hover:scale-105">
+                <Camera className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="break-words text-2xl font-black tracking-tight text-white sm:text-3xl">@{localUsername.replace(/^@/, '')}</h1>
+              <p className="mt-1 text-sm font-medium text-[#c5d6cd]">{schoolInfo.fullName}</p>
+              <p className="mt-2 text-xs text-sage">{profile?.is_admin ? 'Platform administrator' : 'KAMPUS community member'}</p>
+            </div>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sage text-[10px] font-bold uppercase tracking-wider">
-              {schoolInfo.code} Degree Programme
-            </span>
-            <span className="text-white font-bold text-xs truncate">
-              {localCourse || `Select your official ${schoolInfo.code} course`}
-            </span>
+          <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-white/15 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-[#b8c9bb]">{schoolInfo.code} / Academic programme</p>
+              <p className="break-words text-sm font-semibold text-white">{localCourse || 'Add your course to complete your profile'}</p>
+            </div>
+            <button type="button" onClick={() => setIsEditModalOpen(true)}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-pine/60 bg-pine px-4 text-xs font-black text-black hover:brightness-105">
+              <Edit3 className="h-4 w-4" aria-hidden="true" />Edit profile
+            </button>
           </div>
         </div>
-        <button
-          onClick={() => setIsEditModalOpen(true)}
-          className="px-3 py-2 rounded-xl bg-pine text-black text-xs font-black shrink-0 active:scale-95 transition-transform"
-        >
-          {localCourse ? 'Change' : 'Select'}
-        </button>
-      </div>
+      </section>
 
       {/* Contributor Benchmark Card (For High-Scoring Students) */}
       <div className="w-full mt-3 bg-surface border border-pine/30 rounded-2xl p-4 flex items-center justify-between gap-3">
@@ -629,17 +608,20 @@ export default function ProfileScreen({
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-surface border border-gray-800 rounded-2xl p-3.5 flex flex-col items-center gap-1"
+            className="w-full rounded-2xl border border-white/10 bg-surface p-4 sm:p-5 flex flex-col gap-2"
           >
-            <span className="text-pine font-black font-mono text-lg">
+            <span className="text-pine font-black font-mono text-2xl">
               {stat.value}
             </span>
-            <span className="text-sage text-[11px] font-bold text-center">
+            <span className="text-sage text-xs font-medium">
               {stat.label}
             </span>
           </div>
         ))}
       </div>
+
+      {profile && <StudentPreferences profile={profile} onProfileUpdate={onProfileUpdate} />}
+      <div className="w-full mt-4"><PushNotificationBanner userId={profile?.id ?? ''} /></div>
 
       {/* Emergency Hotlines */}
       <div className="w-full mt-6">
@@ -728,6 +710,7 @@ export default function ProfileScreen({
           {signingOut ? 'Signing out...' : 'Sign Out'}
         </span>
       </button>
+      </div>
     </div>
   );
 }

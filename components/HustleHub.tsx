@@ -100,7 +100,7 @@ export default function HustleHub({
   const myName = profile ? (profile.username ? `@${profile.username}` : profile.email.split('@')[0]) : 'student';
   const isAdmin = !!profile?.is_admin;
   
-  // 🔥 Super Admin Override for image manipulation
+  // Admin override for image manipulation
   const isSuperAdmin = !!profile?.is_admin;
 
   const loadGigs = useCallback(async () => {
@@ -209,7 +209,7 @@ export default function HustleHub({
     setGigs((prev) => [gig, ...prev]);
 
     toast({
-      title: 'Gig published! 🚀',
+      title: 'Gig published!',
       description: "Your listing is live for free. No listing fee is charged.",
     });
 
@@ -242,7 +242,7 @@ export default function HustleHub({
     if (!error) {
       setGigs((prev) => prev.map((g) => (g.id === gigId ? { ...g, images: updatedImages } : g)));
       setSelectedGig((prev) => prev && prev.id === gigId ? { ...prev, images: updatedImages } : prev);
-      toast({ title: 'Images synchronized successfully 🚀' });
+      toast({ title: 'Images synchronized successfully' });
     } else {
       toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
     }

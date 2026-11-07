@@ -2,7 +2,7 @@
 import SecureImage from './SecureImage';
 
 import { useState, useEffect, useCallback } from 'react';
-import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2, Zap } from 'lucide-react';
+import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2, Megaphone, UserRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import { uploadImages } from '@/lib/media-upload';
@@ -260,7 +260,7 @@ export default function CommunityHub({
       setPosts((prev) => [post, ...prev]);
 
       if (isBlast) {
-         toast({ title: '⚡ Blast Sent', description: 'Your post was blasted to the campus.' });
+         toast({ title: 'Blast sent', description: 'Your post was blasted to the campus.' });
       }
     } else {
       console.error(error);
@@ -306,7 +306,6 @@ export default function CommunityHub({
             onClick={() => setAskModalType('anonymous')}
             className="flex-1 h-12 rounded-xl bg-[#161616] border border-zinc-700 text-white flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-[0_0_15px_rgba(255,255,255,0.03)]"
           >
-            <span className="text-lg">🤫</span>
             <span className="font-bold text-sm">Confess</span>
           </button>
         </div>
@@ -357,7 +356,7 @@ export default function CommunityHub({
                 <div className="flex items-center gap-2">
                   {post.is_anonymous ? (
                     <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-lg shrink-0 shadow-inner">
-                      🤫
+                      <UserRound className="h-4 w-4 text-sage" aria-hidden="true" />
                     </div>
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
@@ -381,7 +380,7 @@ export default function CommunityHub({
                       )}
                       {post.is_blasted && (
                         <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-yellow-400 text-black animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.4)]">
-                          ⚡ Blast
+                          Blast
                         </span>
                       )}
                     </div>
@@ -389,11 +388,6 @@ export default function CommunityHub({
                   </div>
                 </div>
 
-                {post.is_anonymous && (
-                  <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded text-[10px] text-yellow-400 font-mono font-bold">
-                    ⚡ {post.impact_score}
-                  </div>
-                )}
               </div>
 
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">{post.text}</p>
@@ -465,7 +459,7 @@ export default function CommunityHub({
             
             <div className="flex items-center justify-between shrink-0">
               <span className="text-white font-black text-lg">
-                {askModalType === 'anonymous' ? '🤫 Drop a Confession' : 'Ask a Campus Question'}
+                {askModalType === 'anonymous' ? 'Drop a Confession' : 'Ask a Campus Question'}
               </span>
               <button 
                 onClick={() => setAskModalType(null)} 
@@ -544,7 +538,7 @@ export default function CommunityHub({
             >
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isBlast ? 'bg-yellow-400 text-black' : 'bg-gray-800 text-sage'}`}>
-                  <Zap className="w-4 h-4" strokeWidth={2} />
+                  <Megaphone className="w-4 h-4" strokeWidth={2} />
                 </div>
                 <div className="flex flex-col">
                   <span className={`text-sm font-bold ${isBlast ? 'text-yellow-400' : 'text-white'}`}>

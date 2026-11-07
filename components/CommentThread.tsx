@@ -50,7 +50,7 @@ export default function CommentThread({
                 <div className="flex items-start gap-2">
                   {commentIsAnon ? (
                     <div className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 mt-0.5 shadow-inner">
-                      <span className="text-[10px]">🤫</span>
+                      <User className="w-3 h-3 text-sage" strokeWidth={1.75} aria-hidden="true" />
                     </div>
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0 mt-0.5">
