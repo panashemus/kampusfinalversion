@@ -655,7 +655,7 @@ export default function KampusKritic({
             <p className="text-sage text-xs leading-relaxed">
               Kritic uses public BQA assessment principles to guide detailed feedback for{' '}
               <strong className="text-white">{profile?.course_code || 'your programme'}</strong>.
-              Your lecturer's rubric takes priority. Contributed student exemplars are not yet integrated, and Kritic is not an official marker.
+              Your lecturer&apos;s rubric takes priority. Contributed student exemplars are not yet integrated, and Kritic is not an official marker.
               {' '}<a href="https://www.bqa.org.bw/departments-divisions/national-credit-and-qualifications-framework-services-ncqfs" target="_blank" rel="noopener noreferrer" className="text-pine underline">Read BQA guidance</a>.
             </p>
           </div>
