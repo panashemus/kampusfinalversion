@@ -27,7 +27,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { classifyUniversity } from '@/lib/utils';
+import { classifyUniversity, isValidCourseForSchool } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 import StudentPreferences from './StudentPreferences';
@@ -168,10 +168,10 @@ export default function ProfileScreen({
 
   const handleSaveProfile = async () => {
     if (!profile || !editUsername.trim()) return;
-    if (editCourse && !schoolInfo.courses.includes(editCourse)) {
+    if (editCourse && !isValidCourseForSchool(editCourse, profile.email || profile.university)) {
       toast({
-        title: 'Select Official Programme',
-        description: `Please select a valid degree programme offered at ${schoolInfo.code}.`,
+        title: 'Check programme title',
+        description: 'Enter a programme title between 3 and 120 characters.',
         variant: 'destructive',
       });
       return;
@@ -387,6 +387,7 @@ export default function ProfileScreen({
                   value={courseSearch}
                   onChange={(e) => setCourseSearch(e.target.value)}
                   placeholder={`Search ${schoolInfo.code} courses (e.g. Law, Computer, Finance)...`}
+                  maxLength={120}
                   className="bg-ink rounded-xl h-10 w-full pl-9 pr-3 border border-gray-800 text-white placeholder:text-sage/60 outline-none focus:border-pine text-xs"
                 />
               </div>
@@ -394,7 +395,7 @@ export default function ProfileScreen({
               <div className="max-h-44 overflow-y-auto rounded-xl bg-ink border border-gray-800 divide-y divide-gray-800/70 no-scrollbar">
                 {filteredCourses.length === 0 ? (
                   <div className="p-3 text-center text-sage text-xs">
-                    No matching course offered at {schoolInfo.code}.
+                    Not on the current list? You can enter your programme below.
                   </div>
                 ) : (
                   filteredCourses.map((c) => {
@@ -417,6 +418,16 @@ export default function ProfileScreen({
                   })
                 )}
               </div>
+              {courseSearch.trim().length >= 3 && !schoolInfo.courses.includes(courseSearch.trim()) && (
+                <button type="button" onClick={() => setEditCourse(courseSearch.trim())}
+                  className="mt-2 w-full rounded-xl border border-pine/40 px-3 py-2.5 text-left text-xs text-pine hover:border-pine">
+                  Use my programme: {courseSearch.trim().slice(0,120)} (self-reported)
+                </button>
+              )}
+              <p className="mt-2 text-[11px] leading-relaxed text-sage">
+                Catalogue includes BQA programme titles. Missing courses can be self-reported, not certified by KAMPUS.
+                {' '}<a className="underline text-pine" href="https://www.bqa.org.bw/accredited-learning-programmes-ncqf" target="_blank" rel="noopener noreferrer">Verify on BQA</a>
+              </p>
             </div>
 
             <button

@@ -650,13 +650,13 @@ export default function KampusKritic({
           <AlertCircle className="w-4 h-4 text-pine shrink-0 mt-0.5" />
           <div className="flex flex-col gap-0.5">
             <span className="text-pine text-[11px] font-black uppercase tracking-wider">
-              Still Being Built — Benchmark Archive Not Yet Active
+              Botswana-Aligned Feedback — Benchmark Archive Coming Later
             </span>
             <p className="text-sage text-xs leading-relaxed">
-              Kampus Kritic is currently under construction and does not yet
-              source past or current student coursework for{' '}
-              <strong className="text-white">{profile?.course_code}</strong>.
-              Responses during this build phase are general AI previews only.
+              Kritic uses public BQA assessment principles to guide detailed feedback for{' '}
+              <strong className="text-white">{profile?.course_code || 'your programme'}</strong>.
+              Your lecturer's rubric takes priority. Contributed student exemplars are not yet integrated, and Kritic is not an official marker.
+              {' '}<a href="https://www.bqa.org.bw/departments-divisions/national-credit-and-qualifications-framework-services-ncqfs" target="_blank" rel="noopener noreferrer" className="text-pine underline">Read BQA guidance</a>.
             </p>
           </div>
         </div>

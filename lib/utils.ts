@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { BQA_DEGREES_BY_SCHOOL } from './bqa-degree-catalogue';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -173,6 +174,11 @@ export const SCHOOL_COURSES: Record<SchoolCode, string[]> = {
   ],
 };
 
+/** Returns a source-labelled broad programme-picker, not an accreditation certificate. */
+function combinedCourses(code: SchoolCode): string[] {
+  return Array.from(new Set([...SCHOOL_COURSES[code], ...BQA_DEGREES_BY_SCHOOL[code]])).sort((a,b) => a.localeCompare(b));
+}
+
 export function classifyUniversity(emailOrUni?: string | null): {
   code: SchoolCode;
   fullName: string;
@@ -188,7 +194,7 @@ export function classifyUniversity(emailOrUni?: string | null): {
     return {
       code: 'BAC / BSBS',
       fullName: 'BAC / BSBS (Botswana School of Business Sciences)',
-      courses: SCHOOL_COURSES['BAC / BSBS'],
+      courses: combinedCourses('BAC / BSBS'),
     };
   }
   if (clean.includes('biust.ac.bw') || clean.includes('biust')) {
@@ -196,14 +202,14 @@ export function classifyUniversity(emailOrUni?: string | null): {
       code: 'BIUST',
       fullName:
         'BIUST (Botswana International University of Science and Technology)',
-      courses: SCHOOL_COURSES.BIUST,
+      courses: combinedCourses('BIUST'),
     };
   }
   if (clean.includes('botho.ac.bw') || clean.includes('botho')) {
     return {
       code: 'BOTHO',
       fullName: 'Botho University',
-      courses: SCHOOL_COURSES.BOTHO,
+      courses: combinedCourses('BOTHO'),
     };
   }
   if (clean.includes('buan.ac.bw') || clean.includes('buan')) {
@@ -211,21 +217,24 @@ export function classifyUniversity(emailOrUni?: string | null): {
       code: 'BUAN',
       fullName:
         'BUAN (Botswana University of Agriculture and Natural Resources)',
-      courses: SCHOOL_COURSES.BUAN,
+      courses: combinedCourses('BUAN'),
     };
   }
   return {
     code: 'UB',
     fullName: 'UB (University of Botswana)',
-    courses: SCHOOL_COURSES.UB,
+    courses: combinedCourses('UB'),
   };
 }
 
+/** Students must not be locked out just because a legitimate title is missing.
+ *  User-specified programmes are accepted as self-reported, never BQA certified.
+ */
 export function isValidCourseForSchool(
   course: string | null | undefined,
-  emailOrUni?: string | null
+  _emailOrUni?: string | null
 ): boolean {
   if (!course) return false;
-  const { courses } = classifyUniversity(emailOrUni);
-  return courses.includes(course.trim());
+  const trimmed = course.trim();
+  return trimmed.length >= 3 && trimmed.length <= 120 && !/[<>\r\n\x00-\x1f]/.test(trimmed);
 }
