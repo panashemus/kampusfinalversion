@@ -7,11 +7,11 @@ description: Use after any KAMPUS code change and before a PR or authorized prod
 Adapted from ECC's verification-loop skill for this Next.js/Supabase repository.
 
 ## Run in this order
-1. **Scope:** inspect \`git diff\` and changed files; ensure no unexpected DB migrations, secrets, fake accounts, notification broadcasts or content publication.
-2. **Tests:** run focused regression tests first, then \`pnpm run test\`. For database authorization changes use \`pnpm run test:db\` only against a safe isolated test database.
-3. **Types:** \`pnpm run typecheck\`.
-4. **Lint:** \`pnpm run lint\`. Record warnings rather than mislabelling them as errors.
-5. **Build:** \`pnpm run build\`. Fix compilation/type errors before release.
+1. **Scope:** inspect `git diff` and changed files; ensure no unexpected DB migrations, secrets, fake accounts, notification broadcasts or content publication.
+2. **Tests:** run focused regression tests first, then `pnpm run test`. For database authorization changes use `pnpm run test:db` only against a safe isolated test database.
+3. **Types:** `pnpm run typecheck`.
+4. **Lint:** `pnpm run lint`. Record warnings rather than mislabelling them as errors.
+5. **Build:** `pnpm run build`. Fix compilation/type errors before release.
 6. **Security review:** auth, RLS, untrusted input, privacy, redirects, storage, push/email abuse, secrets and explicit authorization for production mutations.
 7. **Target acceptance:** if authorized to deploy, verify Vercel build succeeded at the expected commit, aliases point to the new READY deployment and relevant functionality has been smoke-tested. A Vercel READY result alone does not prove feature behavior.
 

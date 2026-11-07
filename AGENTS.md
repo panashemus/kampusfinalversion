@@ -32,19 +32,19 @@ This file is the shared, project-scoped guide for Codex and any other coding age
 
 ## Existing project commands
 Run from the repository root, with its locked pnpm version where available:
-- \`pnpm run typecheck\`
-- \`pnpm run lint\`
-- \`pnpm run test\`
-- \`pnpm run build\`
-- \`pnpm run test:db\` **only** when a safe local/test Postgres environment is configured; it is not a production smoke test.
+- `pnpm run typecheck`
+- `pnpm run lint`
+- `pnpm run test`
+- `pnpm run build`
+- `pnpm run test:db` **only** when a safe local/test Postgres environment is configured; it is not a production smoke test.
 
 If the environment lacks a terminal, say so. Prefer reviewing Vercel build logs and running available checks without pretending they are equivalent to a local test. Do not repeatedly redeploy to discover basic syntax errors.
 
 ## Read the relevant focused skills
-- Multi-step architecture or significant product work: \`.agents/skills/kampus-plan/SKILL.md\`
-- React/Next.js screens, profiles, feeds and responsive design: \`.agents/skills/kampus-ui/SKILL.md\`
-- Auth, Supabase, Postgres RLS, web push, email and credentials: \`.agents/skills/kampus-security/SKILL.md\`
-- Gemini/Kritic assignment review, limits and quality: \`.agents/skills/kampus-kritic/SKILL.md\`
-- Any code changes, reviews and pre-deployment checks: \`.agents/skills/kampus-verify/SKILL.md\`
+- Multi-step architecture or significant product work: `.agents/skills/kampus-plan/SKILL.md`
+- React/Next.js screens, profiles, feeds and responsive design: `.agents/skills/kampus-ui/SKILL.md`
+- Auth, Supabase, Postgres RLS, web push, email and credentials: `.agents/skills/kampus-security/SKILL.md`
+- Gemini/Kritic assignment review, limits and quality: `.agents/skills/kampus-kritic/SKILL.md`
+- Any code changes, reviews and pre-deployment checks: `.agents/skills/kampus-verify/SKILL.md`
 
-The skills are **project guidance**, not automated hooks, independent agents or installed ChatGPT plugins. See \`docs/ECC-KAMPUS-SETUP.md\`.
+The skills are **project guidance**, not automated hooks, independent agents or installed ChatGPT plugins. See `docs/ECC-KAMPUS-SETUP.md`.

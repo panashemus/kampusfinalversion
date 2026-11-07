@@ -7,8 +7,8 @@ description: Use when implementing, diagnosing or evaluating KAMPUS Kritic acade
 KAMPUS-specific application of ECC verification, security and TDD principles.
 
 ## Confirm current state
-- Review \`app/api/kritic-audit/route.ts\`, \`components/KampusKritic.tsx\`, \`lib/kritic-validation.ts\`, associated SQL RPCs and current environment-variable **names only** (never key values).
-- Existing source uses a Gemini API key plus \`KRITIC_MODEL\`, authentication, student email verification, bounded inputs and request budgets.
+- Review `app/api/kritic-audit/route.ts`, `components/KampusKritic.tsx`, `lib/kritic-validation.ts`, associated SQL RPCs and current environment-variable **names only** (never key values).
+- Existing source uses a Gemini API key plus `KRITIC_MODEL`, authentication, student email verification, bounded inputs and request budgets.
 - At the documented baseline, Kritic was free with a per-user daily limit and global daily ceiling. A P30 Pro plan or weekly one-premium-critique trial is a **proposal**, not a deployed entitlement. Do not silently implement a checkout.
 - Validate a real, authorized end-to-end critique rather than assuming service health from build status.
 
