@@ -63,3 +63,32 @@ test('gallery filters, lightbox escape, save and share are interactive',()=>{
  assert.match(store,/localStorage.setItem/);
  assert.match(store,/navigator.share/);
 });
+
+
+test('each gallery caption is bound to the correct individual supplied photo',()=>{
+ const names=[
+  'Rose-gold floral stilettos',
+  'Silver crystal-encrusted stilettos',
+  'Black French tips with silver cross',
+  'Pink and lime animal-print stilettos',
+  'Turquoise, tortoiseshell and gold nail art',
+  'Blue sculpted 3D floral nails',
+  'Chocolate teddy, ivory bone and lash art',
+  'Pearlescent pink stilettos with gold tips',
+  'Colourful striped and cartoon stilettos',
+ ];
+ const captions=[...store.matchAll(/^\s*\{name:'([^']+)',tags:\[/gm)].map(m=>m[1]);
+ assert.deepEqual(captions,names);
+ assert.match(store,/String\(index\+1\)\.padStart\(2,'0'\)/);
+ assert.match(store,/studio-["']\+number\+["']\.svg/);
+});
+
+test('main booking links open the exact studio WhatsApp number directly, with no intermediate scroll',()=>{
+ assert.match(store,/const PHONE='26778348637'/);
+ assert.match(store,/const DIRECT_BOOKING_URL=messageLink\(/);
+ const directLinks=store.match(/<a href=\{DIRECT_BOOKING_URL\}/g)||[];
+ assert.equal(directLinks.length,2,'Both hero and sticky booking CTA must link directly to WhatsApp');
+ assert.match(store,/window\.location\.assign\(messageLink\(msg\)\)/);
+ assert.match(store,/href=\{messageLink\('Hi HER NAIL TECH! I saw your '\+LOOKS\[selected\]\.name/);
+ assert.doesNotMatch(store,/onClick=\{\(\)=>jump\('booking'\)\}[^>]*>.*?Book on WhatsApp/);
+});
