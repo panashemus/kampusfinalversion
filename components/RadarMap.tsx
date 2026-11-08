@@ -223,18 +223,29 @@ function CampusDetector({
   return null;
 }
 
+/** Focus on the public town centre, never a purported private studio address. */
+function RequestedPlaceFocus({place}:{place?:string}){
+  const map=useMap();
+  useEffect(()=>{
+    if(place?.toLowerCase().includes('tlokweng'))map.flyTo([-24.66861,25.97111],13,{animate:true,duration:0.65});
+  },[place,map]);
+  return null;
+}
+
 export default function RadarMap({
   profile,
   onOpenHazard,
   sosAlerts,
   onLocate,
   onMessageUser,
+  focusPlace,
 }: {
   profile: Profile | null;
   onOpenHazard: (h: Hazard) => void;
   sosAlerts: SosAlert[];
   onLocate: (pos: [number, number]) => void;
   onMessageUser?: (userId: string, username: string) => void;
+  focusPlace?: string;
 }) {
   const { toast } = useToast();
   const [isMounted,setIsMounted]=useState(false);
@@ -437,6 +448,7 @@ export default function RadarMap({
         />
 
         <CampusDetector onNearbyCampus={setNearbyCampus} />
+        <RequestedPlaceFocus place={focusPlace} />
         {locateRequested && <LocationTracker onLocate={handleLocate} onError={() => { setLocateRequested(false); toast({ title: 'Location unavailable', description: 'Allow location access to center the map on your position.' }); }} />}
 
         {hazards.map((h) => (
