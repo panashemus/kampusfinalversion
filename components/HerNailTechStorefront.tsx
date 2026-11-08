@@ -23,9 +23,9 @@ const TIKTOK='https://www.tiktok.com/@hernailtech';
 const RADAR='/#radar?search=Tlokweng%2C%20Metlhabeng';
 const messageLink=(text:string)=>'https://wa.me/'+PHONE+'?text='+encodeURIComponent(text);
 function pictureStyle(index:number):CSSProperties{
- const col=index%3,row=Math.floor(index/3);
- // High-resolution grid made from the nine actual customer-supplied photos.
- return {backgroundImage:"url('/images/her-nail-tech/portfolio-refresh.svg')",backgroundRepeat:'no-repeat',backgroundSize:'300% 300%',backgroundPosition:(col*50)+'% '+(row*50)+'%'};
+ // Each look is served from its own high-resolution source photograph.
+ const number=String(index+1).padStart(2,'0');
+ return {backgroundImage:"url('/images/her-nail-tech/studio-"+number+".svg')",backgroundRepeat:'no-repeat',backgroundSize:'cover',backgroundPosition:'center'};
 }
 
 const policies=[
@@ -69,7 +69,7 @@ export default function HerNailTechStorefront(){
  const share=async()=>{const url=window.location.href;try{if(navigator.share){await navigator.share({title:'HER NAIL TECH on KAMPUS',url});}else{await navigator.clipboard.writeText(url);setCopied(true);window.setTimeout(()=>setCopied(false),2500);}}catch{}};
  const jump=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
  const button='inline-flex items-center justify-center gap-2 min-h-11 rounded-full px-5 text-sm font-semibold motion-safe:transition-all motion-safe:duration-200 hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
- return <main className="relative isolate min-h-[100dvh] w-full min-w-0 max-w-full overflow-x-clip bg-[#090909] text-[#f8f5f6] selection:bg-[#f0d6df] selection:text-black" style={{fontFamily:"Arial, Helvetica, sans-serif"}}>
+ return <main className="relative isolate h-[100dvh] min-h-0 w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#090909] text-[#f8f5f6] selection:bg-[#f0d6df] selection:text-black" style={{fontFamily:"Arial, Helvetica, sans-serif",WebkitOverflowScrolling:"touch"}}>
   <header className="sticky top-0 z-30 border-b border-white/10 bg-[#090909]/95 backdrop-blur-xl">
    <div className="mx-auto flex w-full min-w-0 max-w-6xl items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-7 sm:py-3">
     <Link href="/#hustle" className="flex min-h-11 items-center gap-2 text-sm text-[#d9d0d4] hover:text-white"><ArrowLeft size={17}/> <span className="font-semibold">KAMPUS</span><span className="hidden text-[#8a8187] sm:inline">/ Hustle Hub</span></Link>
@@ -119,7 +119,7 @@ export default function HerNailTechStorefront(){
        <div className="flex min-h-12 items-center justify-between gap-2 px-2.5 py-2"><span className="line-clamp-2 text-[11px] text-[#f0e9ed]">{name}</span><button aria-label={'Book '+name} className="shrink-0 rounded-full border border-white/20 p-2 hover:bg-white/10" onClick={()=>{setSelectedDesign(index);jump('booking');}}><ArrowRight size={15}/></button></div>
       </div>)}
      </div>
-     <p className="mt-4 text-[11px] leading-relaxed text-[#ac9fa6]">Nine higher-quality nail photographs provided by KAMPUS for this showcase. The original TikTok creator credit remains visible where present. Final availability and design details must be confirmed with the technician.</p>
+     <p className="mt-4 text-[11px] leading-relaxed text-[#ac9fa6]">Nine high-resolution nail photographs supplied for this KAMPUS showcase. The original TikTok creator credit remains visible where present. Final availability and design details must be confirmed with the technician.</p>
      <div className="mt-5"><h3 className="font-serif text-2xl italic">Explore styles</h3><div className="mt-3 flex flex-wrap gap-2">{['Soft glam','Chrome & metallic','French tips','Floral detail','Graphic statements','Classic shapes'].map((label,i)=><button key={label} className="rounded-full border border-[#6b5762] px-3 py-2 text-xs text-[#e8d8e0] hover:bg-white/10" onClick={()=>setFilter((['Pink','Chrome','French','Floral','Graphic','Square'] as StyleTag[])[i])}>{label}</button>)}</div></div>
     </section>
     <div className="w-full min-w-0 space-y-5">
