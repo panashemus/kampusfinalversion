@@ -4,6 +4,7 @@ import { requireUser, boundedJson, HttpError, errorResponse } from '@/lib/server
 import { validateKriticInput } from '@/lib/kritic-validation';
 import { buildBotswanaKriticInstruction } from '@/lib/botswana-kritic';
 import { generateKriticReply, isKriticGreeting, type GeminiContent } from '@/lib/kritic-provider';
+import { uploadPrivateKriticFile, deletePrivateKriticFiles } from '@/lib/kritic-files';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -73,6 +74,7 @@ export async function POST(req: Request) {
     });
 
     const privateMaxBytes = 10 * 1024 * 1024;
+    const privateFiles: Array<{ bytes: Buffer; mimeType: string }> = [];
     if (input.filePaths.length) {
       if (!input.filePaths.every(path => path.startsWith(user.id + '/'))) {
         throw new HttpError(403, 'Attachment ownership could not be verified.');
@@ -99,7 +101,7 @@ export async function POST(req: Request) {
         if (!valid || bytes.length === 0 || bytes.length > privateMaxBytes) {
           throw new HttpError(400, 'An attachment is invalid or exceeds 10 MB.');
         }
-        parts.push({ inlineData: { mimeType, data: bytes.toString('base64') } });
+        privateFiles.push({ bytes, mimeType });
       }
     }
 
@@ -129,7 +131,13 @@ export async function POST(req: Request) {
       throw new HttpError(429, 'Your daily limit or the shared service budget has been reached. Please try again after 00:00 UTC.');
     }
 
+    const providerFileNames: string[] = [];
     try {
+      for (const file of privateFiles) {
+        const uploaded = await uploadPrivateKriticFile(apiKey, file.bytes, file.mimeType);
+        providerFileNames.push(uploaded.name);
+        parts.push({ fileData: { mimeType: file.mimeType, fileUri: uploaded.fileUri } });
+      }
       const prior = input.history.slice();
       if (prior.at(-1)?.role === 'user' && prior.at(-1)?.content === input.promptText) prior.pop();
       const contents: GeminiContent[] = prior.map(message => ({
@@ -161,6 +169,8 @@ export async function POST(req: Request) {
     } catch {
       await releaseUnsuccessfulReservation(user.id, bucket);
       throw new HttpError(502, 'Kritic could not reach the academic AI service. Your draft is saved. Please retry shortly.');
+    } finally {
+      if (providerFileNames.length) await deletePrivateKriticFiles(apiKey, providerFileNames);
     }
   } catch (error) {
     return errorResponse(error);
