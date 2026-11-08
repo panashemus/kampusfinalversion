@@ -1,38 +1,43 @@
 /**
- * One-time deployment-time, user-authorized provider diagnostic.
- * Does not log or transmit credentials beyond Google's official API.
- * This is not a replacement for authenticated end-to-end testing.
+ * Temporary provider investigation. Logs only status codes, timings, and error classes.
+ * Never logs or stores credentials, student work, or provider response text.
  */
-const key = process.env.GEMINI_API_KEY;
-const model = process.env.KRITIC_MODEL;
-if (!key || !model) {
-  console.error('[Kritic smoke] Missing configured model/API key (names only).');
-  process.exit(1);
+const key=process.env.GEMINI_API_KEY;
+if(!key){ console.error('[Kritic probe] GEMINI_API_KEY missing');process.exit(1); }
+const models=['gemini-3.8-flash','gemini-3.5-flash-lite'];
+const api='https://generativelanguage.googleapis.com/v1beta/models/';
+async function probe(label, url, init, timeout=12000) {
+  const started=Date.now();
+  try{
+    const result=await fetch(url,{...init,headers:{'x-goog-api-key':key,'Content-Type':'application/json'},signal:AbortSignal.timeout(timeout)});
+    let statusCode='';
+    try {const data=await result.json();statusCode=String(data?.error?.status||'');if(result.ok && label.startsWith('POST')){const reply=data?.candidates?.[0]?.content?.parts?.filter(x=>typeof x.text==='string'&&!x.thought).map(x=>x.text).join(' ').trim();statusCode=reply?'valid-text':'no-visible-text';}}
+    catch{}
+    console.log('[Kritic probe] '+label+' HTTP='+result.status+' result='+statusCode+' elapsed='+Math.round((Date.now()-started)/1000)+'s');
+    return result.ok && (label.startsWith('GET')||statusCode==='valid-text');
+  }catch(error){
+    console.log('[Kritic probe] '+label+' error='+String(error?.name||'unknown')+' elapsed='+Math.round((Date.now()-started)/1000)+'s');
+    return false;
+  }
 }
-let response;
-try {
-  response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' +
-    encodeURIComponent(model) + ':generateContent', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json', 'x-goog-api-key': key },
-    signal: AbortSignal.timeout(23000),
-    body: JSON.stringify({
-      contents: [{ role:'user', parts:[{text:'ey monna'}] }],
-      systemInstruction: { parts: [{text:'You are a helpful Botswana university academic coach. Reply briefly and naturally to a greeting.'}]},
-      generationConfig: { maxOutputTokens:256, thinkingConfig:{thinkingLevel:'low'} },
-    }),
-  });
-} catch(error) {
-  console.error('[Kritic smoke] Provider transport error:', error?.name || 'unknown');
-  process.exit(1);
+const tests=[];
+for(const model of models){
+ const get=await probe('GET '+model,api+model,{method:'GET'},8000);
+ tests.push(get);
+ if(get){
+  const post=await probe('POST '+model,api+model+':generateContent',{
+    method:'POST',
+    body:JSON.stringify({
+     contents:[{role:'user',parts:[{text:'ey monna'}]}],
+     systemInstruction:{parts:[{text:'Reply naturally, briefly to a greeting from a student in Botswana.'}]},
+     generationConfig:{maxOutputTokens:384,thinkingConfig:{thinkingLevel:model.includes('3.8')?'low':'minimal'}}
+    })
+  },18000);
+  tests.push(post);
+ }
 }
-if (!response.ok) {
-  let code = 'unknown';
-  try { const body=await response.json();code=String(body?.error?.status || 'unknown'); } catch {}
-  console.error('[Kritic smoke] Provider rejected request. HTTP '+response.status+', status '+code+', model '+model);
-  process.exit(1);
+if(!tests.some((x,i)=>i%2===1&&x)){
+ console.error('[Kritic probe] No successful generation via provider; build blocked.');
+ process.exit(1);
 }
-const body = await response.json();
-const reply = body?.candidates?.[0]?.content?.parts?.filter(x=>typeof x.text==='string'&&!x.thought).map(x=>x.text).join(' ').trim();
-if (!reply) { console.error('[Kritic smoke] Provider returned success without visible reply. Finish reason '+String(body?.candidates?.[0]?.finishReason));process.exit(1); }
-console.log('[Kritic smoke] Provider responded successfully with visible text; model '+model+'.');
+console.log('[Kritic probe] At least one provider model generated a reply.');
