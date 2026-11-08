@@ -7,7 +7,8 @@ const hub=fs.readFileSync('components/HustleHub.tsx','utf8');
 const guest=fs.readFileSync('components/GuestPreview.tsx','utf8');
 const radar=fs.readFileSync('components/RadarMap.tsx','utf8');
 const member=fs.readFileSync('components/MemberApp.tsx','utf8');
-const asset=fs.readFileSync('public/images/her-nail-tech/lookbook.svg','utf8');
+const shell=fs.readFileSync('app/layout.tsx','utf8');
+const assets=Array.from({length:9},(_,i)=>fs.readFileSync(`public/images/her-nail-tech/studio-${String(i+1).padStart(2,'0')}.svg`,'utf8'));
 
 test('studio storefront is reachable from member and guest Hustle Hub',()=>{
  assert.match(route,/HerNailTechStorefront/);
@@ -15,11 +16,26 @@ test('studio storefront is reachable from member and guest Hustle Hub',()=>{
  assert.match(guest,/store\/her-nail-tech/);
 });
 
-test('lookbook uses 24 cropped source references, without visible view counts',()=>{
- assert.equal((store.match(/\{name:'[^']+',tags:/g)||[]).length,24);
- assert.match(asset,/data:image\/webp;base64,UklGR/);
- assert.doesNotMatch(asset,/TikTok|Following|2,489|views/);
- assert.match(store,/600% 400%/);
+test('lookbook uses nine independent, high-resolution supplied nail photos',()=>{
+ assert.equal((store.match(/\{name:'[^']+',tags:/g)||[]).length,9);
+ assert.equal(assets.length,9);
+ for(const asset of assets){
+  assert.match(asset,/data:image\/webp;base64,UklGR/);
+  assert.ok(asset.length>30000,'Full-resolution photo should not be a tiny contact-sheet crop');
+  assert.doesNotMatch(asset,/TikTok|Following|2,489|views/);
+ }
+ assert.match(store,/studio-["']\+number\+["']\.svg/);
+ assert.doesNotMatch(store,/lookbook\.svg|portfolio-refresh\.svg/);
+ assert.match(hub,/studio-01\.svg/);
+ assert.match(guest,/studio-01\.svg/);
+});
+
+test('mobile storefront scrolls inside the fixed-height Kampus application shell',()=>{
+ assert.match(shell,/h-\[100dvh\].*overflow-hidden/);
+ assert.match(store,/h-\[100dvh\].*overflow-x-hidden overflow-y-auto overscroll-y-contain/);
+ assert.match(store,/lg:grid-cols-\[minmax\(0,1\.08fr\)_minmax\(0,\.92fr\)\]/);
+ assert.match(store,/overflow-x-auto overscroll-x-contain/);
+ assert.match(store,/pb-\[calc\(110px\+env\(safe-area-inset-bottom\)\)\]/);
 });
 
 test('booking never requests payment before confirmation and routes directly to technician',()=>{
