@@ -5,7 +5,7 @@ This is the **combined repository source**, not only Codex's changed files. It i
 ## What's free / what's paused
 
 - Student accounts, Campus Feed, student marketplace listing creation, messaging and ordinary features have no subscription or listing fee. Seller-chosen item/service prices remain displayed; that is not a KAMPUS charge.
-- Kritic's former single-prompt paywall and paid activation route are removed. **Server limits remain: at most 5 requests per verified account per UTC day and 100 requests globally per UTC day**, subject to successful application of the 20261105181039 SQL migration and available AI credentials.
+- Kritic's former single-prompt paywall and paid activation route are removed. **Server limits remain: at most 20 requests per verified account per UTC day and 100 requests globally per UTC day**, subject to successful application of the 20261105181039 SQL migration and available AI credentials.
 - The new SMS/payment reference activation code is removed; DPO webhook and seller payment-confirmation route return HTTP 410. The old subscription, payment and escrow checkouts/components are removed from the active UI.
 - **New escrow transactions are paused.** Historical payment/escrow rows and any funds owed must still be reconciled. Public-location safety/privacy requirements still apply; person-to-person location sharing is still deferred.
 - A new SQL migration (`20261105181102_free_mode_finance_pause.sql`) blocks changes to paid entitlements and creation of new payment/escrow records, and restricts client writes to profiles. It also removes a lingering old subscription gate from hazard reports.
