@@ -19,7 +19,7 @@ test('DOCX extraction preserves paragraphs, tables and decoded XML entities',()=
  assert.match(result,/Results\s+2026/);
 });
 test('TXT rejects binary payload and decodes Unicode',()=>{
- assert.equal(extractKriticDocument(Buffer.from('A student's research notes on Botswana'),'txt'),"A student's research notes on Botswana");
+ assert.equal(extractKriticDocument(Buffer.from("A student's research notes on Botswana"),'txt'),"A student's research notes on Botswana");
  assert.throws(()=>extractKriticDocument(Buffer.from([65,0,66]),'txt'),/binary/);
 });
 test('legacy DOC validates OLE signature and fails clearly for unreadable files',()=>{
