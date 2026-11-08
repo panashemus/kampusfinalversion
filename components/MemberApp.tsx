@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { useState, useCallback, useEffect } from 'react';
 import {
@@ -705,9 +706,20 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                 sosAlerts={activeSosAlerts}
                 onLocate={(pos) => setUserCoords(pos)}
                 onMessageUser={openChat}
+                focusPlace={destination.search}
               />
 
-              {activeSosAlerts.filter((a) => a.active).length === 0 && (
+              {destination.search?.toLowerCase().includes('tlokweng') && (
+                <div className="absolute top-4 left-4 right-4 z-[900] pointer-events-none">
+                  <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 backdrop-blur-xl p-3.5 text-white shadow-xl">
+                    <p className="text-xs font-bold">Tlokweng, Metlhabeng · HER NAIL TECH area</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-sage">Radar is showing the general Tlokweng area, not the studio’s exact address. The technician shares precise directions two days before your confirmed booking.</p>
+                    <Link className="pointer-events-auto mt-2 inline-flex text-xs font-bold text-pine underline" href="/store/her-nail-tech">Return to storefront</Link>
+                  </div>
+                </div>
+              )}
+
+              {!destination.search?.toLowerCase().includes('tlokweng') && activeSosAlerts.filter((a) => a.active).length === 0 && (
                 <div className="absolute top-4 left-4 right-4 z-[500] pointer-events-none">
                   <div className="bg-surface/95 backdrop-blur-md rounded-2xl border border-gray-800 p-3.5 flex items-center gap-3 shadow-lg">
                     <div className="w-9 h-9 rounded-xl bg-ink border border-pine/40 flex items-center justify-center shrink-0">
