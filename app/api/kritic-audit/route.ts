@@ -88,7 +88,7 @@ export async function POST(req: Request) {
             }) }],
           },
           contents: [...contents, { role: 'user', parts }],
-          generationConfig: { maxOutputTokens: 5600, temperature: 0.25 },
+          generationConfig: { maxOutputTokens: 8192 },
         }),
       },
     );
