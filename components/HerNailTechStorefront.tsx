@@ -38,7 +38,7 @@ const RADAR='/#radar?search=Tlokweng%2C%20Metlhabeng';
 const messageLink=(text:string)=>'https://wa.me/'+PHONE+'?text='+encodeURIComponent(text);
 function pictureStyle(index:number):CSSProperties{
  const col=index%6,row=Math.floor(index/6);
- return {backgroundImage:"url('/images/her-nail-tech/lookbook.webp')",backgroundRepeat:'no-repeat',backgroundSize:'600% 400%',backgroundPosition:(col*20)+'% '+(row*100/3)+'%'};
+ return {backgroundImage:"url('/images/her-nail-tech/lookbook.svg')",backgroundRepeat:'no-repeat',backgroundSize:'600% 400%',backgroundPosition:(col*20)+'% '+(row*100/3)+'%'};
 }
 const policies=[
  {name:'Late coming',text:'Please communicate as soon as possible if you are running late. A 10-minute grace period applies; after that, your appointment is automatically cancelled. No late fee is charged. A full set may take between 1 hour 30 minutes and 2 hours 30 minutes.'},
