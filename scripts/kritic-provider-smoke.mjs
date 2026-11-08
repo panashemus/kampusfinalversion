@@ -4,7 +4,7 @@
  */
 const key=process.env.GEMINI_API_KEY;
 if(!key){ console.error('[Kritic probe] GEMINI_API_KEY missing');process.exit(1); }
-const models=['gemini-3.8-flash','gemini-3.5-flash-lite'];
+const models=['gemini-3.6-flash','gemini-3.7-flash','gemini-3.5-flash-lite'];
 const api='https://generativelanguage.googleapis.com/v1beta/models/';
 async function probe(label, url, init, timeout=12000) {
   const started=Date.now();
@@ -32,7 +32,7 @@ for(const model of models){
      systemInstruction:{parts:[{text:'Reply naturally, briefly to a greeting from a student in Botswana.'}]},
      generationConfig:{maxOutputTokens:384,thinkingConfig:{thinkingLevel:model.includes('3.8')?'low':'minimal'}}
     })
-  },18000);
+  },16000);
   tests.push(post);
  }
 }
