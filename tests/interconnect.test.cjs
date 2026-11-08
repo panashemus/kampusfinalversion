@@ -26,7 +26,7 @@ test('Kritic accepts two private references but blocks invalid paths and a third
 test('Kritic limits are enforced by secure server and the UI, not client plan flags',()=>{
  const api=fs.readFileSync(require('node:path').resolve(__dirname,'../app/api/kritic-audit/route.ts'),'utf8');
  const ui=fs.readFileSync(require('node:path').resolve(__dirname,'../components/KampusKritic.tsx'),'utf8');
- const migration=fs.readFileSync(require('node:path').resolve(__dirname,'../supabase/migrations/20261108103000_kritic_twenty_requests_private_attachments.sql'),'utf8');
+ const migration=fs.readFileSync(require('node:path').resolve(__dirname,'../supabase/migrations/20261108095327_kritic_twenty_requests_private_attachments.sql'),'utf8');
  assert.match(ui,/up to 20 requests per account per UTC day/);
  assert.match(ui,/10 MB each/);
  assert.match(api,/privateFiles/);
