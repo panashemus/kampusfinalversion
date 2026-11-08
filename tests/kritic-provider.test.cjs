@@ -94,7 +94,7 @@ test('10 MB files travel through the Gemini Files API rather than the generateCo
  const result=await uploadPrivateKriticFile('test-placeholder',bytes,'application/pdf',fakeFetch);
  assert.equal(result.name,'files/mock');
  assert.equal(seen.length,2);
- assert.match(seen[0].url,/upload\\/v1beta\\/files$/);
+ assert.equal(seen[0].url,'https://generativelanguage.googleapis.com/upload/v1beta/files');
  assert.equal(seen[0].options.headers['X-Goog-Upload-Header-Content-Length'],String(bytes.length));
  assert.equal(seen[1].url,uploadUrl);
  assert.equal(seen[1].options.headers['X-Goog-Upload-Command'],'upload, finalize');
