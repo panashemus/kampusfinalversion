@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { useState, useCallback, useEffect } from 'react';
 import {
@@ -713,7 +714,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                   <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 backdrop-blur-xl p-3.5 text-white shadow-xl">
                     <p className="text-xs font-bold">Tlokweng, Metlhabeng · HER NAIL TECH area</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-sage">Radar is showing the general Tlokweng area, not the studio’s exact address. The technician shares precise directions two days before your confirmed booking.</p>
-                    <a className="pointer-events-auto mt-2 inline-flex text-xs font-bold text-pine underline" href="/store/her-nail-tech">Return to storefront</a>
+                    <Link className="pointer-events-auto mt-2 inline-flex text-xs font-bold text-pine underline" href="/store/her-nail-tech">Return to storefront</Link>
                   </div>
                 </div>
               )}
