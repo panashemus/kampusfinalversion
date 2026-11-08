@@ -282,7 +282,7 @@ export default function HustleHub({
           <Link href="/store/her-nail-tech" className="group mb-4 block overflow-hidden rounded-3xl border border-[#8c6c7b]/60 bg-[radial-gradient(ellipse_at_90%_0%,#4d3545,#130f13_68%)] text-white shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#efdeea]">
             <div className="flex items-stretch gap-3 p-4 sm:gap-5 sm:p-5">
               <div className="h-32 w-28 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-[#37252e] sm:h-36 sm:w-36">
-                <div className="h-full w-full transition-transform duration-300 group-hover:scale-105" style={{backgroundImage:"url('/images/her-nail-tech/portfolio-refresh.svg')",backgroundSize:'300% 300%',backgroundPosition:'0% 0%'}} role="img" aria-label="Nail designs from HER NAIL TECH"/>
+                <div className="h-full w-full transition-transform duration-300 group-hover:scale-105" style={{backgroundImage:"url('/images/her-nail-tech/studio-01.svg')",backgroundSize:'cover',backgroundPosition:'0% 0%'}} role="img" aria-label="Nail designs from HER NAIL TECH"/>
               </div>
               <div className="flex min-w-0 flex-col justify-center">
                 <span className="mb-2 text-[10px] font-bold uppercase tracking-[.17em] text-[#e5bfcf]">Featured beauty studio</span>
