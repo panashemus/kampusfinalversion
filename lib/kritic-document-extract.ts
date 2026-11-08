@@ -63,9 +63,9 @@ function extractLegacyDoc(buffer: Buffer): string {
   // This is a best-effort text extraction; complex DOC formatting may be lost.
   if(!buffer.subarray(0,8).equals(Buffer.from([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1])))throw new Error('Invalid legacy DOC file.');
   const unicode: string[]=[];
-  for(const match of buffer.toString('utf16le').matchAll(/[\p{L}\p{N}][\p{L}\p{N}\p{P}\p{Zs}\t\r\n]{24,}/gu))unicode.push(match[0]);
+  for(const match of Array.from(buffer.toString('utf16le').matchAll(/[\p{L}\p{N}][\p{L}\p{N}\p{P}\p{Zs}\t\r\n]{24,}/gu)))unicode.push(match[0]);
   const ascii: string[]=[];
-  for(const match of buffer.toString('latin1').matchAll(/[A-Za-z0-9][\x20-\x7e\r\n\t]{35,}/g))ascii.push(match[0]);
+  for(const match of Array.from(buffer.toString('latin1').matchAll(/[A-Za-z0-9][\x20-\x7e\r\n\t]{35,}/g)))ascii.push(match[0]);
   const best=unicode.join('\n').length>=ascii.join('\n').length?unicode:ascii;
   if(!best.length)throw new Error('This legacy DOC could not be read. Save it as DOCX or PDF and retry.');
   return readableText(best.join('\n'),'DOC');
