@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import {useEffect,useMemo,useState,type CSSProperties} from 'react';
 import {ArrowLeft,ArrowRight,Bookmark,CalendarDays,Check,ChevronDown,ChevronLeft,ChevronRight,Clock3,ExternalLink,Heart,Instagram,MapPin,MessageCircle,Send,ShieldCheck,Sparkles,X} from 'lucide-react';
@@ -84,7 +85,7 @@ export default function HerNailTechStorefront(){
  return <main className="min-h-[100dvh] bg-[#090909] text-[#f8f5f6] selection:bg-[#f0d6df] selection:text-black" style={{fontFamily:"Arial, Helvetica, sans-serif"}}>
   <header className="sticky top-0 z-30 border-b border-white/10 bg-[#090909]/95 backdrop-blur-xl">
    <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-7">
-    <a href="/#hustle" className="flex min-h-11 items-center gap-2 text-sm text-[#d9d0d4] hover:text-white"><ArrowLeft size={17}/> <span className="font-semibold">KAMPUS</span><span className="hidden text-[#8a8187] sm:inline">/ Hustle Hub</span></a>
+    <Link href="/#hustle" className="flex min-h-11 items-center gap-2 text-sm text-[#d9d0d4] hover:text-white"><ArrowLeft size={17}/> <span className="font-semibold">KAMPUS</span><span className="hidden text-[#8a8187] sm:inline">/ Hustle Hub</span></Link>
     <span className="text-[11px] font-bold uppercase tracking-[.22em] text-[#d9c4cf]">Featured studio</span>
     <div className="flex items-center gap-1"><button className="rounded-full p-3 hover:bg-white/10" onClick={save} aria-label={saved?'Remove from saved':'Save storefront'}><Bookmark size={18} fill={saved?'currentColor':'none'}/></button><button className="rounded-full p-3 hover:bg-white/10" onClick={share} aria-label="Share storefront">{copied?<Check size={18}/>:<ExternalLink size={18}/>}</button></div>
    </div>
@@ -104,14 +105,14 @@ export default function HerNailTechStorefront(){
       </div>
      </div>
      <div className="mt-5 flex flex-wrap gap-2">
-      <a href={RADAR} className="inline-flex items-center gap-1.5 rounded-full border border-[#d4bec8]/40 bg-black/35 px-3 py-2 text-xs hover:bg-white/10"><MapPin size={14}/> Tlokweng, Metlhabeng</a>
+      <Link href={RADAR} className="inline-flex items-center gap-1.5 rounded-full border border-[#d4bec8]/40 bg-black/35 px-3 py-2 text-xs hover:bg-white/10"><MapPin size={14}/> Tlokweng, Metlhabeng</Link>
       <span className="rounded-full border border-[#d4bec8]/40 bg-black/35 px-3 py-2 text-xs"><CalendarDays size={13} className="mr-1 inline"/> Book 1 week ahead</span>
       <span className="rounded-full border border-[#d4bec8]/40 bg-black/35 px-3 py-2 text-xs">P30 deposit after confirmation</span>
       <span className="rounded-full border border-[#d4bec8]/40 bg-black/35 px-3 py-2 text-xs">No walk-ins</span>
      </div>
      <div className="mt-6 flex flex-wrap gap-2">
       <button className={button+' bg-[#f7edf1] text-[#151015] hover:bg-white'} onClick={()=>jump('booking')}><MessageCircle size={17}/> Book on WhatsApp <ArrowRight size={16}/></button>
-      <a className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} href={RADAR}><MapPin size={16}/> View location</a>
+      <a className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} href={RADAR}><MapPin size={16}/> View location</Link>
       <button className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} onClick={()=>jump('lookbook')}>Explore gallery <ArrowRight size={16}/></button>
      </div>
     </div>
@@ -166,11 +167,11 @@ export default function HerNailTechStorefront(){
      </section>
      <section className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_90%_20%,#44313d,transparent_60%),#161216] p-5 sm:p-6">
       <p className="text-[11px] uppercase tracking-[.18em] text-[#cdaabf]">Find the studio</p><h2 className="mt-1 font-serif text-3xl italic">Tlokweng, Metlhabeng</h2><p className="mt-3 text-sm text-[#cfc1c9]">Explore the general area in Kampus Radar. Exact directions are sent by HER NAIL TECH two days before a confirmed booking.</p>
-      <a href={RADAR} className={button+' mt-4 border border-[#e9d7e0] bg-white/10 hover:bg-white/20'}><MapPin size={17}/> Open in Radar <ArrowRight size={15}/></a>
+      <Link href={RADAR} className={button+' mt-4 border border-[#e9d7e0] bg-white/10 hover:bg-white/20'}><MapPin size={17}/> Open in Radar <ArrowRight size={15}/></Link>
      </section>
      <section className="rounded-3xl border border-white/10 bg-[#151215] p-5">
       <div className="flex gap-3"><ShieldCheck size={19} className="shrink-0 text-[#e5cbd7]"/><p className="text-xs leading-relaxed text-[#b9abb3]">Curated KAMPUS showcase based on HER NAIL TECH’s publicly shared information. Booking, availability, prices and payments are handled directly by the technician. This is not a verified owner-managed listing. Social counts are a snapshot from the supplied screenshots, not live totals.</p></div>
-      <a href={TIKTOK} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#e9d5df] hover:underline"><Instagram size={17}/> See @hernailtech on TikTok <ExternalLink size={14}/></a>
+      <a href={TIKTOK} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#e9d5df] hover:underline"><Instagram size={17}/> See @hernailtech on TikTok <ExternalLink size={14}/></Link>
      </section>
     </div>
    </div>
@@ -178,7 +179,7 @@ export default function HerNailTechStorefront(){
   <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#66545f] bg-[#0c0b0d]/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
    <div className="mx-auto flex max-w-6xl gap-2">
     <button className={button+' flex-1 bg-[#f4e9ef] px-3 text-[#181016]'} onClick={()=>jump('booking')}><MessageCircle size={18}/> Book <span className="hidden sm:inline">on WhatsApp</span></button>
-    <a className={button+' flex-1 border border-[#a996a0] bg-[#1e181d] px-3'} href={RADAR}><MapPin size={18}/> Location</a>
+    <a className={button+' flex-1 border border-[#a996a0] bg-[#1e181d] px-3'} href={RADAR}><MapPin size={18}/> Location</Link>
     <button className={button+' border border-[#a996a0] bg-[#1e181d] px-4'} onClick={save} aria-label={saved?'Remove saved storefront':'Save storefront'}><Heart size={18} fill={saved?'currentColor':'none'}/>{saved?'Saved':'Save'}</button>
    </div>
   </div>
