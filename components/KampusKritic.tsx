@@ -427,20 +427,6 @@ export default function KampusKritic({
       }
     }
 
-    if (profile?.id) {
-      try {
-        await supabase.from('kritic_messages').insert({
-          chat_id: currentSessionId,
-          user_id: profile.id,
-          role: 'user',
-          content: userMsg.content,
-          images: attachedImages,
-        });
-      } catch {
-        // Handled by sessionStorage
-      }
-    }
-
     try {
       const res = await fetch('/api/kritic-audit', {
         method: 'POST',
@@ -514,6 +500,13 @@ export default function KampusKritic({
           await supabase.from('kritic_messages').insert({
             chat_id: currentSessionId,
             user_id: profile.id,
+            role: 'user',
+            content: userMsg.content,
+            images: attachedImages,
+          });
+          await supabase.from('kritic_messages').insert({
+            chat_id: currentSessionId,
+            user_id: profile.id,
             role: 'assistant',
             content: assistantMsg.content,
             benchmark_used: assistantMsg.benchmark_used,
@@ -523,6 +516,8 @@ export default function KampusKritic({
         }
       }
     } catch (error) {
+      // Undo the optimistic message; the student's draft and files remain in the composer.
+      setMessages(messages);
       setInput(textToSend);setPendingImages(attachedImages);
       toast({
         title: 'Kritic unavailable',

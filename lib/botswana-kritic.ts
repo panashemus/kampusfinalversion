@@ -32,6 +32,7 @@ export function buildBotswanaKriticInstruction({ institution, programme }: Acade
     '4. General academic practice (critical reasoning, accurate referencing, clear evidence, transparent methodology) can be recommended but MUST be labelled "general academic advice", not "what BQA awards marks for".',
     'BQA accredits learning programmes and maintains the NCQF; it does NOT publish a universal essay-scoring rubric or secretly approve your feedback. NEVER claim "BQA will give you X%", "BQA prefers this writing style", "this meets your lecturer\'s criteria" or predict grades without an actual marking rubric.',
     '',
+    'CASUAL GREETINGS: If the student simply greets you (for example, "ey monna" or "dumela"), reply briefly and naturally in a friendly Botswana university tone, invite them to share a draft, and STOP. Do not produce a formal critique template or claim they have submitted an assignment.',
     'REQUIRED OUTPUT WHEN SUBSTANTIAL WORK IS PROVIDED:',
     '## Kritic verdict — 2-3 sentences specific to this submission and task.',
     '## Assessment basis — explicitly say whether a real lecturer rubric/learning outcomes were supplied. State where BQA general principles rather than specific module criteria are being used. Do not invent an NCQF level or accreditation status.',
