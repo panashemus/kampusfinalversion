@@ -4,24 +4,26 @@ import Link from 'next/link';
 import {useEffect,useMemo,useState,type CSSProperties} from 'react';
 import {ArrowLeft,ArrowRight,Bookmark,CalendarDays,Check,ChevronDown,ChevronLeft,ChevronRight,Clock3,ExternalLink,Heart,Instagram,MapPin,MessageCircle,Send,ShieldCheck,Sparkles,X} from 'lucide-react';
 
-type StyleTag='All'|'Pink'|'Chrome'|'Floral'|'Black'|'Square'|'Stiletto'|'Almond'|'French'|'Graphic';
+type StyleTag='All'|'Pink'|'Blue'|'Chrome'|'Floral'|'Black'|'Square'|'Stiletto'|'Almond'|'French'|'Graphic';
 type Look={name:string;tags:StyleTag[]};
+// The order matches studio-01.svg through studio-09.svg, checked against each source photo.
 const LOOKS:Look[]=[
- {name:'Blush pink floral gilded tips',tags:['Pink','Floral','Stiletto']},
- {name:'Pearlescent gold stiletto nails',tags:['Pink','Chrome','Stiletto']},
- {name:'Monochrome graphic statement set',tags:['Black','Graphic','Square']},
- {name:'Playful striped graphic stilettos',tags:['Graphic','Stiletto']},
- {name:'Blue, tortoiseshell and gold artistry',tags:['Floral','Stiletto']},
- {name:'Silver crystal statement nails',tags:['Chrome','Stiletto']},
- {name:'Pink graphic French mix',tags:['Pink','Graphic','Stiletto']},
- {name:'Blue botanical floral designs',tags:['Floral','Almond']},
- {name:'Black pointed French tips',tags:['Black','French','Stiletto']},
+ {name:'Rose-gold floral stilettos',tags:['Pink','Floral','Stiletto']},
+ {name:'Silver crystal-encrusted stilettos',tags:['Chrome','Stiletto']},
+ {name:'Black French tips with silver cross',tags:['Black','French','Stiletto']},
+ {name:'Pink and lime animal-print stilettos',tags:['Pink','Graphic','Stiletto']},
+ {name:'Turquoise, tortoiseshell and gold nail art',tags:['Blue','Floral','Stiletto']},
+ {name:'Blue sculpted 3D floral nails',tags:['Blue','Floral','Almond']},
+ {name:'Chocolate teddy, ivory bone and lash art',tags:['Black','Graphic','Square']},
+ {name:'Pearlescent pink stilettos with gold tips',tags:['Pink','Chrome','Stiletto']},
+ {name:'Colourful striped and cartoon stilettos',tags:['Graphic','Stiletto']},
 ];
-const FILTERS:StyleTag[]=['All','Pink','Chrome','Floral','Black','Square','Stiletto','Almond','French','Graphic'];
+const FILTERS:StyleTag[]=['All','Pink','Blue','Chrome','Floral','Black','Square','Stiletto','Almond','French','Graphic'];
 const PHONE='26778348637';
 const TIKTOK='https://www.tiktok.com/@hernailtech';
 const RADAR='/#radar?search=Tlokweng%2C%20Metlhabeng';
 const messageLink=(text:string)=>'https://wa.me/'+PHONE+'?text='+encodeURIComponent(text);
+const DIRECT_BOOKING_URL=messageLink('Hi HER NAIL TECH! I found your nail studio through KAMPUS and would like to enquire about booking an appointment. Please let me know your availability before I send any deposit.');
 function pictureStyle(index:number):CSSProperties{
  // Each look is served from its own high-resolution source photograph.
  const number=String(index+1).padStart(2,'0');
@@ -64,7 +66,7 @@ export default function HerNailTechStorefront(){
  const openBooking=(design:number|null=selectedDesign)=>{
   const intro='Hi HER NAIL TECH! I would like to enquire about an appointment.';
   const msg=[intro,name.trim()?'My name: '+name.trim():'My name: [your name]',date?'Preferred date: '+date:'Preferred date: [your date]',design!==null?'Design: '+LOOKS[design].name:'Design: [please describe / attach a photo]','Soak-off needed: '+(soakOff?'Yes':'No'),'Please let me know if this date is available before I send any deposit.'].join('\n');
-  window.open(messageLink(msg),'_blank','noopener,noreferrer');
+  window.location.assign(messageLink(msg));
  };
  const share=async()=>{const url=window.location.href;try{if(navigator.share){await navigator.share({title:'HER NAIL TECH on KAMPUS',url});}else{await navigator.clipboard.writeText(url);setCopied(true);window.setTimeout(()=>setCopied(false),2500);}}catch{}};
  const jump=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -96,7 +98,7 @@ export default function HerNailTechStorefront(){
       <span className="rounded-full border border-[#d4bec8]/40 bg-black/35 px-3 py-2 text-xs">No walk-ins</span>
      </div>
      <div className="mt-6 flex w-full min-w-0 flex-wrap gap-2">
-      <button className={button+' bg-[#f7edf1] text-[#151015] hover:bg-white'} onClick={()=>jump('booking')}><MessageCircle size={17}/> Book on WhatsApp <ArrowRight size={16}/></button>
+      <a href={DIRECT_BOOKING_URL} target="_blank" rel="noopener noreferrer" className={button+' bg-[#f7edf1] text-[#151015] hover:bg-white'}><MessageCircle size={17}/> Book on WhatsApp <ArrowRight size={16}/></a>
       <Link className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} href={RADAR}><MapPin size={16}/> View location</Link>
       <button className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} onClick={()=>jump('lookbook')}>Explore gallery <ArrowRight size={16}/></button>
      </div>
@@ -163,7 +165,7 @@ export default function HerNailTechStorefront(){
   </div>
   <div className="fixed inset-x-0 bottom-0 z-30 w-full max-w-full border-t border-[#66545f] bg-[#0c0b0d]/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
    <div className="mx-auto flex w-full min-w-0 max-w-6xl gap-2">
-    <button className={button+' flex-1 bg-[#f4e9ef] px-3 text-[#181016]'} onClick={()=>jump('booking')}><MessageCircle size={18}/> Book <span className="hidden sm:inline">on WhatsApp</span></button>
+    <a href={DIRECT_BOOKING_URL} target="_blank" rel="noopener noreferrer" className={button+' flex-1 bg-[#f4e9ef] px-3 text-[#181016]'}><MessageCircle size={18}/> Book <span className="hidden sm:inline">on WhatsApp</span></a>
     <Link className={button+' flex-1 border border-[#a996a0] bg-[#1e181d] px-3'} href={RADAR}><MapPin size={18}/> Location</Link>
     <button className={button+' border border-[#a996a0] bg-[#1e181d] px-4'} onClick={save} aria-label={saved?'Remove saved storefront':'Save storefront'}><Heart size={18} fill={saved?'currentColor':'none'}/>{saved?'Saved':'Save'}</button>
    </div>
@@ -172,7 +174,7 @@ export default function HerNailTechStorefront(){
    <div className="relative my-auto w-full min-w-0 max-w-lg"><div className="mb-3 flex items-center justify-between gap-4"><div><p className="text-[11px] uppercase tracking-widest text-[#d6b8c7]">Look {selected+1} of {LOOKS.length}</p><h2 className="font-serif text-xl">{LOOKS[selected].name}</h2></div><button className="rounded-full border border-white/30 p-3" onClick={()=>setSelected(null)} aria-label="Close gallery"><X size={20}/></button></div>
     <div className="relative overflow-hidden rounded-3xl bg-[#1a1419]"><div className="aspect-[9/16] max-h-[70dvh] w-full" role="img" aria-label={LOOKS[selected].name} style={pictureStyle(selected)}/><div className="absolute inset-x-3 top-1/2 flex -translate-y-1/2 justify-between"><button className="rounded-full bg-black/65 p-3" aria-label="Previous look" onClick={()=>setSelected((selected+LOOKS.length-1)%LOOKS.length)}><ChevronLeft size={22}/></button><button className="rounded-full bg-black/65 p-3" aria-label="Next look" onClick={()=>setSelected((selected+1)%LOOKS.length)}><ChevronRight size={22}/></button></div></div>
     <div className="mt-3 flex flex-wrap gap-2">{LOOKS[selected].tags.map(tag=><span className="rounded-full border border-[#6c5562] px-3 py-1 text-xs" key={tag}>{tag}</span>)}</div>
-    <button className={button+' mt-4 w-full bg-[#f3e7ec] text-black'} onClick={()=>{const design=selected;setSelectedDesign(design);setSelected(null);window.setTimeout(()=>jump('booking'),50);}}><MessageCircle size={18}/> Enquire about this look</button>
+    <a href={messageLink('Hi HER NAIL TECH! I saw your '+LOOKS[selected].name+' design on KAMPUS and would like to enquire about booking a similar set. Please confirm availability before I send a deposit.')} target="_blank" rel="noopener noreferrer" className={button+' mt-4 w-full bg-[#f3e7ec] text-black'}><MessageCircle size={18}/> Enquire about this look</a>
    </div>
   </div>}
  </main>;
