@@ -115,7 +115,7 @@ export default function HerNailTechStorefront(){
      </div>
      <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
       {shown.map(({index,name})=><div key={index} className="relative min-w-0 overflow-hidden rounded-2xl border border-[#453b42] bg-[#201b22]">
-       <Photo index={index} className="aspect-[9/13] w-full" label={'Open '+name} onClick={()=>setSelected(index)}/>
+       <Photo index={index} className="aspect-[9/16] w-full" label={'Open '+name} onClick={()=>setSelected(index)}/>
        <div className="flex min-h-12 items-center justify-between gap-2 px-2.5 py-2"><span className="line-clamp-2 text-[11px] text-[#f0e9ed]">{name}</span><button aria-label={'Book '+name} className="shrink-0 rounded-full border border-white/20 p-2 hover:bg-white/10" onClick={()=>{setSelectedDesign(index);jump('booking');}}><ArrowRight size={15}/></button></div>
       </div>)}
      </div>
