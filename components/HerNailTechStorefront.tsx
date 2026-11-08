@@ -112,7 +112,7 @@ export default function HerNailTechStorefront(){
      </div>
      <div className="mt-6 flex flex-wrap gap-2">
       <button className={button+' bg-[#f7edf1] text-[#151015] hover:bg-white'} onClick={()=>jump('booking')}><MessageCircle size={17}/> Book on WhatsApp <ArrowRight size={16}/></button>
-      <a className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} href={RADAR}><MapPin size={16}/> View location</Link>
+      <Link className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} href={RADAR}><MapPin size={16}/> View location</Link>
       <button className={button+' border border-white/45 bg-black/40 hover:bg-white/10'} onClick={()=>jump('lookbook')}>Explore gallery <ArrowRight size={16}/></button>
      </div>
     </div>
@@ -171,7 +171,7 @@ export default function HerNailTechStorefront(){
      </section>
      <section className="rounded-3xl border border-white/10 bg-[#151215] p-5">
       <div className="flex gap-3"><ShieldCheck size={19} className="shrink-0 text-[#e5cbd7]"/><p className="text-xs leading-relaxed text-[#b9abb3]">Curated KAMPUS showcase based on HER NAIL TECH’s publicly shared information. Booking, availability, prices and payments are handled directly by the technician. This is not a verified owner-managed listing. Social counts are a snapshot from the supplied screenshots, not live totals.</p></div>
-      <a href={TIKTOK} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#e9d5df] hover:underline"><Instagram size={17}/> See @hernailtech on TikTok <ExternalLink size={14}/></Link>
+      <a href={TIKTOK} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#e9d5df] hover:underline"><Instagram size={17}/> See @hernailtech on TikTok <ExternalLink size={14}/></a>
      </section>
     </div>
    </div>
@@ -179,7 +179,7 @@ export default function HerNailTechStorefront(){
   <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#66545f] bg-[#0c0b0d]/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
    <div className="mx-auto flex max-w-6xl gap-2">
     <button className={button+' flex-1 bg-[#f4e9ef] px-3 text-[#181016]'} onClick={()=>jump('booking')}><MessageCircle size={18}/> Book <span className="hidden sm:inline">on WhatsApp</span></button>
-    <a className={button+' flex-1 border border-[#a996a0] bg-[#1e181d] px-3'} href={RADAR}><MapPin size={18}/> Location</Link>
+    <Link className={button+' flex-1 border border-[#a996a0] bg-[#1e181d] px-3'} href={RADAR}><MapPin size={18}/> Location</Link>
     <button className={button+' border border-[#a996a0] bg-[#1e181d] px-4'} onClick={save} aria-label={saved?'Remove saved storefront':'Save storefront'}><Heart size={18} fill={saved?'currentColor':'none'}/>{saved?'Saved':'Save'}</button>
    </div>
   </div>
