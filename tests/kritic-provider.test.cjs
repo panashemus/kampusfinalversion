@@ -12,6 +12,7 @@ require.extensions['.ts'] = (mod, filename) => {
   mod._compile(compiled.outputText, filename);
 };
 const {generateKriticReply,isKriticGreeting} = require('../lib/kritic-provider.ts');
+const {uploadPrivateKriticFile} = require('../lib/kritic-files.ts');
 const validReply = value => ({ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:value}]}}]})});
 const failure = status => ({ok:false,status,json:async()=>({error:{status:'UNAVAILABLE'}})});
 const base={
@@ -79,4 +80,27 @@ test('server uses the service-only refund RPC on failed generation and retains q
   assert.match(source,/SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(source,/generateKriticReply/);
   assert.match(source,/releaseUnsuccessfulReservation\(user\.id, bucket\)/);
+});
+
+test('10 MB files travel through the Gemini Files API rather than the generateContent JSON body',async()=>{
+ const seen=[];
+ const bytes=Buffer.from('%PDF-1.4\\nsynthetic coursework fixture');
+ const uploadUrl='https://generativelanguage.googleapis.com/upload/v1beta/files?upload_id=fixture';
+ const fakeFetch=async (url,options)=>{
+   seen.push({url,options});
+   if(seen.length===1) return {ok:true,headers:{get:()=>uploadUrl}};
+   return {ok:true,json:async()=>({file:{uri:'https://generativelanguage.googleapis.com/v1beta/files/mock',name:'files/mock',state:'ACTIVE'}})};
+ };
+ const result=await uploadPrivateKriticFile('test-placeholder',bytes,'application/pdf',fakeFetch);
+ assert.equal(result.name,'files/mock');
+ assert.equal(seen.length,2);
+ assert.match(seen[0].url,/upload\\/v1beta\\/files$/);
+ assert.equal(seen[0].options.headers['X-Goog-Upload-Header-Content-Length'],String(bytes.length));
+ assert.equal(seen[1].url,uploadUrl);
+ assert.equal(seen[1].options.headers['X-Goog-Upload-Command'],'upload, finalize');
+ assert.deepEqual(Buffer.from(seen[1].options.body),bytes);
+});
+test('Gemini Files API refuses unexpected upload URLs',async()=>{
+ const fakeFetch=async ()=>({ok:true,headers:{get:()=> 'http://untrusted.example/upload'}});
+ await assert.rejects(()=>uploadPrivateKriticFile('test-placeholder',Buffer.from('PDF'),'application/pdf',fakeFetch),/could not be started/);
 });
