@@ -311,7 +311,7 @@ export default function KampusKritic({
 
   const handleFilesSelected = async (files: File[]) => {
     if (!files.length) return;
-    if(files.length+pendingImages.length>2 || files.some(f=>!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)||f.size>262144)){toast({title:'Attachment limit',description:'Attach up to two JPEG, PNG, WebP or PDF files, each 256 KB or smaller.',variant:'destructive'});return;}
+    if(files.length+pendingImages.length>2 || files.some(f=>!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Attach up to two JPEG, PNG, WebP or PDF files, each 10 MB or smaller.',variant:'destructive'});return;}
     setUploadingImage(true);
 
     try {
@@ -394,7 +394,7 @@ export default function KampusKritic({
       id: `user-${Date.now()}`,
       role: 'user',
       content: textToSend || 'Attached file for academic review.',
-      images: attachedImages,
+      images: attachedImages.map(url => url.startsWith('data:application/pdf') ? 'kritic-file:PDF' : 'kritic-file:Image'),
       created_at: new Date().toISOString(),
     };
 
@@ -427,13 +427,30 @@ export default function KampusKritic({
       }
     }
 
+    const uploadedPaths: string[] = [];
     try {
+      if (attachedImages.length && !profile?.id) throw new Error('Sign in to attach coursework.');
+      // Keep large documents out of function requests, chat history and persisted messages.
+      for (const dataUrl of attachedImages) {
+        const match = /^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
+        if (!match) throw new Error('Invalid attachment format.');
+        const mimeType = match[1];
+        const bytes = Uint8Array.from(atob(match[2]), char => char.charCodeAt(0));
+        if (bytes.length > 10 * 1024 * 1024) throw new Error('Attachments must be 10 MB or smaller.');
+        const extension = mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/jpeg' ? 'jpg' : mimeType.split('/')[1];
+        const path = `${profile!.id}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from('kritic_attachments')
+          .upload(path, new Blob([bytes], { type: mimeType }), { contentType: mimeType, upsert: false });
+        if (uploadError) throw new Error('Your attachment could not be uploaded privately. Please retry.');
+        uploadedPaths.push(path);
+      }
       const res = await fetch('/api/kritic-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json',...await authHeaders() },
         body: JSON.stringify({
           promptText: textToSend,
-          images: attachedImages,
+          images: [],
+          filePaths: uploadedPaths,
           history: updatedMessages,
           sourcePostId,
           courseCode: profile?.course_code || '',
@@ -502,7 +519,7 @@ export default function KampusKritic({
             user_id: profile.id,
             role: 'user',
             content: userMsg.content,
-            images: attachedImages,
+            images: userMsg.images,
           });
           await supabase.from('kritic_messages').insert({
             chat_id: currentSessionId,
@@ -525,6 +542,8 @@ export default function KampusKritic({
         variant: 'destructive',
       });
     } finally {
+      // Server-side cleanup handles completed requests; this also covers failed sends.
+      if (uploadedPaths.length) void supabase.storage.from('kritic_attachments').remove(uploadedPaths);
       setSending(false);
     }
   };
@@ -537,7 +556,7 @@ export default function KampusKritic({
   return (
     <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
       {sourcePostId&&<div className="p-4 border-b border-gray-800 text-sm"><button className="text-pine min-h-11" onClick={()=>onReturnToSource?.(sourcePostId)}>← Return to the original discussion</button><p className="text-sage">Review the question before sending. Your critique stays private.</p>{sourceError&&<p role="alert" className="text-red-300">{sourceError}</p>}</div>}
-      <p className="px-4 py-2 text-xs text-sage">Service safety limit: up to 5 requests per account per UTC day, subject to the shared service budget and your current plan. Attachments: 2 files, 256 KB each.</p>
+      <p className="px-4 py-2 text-xs text-sage">Service safety limit: up to 20 requests per account per UTC day, subject to the shared service budget and your current plan. Attachments: 2 files, 10 MB each.</p>
       {/* Minimal, Clean Sub-Row */}
       <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
         <button
@@ -741,13 +760,13 @@ export default function KampusKritic({
                 {m.images && m.images.length > 0 && (
                   <div className="grid grid-cols-2 gap-2">
                     {m.images.map((fileUrl, i) =>
-                      fileUrl.startsWith('data:application/pdf') ? (
+                      (fileUrl.startsWith('data:application/pdf') || fileUrl.startsWith('kritic-file:')) ? (
                         <div
                           key={i}
                           className="col-span-2 p-2.5 rounded-xl bg-ink border border-gray-800 flex items-center gap-2 text-white text-xs font-bold"
                         >
                           <FileText className="w-4 h-4 text-pine shrink-0" />
-                          <span>Attached PDF Document</span>
+                          <span>{fileUrl === 'kritic-file:Image' ? 'Attached image' : 'Attached PDF Document'}</span>
                         </div>
                       ) : (
                         <SecureImage
