@@ -7,7 +7,7 @@ const hub=fs.readFileSync('components/HustleHub.tsx','utf8');
 const guest=fs.readFileSync('components/GuestPreview.tsx','utf8');
 const radar=fs.readFileSync('components/RadarMap.tsx','utf8');
 const member=fs.readFileSync('components/MemberApp.tsx','utf8');
-const asset=fs.readFileSync('public/images/her-nail-tech/lookbook.svg','utf8');
+const asset=fs.readFileSync('public/images/her-nail-tech/portfolio-refresh.svg','utf8');
 
 test('studio storefront is reachable from member and guest Hustle Hub',()=>{
  assert.match(route,/HerNailTechStorefront/);
@@ -15,11 +15,11 @@ test('studio storefront is reachable from member and guest Hustle Hub',()=>{
  assert.match(guest,/store\/her-nail-tech/);
 });
 
-test('lookbook uses 24 cropped source references, without visible view counts',()=>{
- assert.equal((store.match(/\{name:'[^']+',tags:/g)||[]).length,24);
+test('lookbook uses nine refreshed nail photos, without visible view counts',()=>{
+ assert.equal((store.match(/\{name:'[^']+',tags:/g)||[]).length,9);
  assert.match(asset,/data:image\/webp;base64,UklGR/);
  assert.doesNotMatch(asset,/TikTok|Following|2,489|views/);
- assert.match(store,/600% 400%/);
+ assert.match(store,/300% 300%/);
 });
 
 test('booking never requests payment before confirmation and routes directly to technician',()=>{
