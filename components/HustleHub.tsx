@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import SecureImage from './SecureImage';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -278,7 +279,7 @@ export default function HustleHub({
         
         {/* Curated storefront: separate from student-owned Supabase listings. */}
         {!selectedListingId && (activeFilter === 'All' || activeFilter === 'Beauty') && (!searchQuery.trim() || /her|nail|beauty|salon|tlokweng/i.test(searchQuery)) && (
-          <a href="/store/her-nail-tech" className="group mb-4 block overflow-hidden rounded-3xl border border-[#8c6c7b]/60 bg-[radial-gradient(ellipse_at_90%_0%,#4d3545,#130f13_68%)] text-white shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#efdeea]">
+          <Link href="/store/her-nail-tech" className="group mb-4 block overflow-hidden rounded-3xl border border-[#8c6c7b]/60 bg-[radial-gradient(ellipse_at_90%_0%,#4d3545,#130f13_68%)] text-white shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#efdeea]">
             <div className="flex items-stretch gap-3 p-4 sm:gap-5 sm:p-5">
               <div className="h-32 w-28 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-[#37252e] sm:h-36 sm:w-36">
                 <div className="h-full w-full transition-transform duration-300 group-hover:scale-105" style={{backgroundImage:"url('/images/her-nail-tech/lookbook.svg')",backgroundSize:'600% 400%',backgroundPosition:'20% 0%'}} role="img" aria-label="Nail designs from HER NAIL TECH"/>
@@ -291,7 +292,7 @@ export default function HustleHub({
                 <span className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-[#f7e4ed]">Enter the storefront <span aria-hidden="true">→</span></span>
               </div>
             </div>
-          </a>
+          </Link>
         )}
 
         {/* STATIC LIST GIG BUTTON */}
