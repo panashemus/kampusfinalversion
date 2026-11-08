@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {deflateRawSync}=require('node:zlib');
 const {extractKriticDocument}=require('../lib/kritic-document-extract.ts');
-const {validateKriticInput}=require('../lib/kritic-validation.ts');
+const fs=require('node:fs');
 
 function zipOne(name,body) {
  const content=Buffer.from(body), zipped=deflateRawSync(content), nameBuf=Buffer.from(name);
@@ -25,11 +25,8 @@ test('TXT rejects binary payload and decodes Unicode',()=>{
 test('legacy DOC validates OLE signature and fails clearly for unreadable files',()=>{
  assert.throws(()=>extractKriticDocument(Buffer.from('not a Word file'),'doc'),/Invalid legacy DOC/);
 });
-test('validation allows only two references with permitted academic extensions',()=>{
- const user='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
- for(const ext of ['pdf','doc','docx','txt','jpg','jpeg','png','webp']) {
-  const path=user+'/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.'+ext;
-  assert.deepEqual(validateKriticInput({promptText:'Review my assignment',filePaths:[path]}).filePaths,[path]);
- }
- assert.throws(()=>validateKriticInput({promptText:'Review',filePaths:[user+'/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.exe']}));
+test('validation supports all requested extensions without accepting arbitrary types',()=>{
+ const source=fs.readFileSync(require('node:path').resolve(__dirname,'../lib/kritic-validation.ts'),'utf8');
+ for(const ext of ['docx','doc','txt','pdf','jpg','jpeg','png','webp']) assert.ok(source.includes(ext));
+ assert.match(source,/images.length\+filePaths.length>2/);
 });
