@@ -1,43 +1,51 @@
 /**
- * Temporary provider investigation. Logs only status codes, timings, and error classes.
- * Never logs or stores credentials, student work, or provider response text.
+ * Opt-in live provider smoke test. This uses only synthetic test input and
+ * does NOT use a student's identity, documents, auth token or quota budget.
+ * Logs no API key, private text or model completion.
  */
-const key=process.env.GEMINI_API_KEY;
-if(!key){ console.error('[Kritic probe] GEMINI_API_KEY missing');process.exit(1); }
-const models=['gemini-3.6-flash','gemini-3.7-flash','gemini-3.5-flash-lite'];
-const api='https://generativelanguage.googleapis.com/v1beta/models/';
-async function probe(label, url, init, timeout=12000) {
-  const started=Date.now();
+import fs from 'node:fs';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+
+const require=createRequire(import.meta.url);
+const typescript=require('typescript');
+const originalLoader=require.extensions['.ts'];
+require.extensions['.ts']=(module,filename)=>{
+  const code=fs.readFileSync(filename,'utf8');
+  const compiled=typescript.transpileModule(code,{
+    compilerOptions:{module:typescript.ModuleKind.CommonJS,target:typescript.ScriptTarget.ES2022},
+    fileName:filename,
+  });
+  module._compile(compiled.outputText,filename);
+};
+const dirname=path.dirname(fileURLToPath(import.meta.url));
+const {buildBotswanaKriticInstruction}=require(path.join(dirname,'../lib/botswana-kritic.ts'));
+const {generateKriticReply,isKriticGreeting}=require(path.join(dirname,'../lib/kritic-provider.ts'));
+require.extensions['.ts']=originalLoader;
+
+const apiKey=process.env.GEMINI_API_KEY;
+const primaryModel=process.env.KRITIC_MODEL;
+if(!apiKey||!primaryModel){console.error('[Kritic live smoke] Provider credentials not configured by name.');process.exit(1);}
+const systemInstruction=buildBotswanaKriticInstruction({institution:'UB (synthetic test context)',programme:'BSc Computer Science'});
+const samples=[
+  {label:'Casual greeting',prompt:'ey monna'},
+  {label:'Academic feedback',prompt:'Review this fictional sample paragraph, explaining one weakness: "Solar energy is important for Botswana because it is very important and everybody agrees."'},
+];
+for(const sample of samples){
+  const start=Date.now();
   try{
-    const result=await fetch(url,{...init,headers:{'x-goog-api-key':key,'Content-Type':'application/json'},signal:AbortSignal.timeout(timeout)});
-    let statusCode='';
-    try {const data=await result.json();statusCode=String(data?.error?.status||'');if(result.ok && label.startsWith('POST')){const reply=data?.candidates?.[0]?.content?.parts?.filter(x=>typeof x.text==='string'&&!x.thought).map(x=>x.text).join(' ').trim();statusCode=reply?'valid-text':'no-visible-text';}}
-    catch{}
-    console.log('[Kritic probe] '+label+' HTTP='+result.status+' result='+statusCode+' elapsed='+Math.round((Date.now()-started)/1000)+'s');
-    return result.ok && (label.startsWith('GET')||statusCode==='valid-text');
+    const result=await generateKriticReply({
+      apiKey,primaryModel,systemInstruction,
+      contents:[{role:'user',parts:[{text:sample.prompt}]}],
+      greeting:isKriticGreeting(sample.prompt),
+      logger:(event,model,reason)=>console.warn('[Kritic live smoke]',sample.label,event,model,reason),
+    });
+    if(!result.reply.trim())throw new Error('Empty response');
+    console.log('[Kritic live smoke]',sample.label,'PASS model='+result.model,'fallback='+result.fallbackUsed,'seconds='+Math.round((Date.now()-start)/1000));
   }catch(error){
-    console.log('[Kritic probe] '+label+' error='+String(error?.name||'unknown')+' elapsed='+Math.round((Date.now()-started)/1000)+'s');
-    return false;
+    console.error('[Kritic live smoke]',sample.label,'FAIL '+String(error?.name||'Unknown'));
+    process.exit(1);
   }
 }
-const tests=[];
-for(const model of models){
- const get=await probe('GET '+model,api+model,{method:'GET'},8000);
- tests.push(get);
- if(get){
-  const post=await probe('POST '+model,api+model+':generateContent',{
-    method:'POST',
-    body:JSON.stringify({
-     contents:[{role:'user',parts:[{text:'ey monna'}]}],
-     systemInstruction:{parts:[{text:'Reply naturally, briefly to a greeting from a student in Botswana.'}]},
-     generationConfig:{maxOutputTokens:384,thinkingConfig:{thinkingLevel:model.includes('3.8')?'low':'minimal'}}
-    })
-  },16000);
-  tests.push(post);
- }
-}
-if(!tests.some((x,i)=>i%2===1&&x)){
- console.error('[Kritic probe] No successful generation via provider; build blocked.');
- process.exit(1);
-}
-console.log('[Kritic probe] At least one provider model generated a reply.');
+console.log('[Kritic live smoke] Both official API requests returned user-visible text.');
