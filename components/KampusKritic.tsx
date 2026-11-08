@@ -319,7 +319,14 @@ export default function KampusKritic({
         (file) =>
           new Promise<string>((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
+            reader.onload = () => {
+              const ext = file.name.split('.').pop()?.toLowerCase();
+              const mime = ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                : ext === 'doc' ? 'application/msword' : ext === 'txt' ? 'text/plain'
+                : ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png'
+                : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+              resolve(String(reader.result).replace(/^data:[^;]*;base64,/, 'data:' + mime + ';base64,'));
+            };
             reader.readAsDataURL(file);
           })
       );
