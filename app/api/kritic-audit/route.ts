@@ -5,6 +5,7 @@ import { validateKriticInput } from '@/lib/kritic-validation';
 import { buildBotswanaKriticInstruction } from '@/lib/botswana-kritic';
 import { generateKriticReply, isKriticGreeting, type GeminiContent } from '@/lib/kritic-provider';
 import { uploadPrivateKriticFile, deletePrivateKriticFiles } from '@/lib/kritic-files';
+import { extractKriticDocument } from '@/lib/kritic-document-extract';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -92,8 +93,9 @@ export async function POST(req: Request) {
         if (error || !file) throw new HttpError(400, 'Could not read your private attachment. Reattach it and retry.');
         const bytes = Buffer.from(await file.arrayBuffer());
         const extension = path.split('.').at(-1)?.toLowerCase();
-        const mimeType = extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : 'image/jpeg';
-        const valid =
+        const mimeType = extension === 'pdf' ? 'application/pdf' : extension === 'png' ? 'image/png' : extension === 'webp' ? 'image/webp' : extension === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : extension === 'doc' ? 'application/msword' : extension === 'txt' ? 'text/plain' : 'image/jpeg';
+        const isTextDocument = ['docx','doc','txt'].includes(extension || '');
+        const valid = isTextDocument ? true :
           mimeType === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-' :
           mimeType === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) :
           mimeType === 'image/jpeg' ? bytes[0] === 255 && bytes[1] === 216 :
@@ -101,7 +103,14 @@ export async function POST(req: Request) {
         if (!valid || bytes.length === 0 || bytes.length > privateMaxBytes) {
           throw new HttpError(400, 'An attachment is invalid or exceeds 10 MB.');
         }
-        privateFiles.push({ bytes, mimeType });
+        if (isTextDocument) {
+          try {
+            const extracted = extractKriticDocument(bytes, extension!);
+            parts.push({ text: `Uploaded ${extension?.toUpperCase()} coursework (extracted text; formatting may be simplified):\n${extracted}` });
+          } catch (cause) {
+            throw new HttpError(400, cause instanceof Error ? cause.message : 'Document could not be read.');
+          }
+        } else privateFiles.push({ bytes, mimeType });
       }
     }
 

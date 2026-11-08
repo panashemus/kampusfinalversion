@@ -311,7 +311,7 @@ export default function KampusKritic({
 
   const handleFilesSelected = async (files: File[]) => {
     if (!files.length) return;
-    if(files.length+pendingImages.length>2 || files.some(f=>!['image/jpeg','image/png','image/webp','application/pdf'].includes(f.type)||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Attach up to two JPEG, PNG, WebP or PDF files, each 10 MB or smaller.',variant:'destructive'});return;}
+    if(files.length+pendingImages.length>2 || files.some(f=>!['jpg','jpeg','png','webp','pdf','docx','doc','txt'].includes(f.name.split('.').pop()?.toLowerCase()||'')||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Attach up to two PDF, DOCX, DOC, TXT, JPEG, PNG or WebP files, each 10 MB or smaller.',variant:'destructive'});return;}
     setUploadingImage(true);
 
     try {
@@ -319,7 +319,14 @@ export default function KampusKritic({
         (file) =>
           new Promise<string>((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result));
+            reader.onload = () => {
+              const ext = file.name.split('.').pop()?.toLowerCase();
+              const mime = ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                : ext === 'doc' ? 'application/msword' : ext === 'txt' ? 'text/plain'
+                : ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png'
+                : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+              resolve(String(reader.result).replace(/^data:[^;]*;base64,/, 'data:' + mime + ';base64,'));
+            };
             reader.readAsDataURL(file);
           })
       );
@@ -343,7 +350,7 @@ export default function KampusKritic({
     for (let i = 0; i < items.length; i++) {
       if (
         items[i].type.startsWith('image/') ||
-        items[i].type === 'application/pdf'
+        ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain'].includes(items[i].type)
       ) {
         const f = items[i].getAsFile();
         if (f) files.push(f);
@@ -394,7 +401,7 @@ export default function KampusKritic({
       id: `user-${Date.now()}`,
       role: 'user',
       content: textToSend || 'Attached file for academic review.',
-      images: attachedImages.map(url => url.startsWith('data:application/pdf') ? 'kritic-file:PDF' : 'kritic-file:Image'),
+      images: attachedImages.map(url => url.startsWith('data:image/') ? 'kritic-file:Image' : 'kritic-file:Document'),
       created_at: new Date().toISOString(),
     };
 
@@ -432,12 +439,12 @@ export default function KampusKritic({
       if (attachedImages.length && !profile?.id) throw new Error('Sign in to attach coursework.');
       // Keep large documents out of function requests, chat history and persisted messages.
       for (const dataUrl of attachedImages) {
-        const match = /^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
+        const match = /^data:(image\/(?:png|jpeg|webp)|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|text\/plain|application\/octet-stream);base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
         if (!match) throw new Error('Invalid attachment format.');
         const mimeType = match[1];
         const bytes = Uint8Array.from(atob(match[2]), char => char.charCodeAt(0));
         if (bytes.length > 10 * 1024 * 1024) throw new Error('Attachments must be 10 MB or smaller.');
-        const extension = mimeType === 'application/pdf' ? 'pdf' : mimeType === 'image/jpeg' ? 'jpg' : mimeType.split('/')[1];
+        const extension = mimeType === 'application/pdf' ? 'pdf' : mimeType === 'application/msword' ? 'doc' : mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? 'docx' : mimeType === 'text/plain' ? 'txt' : mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'application/octet-stream' ? 'doc' : mimeType.split('/')[1];
         const path = `${profile!.id}/${crypto.randomUUID()}.${extension}`;
         const { error: uploadError } = await supabase.storage.from('kritic_attachments')
           .upload(path, new Blob([bytes], { type: mimeType }), { contentType: mimeType, upsert: false });
@@ -766,7 +773,7 @@ export default function KampusKritic({
                           className="col-span-2 p-2.5 rounded-xl bg-ink border border-gray-800 flex items-center gap-2 text-white text-xs font-bold"
                         >
                           <FileText className="w-4 h-4 text-pine shrink-0" />
-                          <span>{fileUrl === 'kritic-file:Image' ? 'Attached image' : 'Attached PDF Document'}</span>
+                          <span>{fileUrl === 'kritic-file:Image' ? 'Attached image' : 'Attached document'}</span>
                         </div>
                       ) : (
                         <SecureImage
@@ -813,10 +820,10 @@ export default function KampusKritic({
                 key={idx}
                 className="relative w-14 h-14 rounded-xl overflow-hidden border border-pine/50 bg-ink flex items-center justify-center shrink-0"
               >
-                {fileUrl.startsWith('data:application/pdf') ? (
+                {!fileUrl.startsWith('data:image/') ? (
                   <div className="flex flex-col items-center gap-0.5 text-pine">
                     <FileText className="w-5 h-5" />
-                    <span className="text-[9px] font-black">PDF</span>
+                    <span className="text-[9px] font-black">FILE</span>
                   </div>
                 ) : (
                   <SecureImage
@@ -843,7 +850,7 @@ export default function KampusKritic({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,application/pdf"
+            accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.webp"
             multiple
             className="hidden"
             onChange={(e) => {
