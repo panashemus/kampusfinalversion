@@ -95,9 +95,7 @@ export default function HerNailTechStorefront(){
     <div className="pointer-events-none absolute -right-5 top-12 h-56 w-48 rotate-[-12deg] opacity-50 blur-[1px] sm:right-12 sm:h-72 sm:w-60"><span className="block h-full w-full rounded-3xl" style={pictureStyle(14)}/></div>
     <div className="relative z-10 max-w-3xl">
      <div className="flex items-start gap-4 sm:gap-6">
-      <div className="grid h-20 w-20 shrink-0 place-content-center rounded-full border border-[#d2b9c6]/60 bg-[radial-gradient(circle,#40343d,#0a090b_78%)] text-center shadow-[0_0_32px_rgba(233,201,216,.17)] sm:h-28 sm:w-28">
-       <span className="font-serif text-[9px] italic text-[#e6d8df] sm:text-[12px]">Her</span><span className="font-serif text-xl leading-5 tracking-tight sm:text-3xl sm:leading-7">NAIL</span><span className="text-[8px] tracking-[.33em] text-[#d9c7d0]">TECH</span>
-      </div>
+      <div role="img" aria-label="HER NAIL TECH official TikTok profile logo" className="h-20 w-20 shrink-0 rounded-full border border-[#d2b9c6]/60 bg-black shadow-[0_0_32px_rgba(233,201,216,.17)] sm:h-28 sm:w-28" style={{backgroundImage:"url('/images/her-nail-tech/logo.svg')",backgroundSize:'cover',backgroundPosition:'center'}}/>
       <div className="min-w-0">
        <p className="mb-1 text-[10px] uppercase tracking-[.2em] text-[#e4c8d5]">Independent nail studio · Tlokweng</p>
        <h1 className="font-serif text-3xl leading-tight tracking-[-.035em] sm:text-5xl">HER NAIL TECH <span className="text-[#eddae3]">♡</span></h1>
