@@ -3,7 +3,7 @@ UPDATE storage.buckets SET
  allowed_mime_types=ARRAY[
  'application/pdf','image/png','image/jpeg','image/webp',
  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
- 'application/msword','text/plain','application/octet-stream'
+ 'application/msword' ,'text/plain'
  ]::text[],
  file_size_limit=10485760,
  public=false
