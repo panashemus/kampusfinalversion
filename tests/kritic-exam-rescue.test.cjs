@@ -56,7 +56,7 @@ test('server checks verified student and course before reserving or uploading',(
   const reserveIndex=route.indexOf("rpc('reserve_kritic_request')");
   assert.ok(courseIndex>0 && courseIndex<uploadIndex && courseIndex<reserveIndex);
   assert.match(route,/buildExamRescueInstruction/);
-  assert.match(route,/kindLabel\(file.kind\)/);
+  assert.match(route,/kindLabel\(privateFiles\[index\]\.kind\)/);
   assert.match(route,/totalAttachmentBytes > KRITIC_MAX_TOTAL_BYTES/);
   assert.match(route,/greeting: false/);
 });
