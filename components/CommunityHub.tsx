@@ -1,7 +1,7 @@
 'use client';
 import SecureImage from './SecureImage';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2, Megaphone, UserRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
@@ -79,6 +79,10 @@ export default function CommunityHub({
   const [posts, setPosts] = useState<EnhancedCommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError,setLoadError]=useState('');
+  // Never unmount the visible feed during realtime updates, polling or voting.
+  // Doing so destroys active comment inputs and causes the blank-page flash.
+  const hasLoadedFeedRef = useRef(false);
+  const latestFeedRequestRef = useRef(0);
   const [page,setPage]=useState(0);
   const [publicPost,setPublicPost]=useState(false);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
@@ -98,12 +102,20 @@ export default function CommunityHub({
   const myName = profile ? (profile.username ? `@${profile.username}` : profile.email.split('@')[0]) : 'student';
 
   const loadPosts = useCallback(async () => {
-    setLoading(true);setLoadError('');
+    const requestId = ++latestFeedRequestRef.current;
+    // A skeleton belongs only to the FIRST load. Afterward, keep posts and
+    // draft inputs mounted while refreshed data arrives in the background.
+    if (!hasLoadedFeedRef.current) { setLoading(true);setLoadError(''); }
     let query=supabase.from('feed_preview').select('*').order('created_at',{ascending:false});
     if(selectedPostId)query=query.eq('id',selectedPostId);
     if(searchQuery.trim())query=query.ilike('text','%'+searchQuery.trim().replace(/[\%_]/g,'')+'%');
     const {data,error}=await query.range(page*40,page*40+39);
-    if(error||!data){setLoadError('The feed could not be loaded. Please try again.');setLoading(false);return;}
+    if(requestId !== latestFeedRequestRef.current) return;
+    if(error||!data){
+      if(!hasLoadedFeedRef.current){setLoadError('The feed could not be loaded. Please try again.');setLoading(false);}
+      // A temporary background error must not erase the existing feed or draft.
+      return;
+    }
     const postRows = data as FeedPostRow[];
 
     const { data: commentData } = await supabase
@@ -147,7 +159,11 @@ export default function CommunityHub({
         images: p.images ?? [],
       };
     });
+    // Ignore slower obsolete responses, e.g. overlapping realtime and polling refreshes.
+    if(requestId !== latestFeedRequestRef.current) return;
+    hasLoadedFeedRef.current=true;
     setPosts(mapped);
+    setLoadError('');
     setLoading(false);
   }, [selectedPostId,searchQuery,page]);
 
@@ -195,20 +211,29 @@ export default function CommunityHub({
     }
   };
 
-  const addComment = async (postId: string, comment: Comment) => {
-    if (!profile) return;
+  const addComment = async (postId: string, comment: Comment): Promise<boolean> => {
+    if (!profile) return false;
     
     const targetPost = posts.find((p) => p.id === postId);
     const isPostAnon = targetPost?.is_anonymous ?? false;
 
-    const {error}=await supabase.from('feed_comments').insert({
-      post_id: postId,
-      user_id: profile.id,
-      author_name: isPostAnon ? 'Anonymous' : myName,
-      is_anonymous: isPostAnon,
-      text: comment.text,
-    });
-    if(error)toast({title:"Reply not saved",description:"Please try again.",variant:"destructive"});else await loadPosts();
+    try {
+      const {error}=await supabase.from('feed_comments').insert({
+        post_id: postId,
+        user_id: profile.id,
+        author_name: isPostAnon ? 'Anonymous' : myName,
+        is_anonymous: isPostAnon,
+        text: comment.text,
+      });
+      if(error) throw error;
+      // Inserting the comment is the success condition. A later feed refresh
+      // failure must not mislead the student into posting the same reply twice.
+      void loadPosts().catch(() => undefined);
+      return true;
+    } catch {
+      toast({title:"Reply not saved",description:"Please try again. Your draft is still here.",variant:"destructive"});
+      return false;
+    }
   };
 
   const deletePost = async (postId: string) => {
