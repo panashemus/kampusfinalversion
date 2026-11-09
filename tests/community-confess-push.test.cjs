@@ -15,6 +15,8 @@ test('question and confession have distinct server-enforced privacy modes',()=>{
  assert.match(feed,/post_kind: isAnonymous \? 'confession' : 'question'/);
  assert.match(sql,/NEW\.is_anonymous := \(NEW\.post_kind='confession'\)/);
  assert.match(sql,/Post type cannot be changed after publishing/);
+ assert.match(sql,/coalesce\(NEW\.post_kind,CASE WHEN coalesce\(NEW\.is_anonymous,false\) THEN 'confession' ELSE 'question' END\)/);
+ assert.match(sql,/ALTER COLUMN post_kind DROP DEFAULT/);
  assert.match(sql,/CREATE TRIGGER feed_post_kind_privacy BEFORE INSERT OR UPDATE/);
 });
 
