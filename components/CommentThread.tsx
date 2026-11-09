@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Send, Trash2, User } from 'lucide-react';
+import SecureImage from '@/components/SecureImage';
 import type { Comment } from '@/lib/types';
 
 export default function CommentThread({
@@ -53,8 +54,8 @@ export default function CommentThread({
                       <User className="w-3 h-3 text-sage" strokeWidth={1.75} aria-hidden="true" />
                     </div>
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0 mt-0.5">
-                      <User className="w-3 h-3 text-sage" strokeWidth={2} />
+                    <div className="w-6 h-6 overflow-hidden rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0 mt-0.5">
+                      {c.avatarUrl ? <SecureImage src={c.avatarUrl} alt={c.author+"'s profile picture"} className="h-full w-full rounded-full object-cover" /> : <User className="w-3 h-3 text-sage" strokeWidth={2} />}
                     </div>
                   )}
                   
@@ -64,7 +65,7 @@ export default function CommentThread({
                         <span className="text-zinc-300 text-xs font-bold">Anonymous</span>
                       ) : (
                         <button 
-                          onClick={() => onAuthorClick?.(c.author, c.authorId)}
+                          onClick={() => { if(c.authorId)onAuthorClick?.(c.author, c.authorId); }}
                           className="text-white text-xs font-bold hover:text-pine transition-colors"
                         >
                           {c.author}
@@ -76,7 +77,7 @@ export default function CommentThread({
                   </div>
                 </div>
                 
-                {currentUserId && c.authorId === currentUserId && onDelete && (
+                {currentUserId && (c.authorId === currentUserId || c.isOwner) && onDelete && (
                   <button 
                     onClick={() => onDelete(c.id)} 
                     className="p-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
