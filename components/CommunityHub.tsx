@@ -217,19 +217,23 @@ export default function CommunityHub({
     const targetPost = posts.find((p) => p.id === postId);
     const isPostAnon = targetPost?.is_anonymous ?? false;
 
-    const {error}=await supabase.from('feed_comments').insert({
-      post_id: postId,
-      user_id: profile.id,
-      author_name: isPostAnon ? 'Anonymous' : myName,
-      is_anonymous: isPostAnon,
-      text: comment.text,
-    });
-    if(error){
+    try {
+      const {error}=await supabase.from('feed_comments').insert({
+        post_id: postId,
+        user_id: profile.id,
+        author_name: isPostAnon ? 'Anonymous' : myName,
+        is_anonymous: isPostAnon,
+        text: comment.text,
+      });
+      if(error) throw error;
+      // Inserting the comment is the success condition. A later feed refresh
+      // failure must not mislead the student into posting the same reply twice.
+      void loadPosts().catch(() => undefined);
+      return true;
+    } catch {
       toast({title:"Reply not saved",description:"Please try again. Your draft is still here.",variant:"destructive"});
       return false;
     }
-    await loadPosts();
-    return true;
   };
 
   const deletePost = async (postId: string) => {
