@@ -182,7 +182,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
             const title =
               notif.type === 'message' ? 'New Message' : notif.type === 'comment' ? 'New Reply' : notif.title;
             toast({ title, description: notif.body });
-            if (notif.type !== 'push_test') fireSystemNotification(title, notif.body);
+            // OS lock-screen notifications are delivered by the push service worker; avoid duplicates here.
           }
         }
       )
@@ -646,9 +646,10 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                           if (n.type === 'message') {
                             setChatInboxOpen(true);
                             setIsNotifOpen(false);
-                          } else if (n.type === 'comment') {
-                            setActiveView('community');
+                          } else if (n.type === 'comment' || n.type === 'post') {
                             setIsNotifOpen(false);
+                            // Jump directly to the discussion rather than just reopening the feed.
+                            onNavigate({ module: 'community', post: n.reference_id && /^[0-9a-f-]{36}$/i.test(n.reference_id) ? n.reference_id : undefined });
                           }
                         }}
                       >
