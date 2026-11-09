@@ -75,7 +75,7 @@ test('exam interface prompts for separate graded work and lecture material',()=>
   assert.match(intake,/onFiles\(Array.from\(e.target.files\),'lecture_material'\)/);
   assert.match(kritic,/fileKinds:attachedKinds/);
   assert.match(kritic,/validateKriticPrompt\(/);
-  assert.match(kritic,/No pass|No exam|guarantee/i);
+  assert.match(intake,/No pass|No exam|guarantee/i);
 });
 test('exam model guidance separates observed and inferred weaknesses and avoids grade predictions',()=>{
   assert.match(prompt,/CONFIRMED/);
