@@ -75,7 +75,7 @@ export function buildExamRescueInstruction(): string {
     'Required response for adequate supplied evidence:',
     '## Exam Rescue overview — the evidence you reviewed and a 2-3 sentence assessment, with boundaries.',
     '## Your demonstrated strengths — 2-4 specific, correctly evidenced examples.',
-    '## Weakness map — table or ranked list: topic; evidence and source; CONFIRMED or INFERRED; explanation of mistake; corrective action.',
+    '## Weakness map — compact ranked list (no Markdown tables): topic; evidence and source; CONFIRMED or INFERRED; explanation of mistake; corrective action.',
     '## What to revise first — 3-6 priorities, grounded in the materials, with an achievable order and study technique.',
     '## Your revision timetable — if an exam date is supplied and future, map tasks to the actual days available; otherwise provide a flexible 48-hour emergency plan, with breaks and realistic scope.',
     '## Practice exam — write 3-5 original topic-aligned questions of mixed difficulty, including at least one checking a proven weak area. Do not claim these are leaked, predicted or official exam questions.',
