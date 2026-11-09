@@ -24,6 +24,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { supabase,authHeaders } from '@/lib/supabase';
+import KriticExamIntake from '@/components/KriticExamIntake';
+import { KRITIC_MAX_FILES,KRITIC_MAX_TOTAL_BYTES,validateKriticPrompt,type KriticMode,type KriticFileKind } from '@/lib/kritic-intake';
 
 import {
   classifyUniversity,
@@ -57,6 +59,7 @@ const PROMPT_STARTERS = [
   'Convert these lecture notes into presentation slide points:',
   'Draft a formal email to my lecturer regarding my continuous assessment mark:',
 ];
+const EXAM_STARTERS = ['help me pass','Find the weak areas in my marked work and lecture slides','quiz me','Make a revision plan for the topics I am struggling with'];
 
 function renderInlineBold(text: string, isUser: boolean) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -173,7 +176,12 @@ export default function KampusKritic({
   const [sourceError,setSourceError]=useState('');
   useEffect(()=>{if(!sourcePostId)return;const controller=new AbortController();setSourceError('');
   (async()=>{try{const res=await fetch('/api/interconnect/source?post='+sourcePostId,{headers:await authHeaders(),signal:controller.signal});const body=await res.json();if(!res.ok)throw new Error(body.error);setInput(body.text);setActiveSessionId(null);setMessages([]);}catch(e){if(!controller.signal.aborted)setSourceError(e instanceof Error?e.message:'Source unavailable.');}})();return()=>controller.abort();},[sourcePostId]);
+  const [mode,setMode]=useState<KriticMode>(sourcePostId?'coursework_review':'exam_rescue');
+  const [examTopic,setExamTopic]=useState('');
+  const [examDate,setExamDate]=useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [pendingKinds,setPendingKinds]=useState<KriticFileKind[]>([]);
+  const [pendingNames,setPendingNames]=useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -309,16 +317,18 @@ export default function KampusKritic({
     });
   };
 
-  const handleFilesSelected = async (files: File[]) => {
+  const handleFilesSelected = async (files: File[],kind:KriticFileKind='other') => {
     if (!files.length) return;
-    if(files.length+pendingImages.length>2 || files.some(f=>!['jpg','jpeg','png','webp','pdf','docx','doc','txt'].includes(f.name.split('.').pop()?.toLowerCase()||'')||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Attach up to two PDF, DOCX, DOC, TXT, JPEG, PNG or WebP files, each 10 MB or smaller.',variant:'destructive'});return;}
+    const currentBytes=pendingImages.reduce((sum,url)=>sum+Math.floor((url.split(',')[1]?.length||0)*0.75),0);
+    if(files.length+pendingImages.length>KRITIC_MAX_FILES || currentBytes+files.reduce((sum,file)=>sum+file.size,0)>KRITIC_MAX_TOTAL_BYTES || files.some(f=>!['jpg','jpeg','png','webp','pdf','docx','doc','txt'].includes(f.name.split('.').pop()?.toLowerCase()||'')||f.size===0||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Up to 4 PDF, DOCX, DOC, TXT, JPEG, PNG or WebP files; 10 MB each and 25 MB combined.',variant:'destructive'});return;}
     setUploadingImage(true);
 
     try {
       const base64Promises = files.map(
         (file) =>
-          new Promise<string>((resolve) => {
+          new Promise<string>((resolve,reject) => {
             const reader = new FileReader();
+            reader.onerror=()=>reject(new Error('Could not read the file.'));
             reader.onload = () => {
               const ext = file.name.split('.').pop()?.toLowerCase();
               const mime = ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -332,6 +342,8 @@ export default function KampusKritic({
       );
       const dataUrls = await Promise.all(base64Promises);
       setPendingImages((prev) => [...prev, ...dataUrls]);
+      setPendingKinds((prev)=>[...prev,...files.map(()=>kind)]);
+      setPendingNames((prev)=>[...prev,...files.map(file=>file.name.slice(0,100))]);
     } catch {
       toast({
         title: 'Attachment error',
@@ -390,17 +402,21 @@ export default function KampusKritic({
   const handleSend = async () => {
     const textToSend = input.trim();
     if ((!textToSend && pendingImages.length === 0) || sending) return;
+    const inputError=validateKriticPrompt(textToSend,pendingImages.length>0||!!sourcePostId,!!examTopic.trim());
+    if(inputError){toast({title:'Academic request needed',description:inputError,variant:'destructive'});return;}
 
 
     const attachedImages = [...pendingImages];
+    const attachedKinds=[...pendingKinds];
+    const attachedNames=[...pendingNames];
     setInput('');
-    setPendingImages([]);
+    setPendingImages([]);setPendingKinds([]);setPendingNames([]);
     setSending(true);
 
     const userMsg: KriticMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: textToSend || 'Attached file for academic review.',
+      content: textToSend || (mode==='exam_rescue'?'Evaluate the uploaded academic work to help me revise for my exam.':'Attached file for academic review.'),
       images: attachedImages.map(url => url.startsWith('data:image/') ? 'kritic-file:Image' : 'kritic-file:Document'),
       created_at: new Date().toISOString(),
     };
@@ -458,6 +474,8 @@ export default function KampusKritic({
           promptText: textToSend,
           images: [],
           filePaths: uploadedPaths,
+          fileKinds:attachedKinds,
+          mode,examTopic:examTopic.trim(),examDate,
           history: updatedMessages,
           sourcePostId,
           courseCode: profile?.course_code || '',
@@ -542,7 +560,7 @@ export default function KampusKritic({
     } catch (error) {
       // Undo the optimistic message; the student's draft and files remain in the composer.
       setMessages(messages);
-      setInput(textToSend);setPendingImages(attachedImages);
+      setInput(textToSend);setPendingImages(attachedImages);setPendingKinds(attachedKinds);setPendingNames(attachedNames);
       toast({
         title: 'Kritic unavailable',
         description: error instanceof Error?error.message:'Please try again.',
