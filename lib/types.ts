@@ -11,6 +11,8 @@ export type Comment = {
   id: string;
   authorId?: string;
   author: string;
+  avatarUrl?: string | null;
+  isOwner?: boolean;
   text: string;
   time: string;
   is_anonymous?: boolean;
@@ -170,7 +172,7 @@ export type HazardRow = {
 export type AppNotification = {
   id: string;
   user_id: string;
-  type: 'message' | 'comment' | 'sos' | 'announcement' | 'push_test';
+  type: 'message' | 'comment' | 'post' | 'sos' | 'announcement' | 'push_test';
   title: string;
   body: string;
   reference_id: string | null;
