@@ -24,6 +24,7 @@ type FeedPostRow = {
   id: string;
   user_id: string;
   author_name: string | null;
+  avatar_url?: string | null;
   category: string;
   text: string;
   upvotes: number;
@@ -39,6 +40,8 @@ type FeedCommentRow = {
   post_id: string;
   user_id: string;
   author_name: string | null;
+  avatar_url?: string | null;
+  is_owner?: boolean;
   text: string;
   created_at: string;
   is_anonymous?: boolean;
@@ -49,6 +52,7 @@ type EnhancedCommunityPost = {
   id: string;
   authorId: string;
   author: string;
+  avatarUrl?: string | null;
   time: string;
   category: Exclude<CommunityCategory, 'All Questions'>;
   text: string;
@@ -80,7 +84,6 @@ export default function CommunityHub({
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
   
   const [askModalType, setAskModalType] = useState<'standard' | 'anonymous' | null>(null);
-  const [isBlast, setIsBlast] = useState(false);
   
   const [newQuestion, setNewQuestion] = useState('');
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
@@ -116,8 +119,9 @@ export default function CommunityHub({
       return {
         id: p.id,
         visibility:p.visibility,approved:p.public_approved,institution:p.institution,isOwner:p.is_owner,
-        authorId: p.user_id,
-        author: p.author_name ?? p.user_id,
+        authorId: p.user_id ?? '',
+        author: p.author_name ?? 'Student',
+        avatarUrl: isPostAnon ? null : (p.avatar_url ?? null),
         time: timeAgo(p.created_at),
         category: p.category as Exclude<CommunityCategory, 'All Questions'>,
         text: p.text,
@@ -127,14 +131,19 @@ export default function CommunityHub({
         impact_score: p.impact_score || 0,
         comments: commentRows
           .filter((c) => c.post_id === p.id)
-          .map((c) => ({
-            id: c.id,
-            authorId: c.user_id,
-            author: isPostAnon ? 'Anonymous' : (c.author_name ?? c.user_id),
-            text: c.text,
-            time: timeAgo(c.created_at),
-            is_anonymous: isPostAnon || c.is_anonymous || false,
-          })),
+          .map((c) => {
+            const hidden = isPostAnon || Boolean(c.is_anonymous);
+            return {
+              id: c.id,
+              authorId: hidden ? undefined : c.user_id,
+              author: hidden ? 'Anonymous' : (c.author_name ?? 'Student'),
+              avatarUrl: hidden ? null : (c.avatar_url ?? null),
+              isOwner: Boolean(c.is_owner),
+              text: c.text,
+              time: timeAgo(c.created_at),
+              is_anonymous: hidden,
+            };
+          }),
         images: p.images ?? [],
       };
     });
@@ -221,7 +230,7 @@ export default function CommunityHub({
     setPosting(true);
     
     const isAnonymous = askModalType === 'anonymous';
-    const startingImpact = isBlast ? 15 : 0;
+    const startingImpact = 0;
 
     const { data, error } = await supabase
       .from('feed_posts')
@@ -230,12 +239,13 @@ export default function CommunityHub({
         visibility:publicPost ? "public" : "campus",
         institution:profile.university,
         author_name: myName,
+        post_kind: isAnonymous ? 'confession' : 'question',
         category: newCategory,
         text,
         upvotes: 0,
         images: newImages.length > 0 ? newImages : null,
         is_anonymous: isAnonymous,
-        is_blasted: isBlast,
+        is_blasted: false,
         impact_score: startingImpact
       })
       .select()
@@ -246,7 +256,8 @@ export default function CommunityHub({
         id: (data as FeedPostRow).id,
         visibility:publicPost?"public":"campus",approved:false,institution:profile.university,isOwner:true,
         authorId: profile.id,
-        author: myName,
+        author: isAnonymous ? 'Anonymous' : myName,
+        avatarUrl: isAnonymous ? null : profile.avatar_url,
         time: 'just now',
         category: newCategory,
         text,
@@ -254,14 +265,12 @@ export default function CommunityHub({
         comments: [],
         images: newImages,
         is_anonymous: isAnonymous,
-        is_blasted: isBlast,
+        is_blasted: false,
         impact_score: startingImpact
       };
       setPosts((prev) => [post, ...prev]);
 
-      if (isBlast) {
-         toast({ title: 'Blast sent', description: 'Your post was blasted to the campus.' });
-      }
+      toast({title:'Posted to Campus Feed',description:isAnonymous?'Your confession and its replies will be anonymous.':'Your question and its replies will display student names.'});
     } else {
       console.error(error);
       toast({ title: 'Error', description: 'Failed to post.', variant: 'destructive' });
@@ -269,7 +278,6 @@ export default function CommunityHub({
     
     setNewQuestion('');
     setNewImages([]);
-    setIsBlast(false);
     setPosting(false);
     setAskModalType(null);
   };
@@ -359,8 +367,8 @@ export default function CommunityHub({
                       <UserRound className="h-4 w-4 text-sage" aria-hidden="true" />
                     </div>
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center shrink-0">
-                      <MessageSquare className="w-4 h-4 text-sage" strokeWidth={1.5} />
+                    <div className="w-9 h-9 rounded-full overflow-hidden bg-ink border border-gray-800 flex items-center justify-center shrink-0">
+                      {post.avatarUrl ? <SecureImage src={post.avatarUrl} alt={post.author+"'s profile photo"} className="h-full w-full rounded-full object-cover" /> : <UserRound className="w-4 h-4 text-sage" strokeWidth={1.5} />}
                     </div>
                   )}
                   
@@ -430,8 +438,8 @@ export default function CommunityHub({
                   isAnonymousPost={post.is_anonymous}
                   myName={myName}
                   onAuthorClick={(username, authorId) => {
-                    if (!post.is_anonymous) {
-                      setProfileUser({ id: authorId || '', username });
+                    if (!post.is_anonymous && authorId) {
+                      setProfileUser({ id: authorId, username });
                     }
                   }}
                   placeholder={post.is_anonymous ? "Reply anonymously..." : "Reply to this post..."}
@@ -489,6 +497,9 @@ export default function CommunityHub({
               </div>
             </div>
 
+            <div role="status" className="rounded-xl border border-pine/20 bg-ink px-3 py-2 text-xs text-sage">
+              {askModalType==='anonymous' ? 'Confess: your identity, profile photo and every reply are hidden from the feed. Avoid naming or identifying other people.' : 'Ask Question: your username and profile photo (if you have one) appear with your post. Replies show their authors, too.'}
+            </div>
             <label className="text-sm text-sage flex items-start gap-3"><input type="checkbox" checked={publicPost} onChange={e=>setPublicPost(e.target.checked)}/>Share this post publicly after moderator review. Leave unchecked for campus-only visibility.</label>
             <div className="flex flex-col gap-1.5 shrink-0">
               <label className="text-sage text-xs font-bold uppercase tracking-wider">
@@ -530,27 +541,7 @@ export default function CommunityHub({
               )}
             </div>
 
-            <div 
-              onClick={() => setIsBlast(!isBlast)}
-              className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-                isBlast ? 'bg-yellow-500/10 border-yellow-500/50' : 'bg-ink border-gray-800 hover:border-gray-700'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isBlast ? 'bg-yellow-400 text-black' : 'bg-gray-800 text-sage'}`}>
-                  <Megaphone className="w-4 h-4" strokeWidth={2} />
-                </div>
-                <div className="flex flex-col">
-                  <span className={`text-sm font-bold ${isBlast ? 'text-yellow-400' : 'text-white'}`}>
-                    Campus Blast (P15)
-                  </span>
-                  <span className="text-sage text-[10px]">Send push notification to all users</span>
-                </div>
-              </div>
-              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${isBlast ? 'bg-yellow-400' : 'bg-gray-800'}`}>
-                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${isBlast ? 'translate-x-4' : 'translate-x-0'}`} />
-              </div>
-            </div>
+            <p className="text-xs text-sage shrink-0">Students who opt in to browser alerts can receive a notification about new campus posts. Public posts are reviewed before sharing.</p>
 
             {profile && (
               <div className="shrink-0">
@@ -566,12 +557,10 @@ export default function CommunityHub({
               <button
                 onClick={submitQuestion}
                 disabled={newQuestion.trim().length < 5 || posting}
-                className={`w-full h-12 rounded-xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg ${
-                  isBlast ? 'bg-yellow-400 text-black' : 'bg-pine text-black'
-                }`}
+                className="w-full h-12 rounded-xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg bg-pine text-black"
               >
                 {posting && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
-                {posting ? 'Posting...' : (isBlast ? 'Pay P15 & Blast' : 'Post to Feed')}
+                {posting ? 'Posting...' : 'Post to Feed'}
               </button>
             </div>
             
