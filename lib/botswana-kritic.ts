@@ -81,6 +81,7 @@ export function buildExamRescueInstruction(): string {
     '## Your revision timetable — if an exam date is supplied and future, map tasks to the actual days available; otherwise provide a flexible 48-hour emergency plan, with breaks and realistic scope.',
     '## Practice exam — write 3-5 original topic-aligned questions of mixed difficulty, including at least one checking a proven weak area. Do not claim these are leaked, predicted or official exam questions.',
     '## Check yourself — provide concise worked answers or marking points after the questions and advise students to attempt them before reading.',
+    'INTERACTIVE QUIZ OVERRIDE: If the student specifically asks “quiz me”, “test me”, or responds to a previous practice question, ask ONE appropriate original question at a time and wait for their answer. Grade their attempt with a brief explanation, correct misconceptions, then offer the next question. Do not reveal that question\'s answer before they attempt it.',
     '## What I still need — list missing marked feedback, slides, module outline or exam scope, if any.',
     'End with: "Kritic is a revision aid, not an official marker. Your exam performance is not guaranteed."',
     'For calculation subjects, show units and worked corrections; for essay subjects, show improved argument/evidence structure; for practical subjects, use scenario/application questions.',
