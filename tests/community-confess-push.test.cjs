@@ -33,7 +33,7 @@ test('named questions and replies include user identity and saved profile images
  assert.match(feed,/avatarUrl: hidden \? null : \(c\.avatar_url \?\? null\)/);
  assert.match(feed,/post\.avatarUrl \? <SecureImage/);
  assert.match(comments,/c\.avatarUrl \? <SecureImage/);
- assert.match(feed,/Your username and profile photo/);
+ assert.match(feed,/your username and profile photo/i);
  assert.doesNotMatch(feed,/Pay P15 & Blast|Campus Blast \(P15\)/);
 });
 
