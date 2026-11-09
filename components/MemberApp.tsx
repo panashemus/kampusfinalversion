@@ -694,8 +694,8 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
         )}
 
         {/* Main Viewport */}
-        <main className="flex-1 relative flex flex-col overflow-y-auto overscroll-y-contain pb-28">
-          {profile && activeView !== 'profile' && <div className="px-4"><PushNotificationBanner userId={profile.id}/></div>}
+        <main className={`flex-1 min-h-0 relative flex flex-col pb-28 ${activeView === 'kritic' ? 'overflow-hidden' : 'overflow-y-auto overscroll-y-contain'}`}>
+          {profile && activeView !== 'profile' && <div className="px-4 shrink-0"><PushNotificationBanner userId={profile.id}/></div>}
           {activeView === 'kritic' && profile && !isValidKriticCourse(profile.course_code) && (
             <div className="flex-1 min-h-[65vh] flex items-center justify-center p-6 text-center">
               <div className="max-w-sm space-y-4 rounded-3xl border border-pine/40 bg-surface p-6">

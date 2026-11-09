@@ -14,7 +14,7 @@ const accept='.pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.webp';
 export default function KriticExamIntake({mode,onModeChange,topic,onTopicChange,examDate,onDateChange,onFiles,uploading}:Props){
   const markedRef=useRef<HTMLInputElement>(null);
   const notesRef=useRef<HTMLInputElement>(null);
-  return <section aria-label="Kritic study options" className="border-b border-gray-800 p-3.5 sm:p-4 space-y-3 max-h-[44dvh] overflow-y-auto overscroll-contain">
+  return <section aria-label="Kritic study options" className="border-b border-gray-800 p-3.5 sm:p-4 space-y-3">
     <div role="group" aria-label="Study mode" className="grid grid-cols-2 gap-2">
       <button type="button" aria-pressed={mode==='exam_rescue'} onClick={()=>onModeChange('exam_rescue')}
         className={'min-h-11 rounded-xl border px-2 text-xs font-black transition-colors '+(mode==='exam_rescue'?'bg-pine border-pine text-black':'border-gray-700 bg-surface text-sage hover:text-white')}>Exam Rescue · Finals</button>
