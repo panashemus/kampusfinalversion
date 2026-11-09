@@ -156,12 +156,18 @@ export async function POST(req: Request) {
 
     const providerFileNames: string[] = [];
     try {
-      for (const file of privateFiles) {
-        const uploaded = await uploadPrivateKriticFile(apiKey, file.bytes, file.mimeType);
-        providerFileNames.push(uploaded.name);
-        parts.push({ text: kindLabel(file.kind) });
-        parts.push({ fileData: { mimeType: file.mimeType, fileUri: uploaded.fileUri } });
+      // Independent provider uploads run concurrently to stay within the function deadline.
+      // Collect successful references even when a sibling upload fails so finally can delete all of them.
+      const fileResults = await Promise.allSettled(privateFiles.map(file =>
+        uploadPrivateKriticFile(apiKey, file.bytes, file.mimeType)));
+      for (const [index, result] of fileResults.entries()) {
+        if (result.status === 'fulfilled') {
+          providerFileNames.push(result.value.name);
+          parts.push({ text: kindLabel(privateFiles[index].kind) });
+          parts.push({ fileData: { mimeType: privateFiles[index].mimeType, fileUri: result.value.fileUri } });
+        }
       }
+      if (fileResults.some(result => result.status === 'rejected')) throw new Error('An attachment could not be processed.');
       const prior = input.history.slice();
       if (prior.at(-1)?.role === 'user' && prior.at(-1)?.content === input.promptText) prior.pop();
       const contents: GeminiContent[] = prior.map(message => ({
@@ -176,9 +182,10 @@ export async function POST(req: Request) {
         systemInstruction: buildBotswanaKriticInstruction({
           institution: String(profile.university || user.email?.split('@')[1] || 'Botswana higher education'),
           programme: String(profile.course_code),
-        }) + (input.mode === 'exam_rescue' ? '\\n' + buildExamRescueInstruction() : ''),
+        }) + (input.mode === 'exam_rescue' ? '\n' + buildExamRescueInstruction() : ''),
         contents,
         greeting: false, // Greetings are rejected before quota reservation.
+        minReplyChars: input.mode === 'exam_rescue' && input.fileKinds.includes('graded_work') && input.fileKinds.includes('lecture_material') ? 450 : 0,
         logger: (event, failedModel, reason) => {
           console.warn('[Kritic provider]', event, failedModel, reason);
         },
