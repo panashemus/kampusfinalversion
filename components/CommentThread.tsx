@@ -16,7 +16,7 @@ export default function CommentThread({
   placeholder = isAnonymousPost ? 'Reply anonymously...' : 'Reply to this post...',
 }: {
   comments: Comment[];
-  onAdd: (c: Comment) => void;
+  onAdd: (c: Comment) => Promise<boolean | void> | boolean | void;
   onDelete?: (id: string) => void;
   currentUserId?: string;
   isAnonymousPost?: boolean;
@@ -25,19 +25,29 @@ export default function CommentThread({
   placeholder?: string;
 }) {
   const [text, setText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    
-    onAdd({
-      id: `temp-${Date.now()}`,
-      author: isAnonymousPost ? 'Anonymous' : myName,
-      text: text.trim(),
-      time: 'just now',
-      is_anonymous: isAnonymousPost,
-    });
-    setText('');
+    const draft = text.trim();
+    if (!draft || submitting) return;
+    setSubmitting(true);
+    try {
+      const saved = await onAdd({
+        id: `temp-${Date.now()}`,
+        author: isAnonymousPost ? 'Anonymous' : myName,
+        text: draft,
+        time: 'just now',
+        is_anonymous: isAnonymousPost,
+      });
+      // Only clear after the parent confirms success. If the network or
+      // database rejects the reply, the student's typed draft survives.
+      if(saved !== false) setText(current => current.trim() === draft ? '' : current);
+    } catch {
+      // Leave the draft intact, allowing the student to retry.
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -101,7 +111,7 @@ export default function CommentThread({
         />
         <button
           type="submit"
-          disabled={!text.trim()}
+          disabled={!text.trim() || submitting}
           className="absolute right-1 top-1 bottom-1 w-8 rounded-full bg-pine flex items-center justify-center text-black disabled:opacity-50 active:scale-95 transition-transform"
         >
           <Send className="w-3.5 h-3.5 -ml-0.5" strokeWidth={2} />
