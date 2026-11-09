@@ -581,7 +581,7 @@ export default function KampusKritic({
   return (
     <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
       {sourcePostId&&<div className="p-4 border-b border-gray-800 text-sm"><button className="text-pine min-h-11" onClick={()=>onReturnToSource?.(sourcePostId)}>← Return to the original discussion</button><p className="text-sage">Review the question before sending. Your critique stays private.</p>{sourceError&&<p role="alert" className="text-red-300">{sourceError}</p>}</div>}
-      <p className="px-4 py-2 text-xs text-sage">Service safety limit: up to 20 requests per account per UTC day, subject to the shared service budget and your current plan. Attachments: 2 files, 10 MB each.</p>
+      <KriticExamIntake mode={mode} onModeChange={setMode} topic={examTopic} onTopicChange={setExamTopic} examDate={examDate} onDateChange={setExamDate} onFiles={handleFilesSelected} uploading={uploadingImage||sending}/>
       {/* Minimal, Clean Sub-Row */}
       <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
         <button
@@ -729,7 +729,7 @@ export default function KampusKritic({
                   Prompt Starters
                 </span>
                 <div className="flex flex-col gap-2">
-                  {PROMPT_STARTERS.map((starter) => (
+                  {(mode==='exam_rescue'?EXAM_STARTERS:PROMPT_STARTERS).map((starter) => (
                     <button
                       key={starter}
                       type="button"
@@ -852,9 +852,11 @@ export default function KampusKritic({
                 )}
                 <button
                   type="button"
-                  onClick={() =>
-                    setPendingImages((prev) => prev.filter((_, i) => i !== idx))
-                  }
+                  onClick={() => {
+                    setPendingImages(prev=>prev.filter((_,i)=>i!==idx));
+                    setPendingKinds(prev=>prev.filter((_,i)=>i!==idx));
+                    setPendingNames(prev=>prev.filter((_,i)=>i!==idx));
+                  }}
                   className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center"
                 >
                   <X className="w-3 h-3" />
@@ -864,6 +866,7 @@ export default function KampusKritic({
           </div>
         )}
 
+        {pendingNames.length>0 && <p className="text-sage text-[11px] leading-relaxed" aria-live="polite">{pendingNames.map((name,i)=>name+' ('+(pendingKinds[i]==='graded_work'?'marked work':pendingKinds[i]==='lecture_material'?'lecture notes':'other')+')').join(' · ')}</p>}
         <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
@@ -873,14 +876,14 @@ export default function KampusKritic({
             className="hidden"
             onChange={(e) => {
               if (e.target.files) {
-                handleFilesSelected(Array.from(e.target.files));
+                handleFilesSelected(Array.from(e.target.files),'other');
                 e.target.value = '';
               }
             }}
           />
           <button
             type="button"
-            disabled={uploadingImage}
+            disabled={uploadingImage||sending}
             onClick={() => fileInputRef.current?.click()}
             title="Attach image or PDF"
             className="w-11 h-11 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-sage hover:text-pine flex items-center justify-center shrink-0 active:scale-95 transition-all disabled:opacity-40"
@@ -905,7 +908,7 @@ export default function KampusKritic({
 
             rows={1}
             placeholder={
-              'Message Kampus Kritic or attach PDF / images...'
+              mode==='exam_rescue' ? 'Ask for a revision plan, exam practice, or evaluation…' : 'Message Kritic or attach your assignment…'
             }
             className="flex-1 h-11 max-h-24 rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none overflow-hidden no-scrollbar"
           />
@@ -914,7 +917,7 @@ export default function KampusKritic({
             type="button"
             onClick={handleSend}
             disabled={
-              sending ||
+              sending || uploadingImage ||
               (!input.trim() && pendingImages.length === 0)
             }
             className="w-11 h-11 rounded-xl bg-pine text-black flex items-center justify-center shrink-0 active:scale-95 transition-transform disabled:opacity-40"
