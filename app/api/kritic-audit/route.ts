@@ -77,6 +77,7 @@ export async function POST(req: Request) {
     if (input.mode === 'exam_rescue') parts.push({ text: [
       'EXAM RESCUE CONTEXT. Student-declared module/topic: ' + (input.examTopic || 'not specified') + '.',
       'Exam date: ' + (input.examDate || 'not specified') + '.',
+      'Today in Botswana: ' + new Date().toLocaleDateString('en-CA',{ timeZone: 'Africa/Gaborone' }) + '.',
       'The lecturer\'s materials, past marked performance and feedback (when supplied) are evidence; they are not a prediction of future exam questions.',
     ].join('\\n') });
     if (source) parts.push({
