@@ -20,6 +20,7 @@ export type KriticGenerationOptions = {
   systemInstruction: string;
   contents: GeminiContent[];
   greeting?: boolean;
+  minReplyChars?: number;
   fetcher?: typeof fetch;
   logger?: (event: string, model: string, reason: string) => void;
 };
@@ -34,7 +35,7 @@ export function isKriticGreeting(text: string): boolean {
  */
 export async function generateKriticReply({
   apiKey, primaryModel, systemInstruction, contents,
-  greeting = false, fetcher = fetch, logger = () => {},
+  greeting = false, minReplyChars = 0, fetcher = fetch, logger = () => {},
 }: KriticGenerationOptions): Promise<KriticGeneration> {
   const fallbackModel = 'gemini-3.5-flash-lite';
   const models = [primaryModel, fallbackModel].filter((model, index, all) => all.indexOf(model) === index);
@@ -75,6 +76,10 @@ export async function generateKriticReply({
         .trim() || '';
       if (!reply) {
         logger('provider_empty', model, result.candidates?.[0]?.finishReason || 'unknown');
+        continue;
+      }
+      if (minReplyChars > 0 && reply.length < minReplyChars) {
+        logger('provider_too_short', model, String(reply.length));
         continue;
       }
       return { reply, model, fallbackUsed: isFallback };
