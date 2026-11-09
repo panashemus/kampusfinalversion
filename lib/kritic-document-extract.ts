@@ -4,7 +4,9 @@ const MAX_TEXT = 120_000;
 function readableText(text: string, label: string): string {
   const cleaned = text.replace(/\u0000/g, '').trim();
   if (cleaned.length < 3) throw new Error(label + ' contains no readable text.');
-  return cleaned.slice(0, MAX_TEXT);
+  return cleaned.length > MAX_TEXT
+    ? cleaned.slice(0, MAX_TEXT) + '\\n[DOCUMENT TRUNCATED: later text was not included. Ask the student to upload relevant sections separately.]'
+    : cleaned;
 }
 function decodeXmlEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos);/gi, (full, entity: string) => {
