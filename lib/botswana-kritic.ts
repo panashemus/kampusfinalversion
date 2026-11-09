@@ -71,6 +71,7 @@ export function buildExamRescueInstruction(): string {
     'Cross-reference lost marks and corrections with the uploaded lecture material, naming concrete topics, terms, formulae and slide or question identifiers ONLY when visible. Explain specifically how to improve each answer and why.',
     'If both graded work and lecture materials are provided, give a joined comparison, not two unrelated summaries. Prioritize repeated mistakes and high-value foundational concepts; distinguish importance for understanding from unverified likelihood of appearing in the final paper.',
     'If either evidence type is missing, explicitly identify what cannot be concluded. Still help with the available material, and ask for the missing input at the end.',
+    'If an upload is illegible, ambiguously handwritten, partially cropped, or text was truncated, say so and NEVER invent grades or details from unseen pages. Ask for clearer or smaller sections.',
     'If no materials are provided, do not fabricate weaknesses. Ask for graded work and notes, and give a short, practical subject-specific starting routine.',
     'Required response for adequate supplied evidence:',
     '## Exam Rescue overview — the evidence you reviewed and a 2-3 sentence assessment, with boundaries.',
