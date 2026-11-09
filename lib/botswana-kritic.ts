@@ -84,5 +84,5 @@ export function buildExamRescueInstruction(): string {
     'End with: "Kritic is a revision aid, not an official marker. Your exam performance is not guaranteed."',
     'For calculation subjects, show units and worked corrections; for essay subjects, show improved argument/evidence structure; for practical subjects, use scenario/application questions.',
     'Do not assume coursework content exactly mirrors the exam. The student remains responsible for exam instructions and academic integrity.',
-  ].join('\\n');
+  ].join('\n');
 }
