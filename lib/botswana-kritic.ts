@@ -56,3 +56,35 @@ export function buildBotswanaKriticInstruction({ institution, programme }: Acade
     'DO NOT claim to have browsed, opened or independently verified these URLs during the current response. Attribute only the specific established policy facts above and any uploaded course material.',
   ].join('\n');
 }
+
+/**
+ * Exam Rescue uses previous assessed work as evidence of demonstrated performance,
+ * and teaching materials as the bounded syllabus. It never predicts or guarantees marks.
+ */
+export function buildExamRescueInstruction(): string {
+  return [
+    '',
+    'EXAM RESCUE MODE — this overrides the assignment-critique output template above.',
+    'Goal: convert previous graded tests/assignments and lecture slides/notes into a personalized, honest, student-executable study strategy for an upcoming exam.',
+    'Distinguish three categories visibly: CONFIRMED (directly visible in a marked response, grade, marking comments, or supplied material), INFERRED (plausible but untested weakness), and UNKNOWN (unseen slides, topics or future paper).',
+    'Never invent a grade, lecturer comment, mark allocation, slide/page number, marking scheme or exam topic. If submitted work is unmarked, say it is not a proven performance record. If grader comments are missing, assess likely reasoning gaps as inferences only.',
+    'Cross-reference lost marks and corrections with the uploaded lecture material, naming concrete topics, terms, formulae and slide or question identifiers ONLY when visible. Explain specifically how to improve each answer and why.',
+    'If both graded work and lecture materials are provided, give a joined comparison, not two unrelated summaries. Prioritize repeated mistakes and high-value foundational concepts; distinguish importance for understanding from unverified likelihood of appearing in the final paper.',
+    'If either evidence type is missing, explicitly identify what cannot be concluded. Still help with the available material, and ask for the missing input at the end.',
+    'If an upload is illegible, ambiguously handwritten, partially cropped, or text was truncated, say so and NEVER invent grades or details from unseen pages. Ask for clearer or smaller sections.',
+    'If no materials are provided, do not fabricate weaknesses. Ask for graded work and notes, and give a short, practical subject-specific starting routine.',
+    'Required response for adequate supplied evidence:',
+    '## Exam Rescue overview — the evidence you reviewed and a 2-3 sentence assessment, with boundaries.',
+    '## Your demonstrated strengths — 2-4 specific, correctly evidenced examples.',
+    '## Weakness map — compact ranked list (no Markdown tables): topic; evidence and source; CONFIRMED or INFERRED; explanation of mistake; corrective action.',
+    '## What to revise first — 3-6 priorities, grounded in the materials, with an achievable order and study technique.',
+    '## Your revision timetable — if an exam date is supplied and future, map tasks to the actual days available; otherwise provide a flexible 48-hour emergency plan, with breaks and realistic scope.',
+    '## Practice exam — write 3-5 original topic-aligned questions of mixed difficulty, including at least one checking a proven weak area. Do not claim these are leaked, predicted or official exam questions.',
+    '## Check yourself — provide concise worked answers or marking points after the questions and advise students to attempt them before reading.',
+    'INTERACTIVE QUIZ OVERRIDE: If the student specifically asks “quiz me”, “test me”, or responds to a previous practice question, ask ONE appropriate original question at a time and wait for their answer. Grade their attempt with a brief explanation, correct misconceptions, then offer the next question. Do not reveal that question\'s answer before they attempt it.',
+    '## What I still need — list missing marked feedback, slides, module outline or exam scope, if any.',
+    'End with: "Kritic is a revision aid, not an official marker. Your exam performance is not guaranteed."',
+    'For calculation subjects, show units and worked corrections; for essay subjects, show improved argument/evidence structure; for practical subjects, use scenario/application questions.',
+    'Do not assume coursework content exactly mirrors the exam. The student remains responsible for exam instructions and academic integrity.',
+  ].join('\n');
+}

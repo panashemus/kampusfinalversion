@@ -40,6 +40,8 @@ import WelcomeModal from '@/components/WelcomeModal';
 import type { Destination } from '@/lib/interconnect';
 import { destinationHash } from '@/lib/interconnect';
 import KampusKritic from '@/components/KampusKritic';
+import KriticCourseGate from '@/components/KriticCourseGate';
+import { isValidKriticCourse } from '@/lib/kritic-intake';
 import HustleHub from '@/components/HustleHub';
 import CommunityHub from '@/components/CommunityHub';
 import ProfileScreen from '@/components/ProfileScreen';
@@ -113,6 +115,7 @@ const fireSystemNotification = (title: string, body: string) => {
 export default function MemberApp({initialProfile, destination, onNavigate, onDisconnect}: {initialProfile: Profile; destination: Destination; onNavigate: (destination: Destination) => void; onDisconnect: () => void}) {
  const [activeView,setActiveView]=useState<View>('community');
  const [profile,setProfile]=useState<Profile|null>(initialProfile);
+ const [coursePromptOpen, setCoursePromptOpen] = useState(!isValidKriticCourse(initialProfile.course_code));
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
   const [hazardCategory, setHazardCategory] = useState(HAZARD_CATEGORIES[0]);
@@ -152,6 +155,10 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
   >('idle');
   const [activeSosAlerts, setActiveSosAlerts] = useState<SosAlert[]>([]);
   const [activeHelpCard, setActiveHelpCard] = useState<SosAlert | null>(null);
+
+  useEffect(() => {
+    if (activeView === 'kritic' && !isValidKriticCourse(profile?.course_code)) setCoursePromptOpen(true);
+  }, [activeView, profile?.course_code]);
 
   const isAdminUser =
     profile?.is_admin;
@@ -511,7 +518,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
   return (
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-ink items-center">
       <div className="relative w-full max-w-[900px] h-[100dvh] flex flex-col overflow-hidden bg-midnight border-x border-gray-800">
-        {/* Discovery is available without an interrupting welcome modal. */}
+        {/* New students see a dismissible course prompt. Kritic itself remains locked until saved. */}
 
         {/* Original Forest Green & Yellow Top Banner */}
         <header className="sticky top-0 z-[1000] bg-midnight border-b border-gray-800 px-4 py-3.5 flex items-center justify-between shrink-0">
@@ -689,7 +696,18 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
         {/* Main Viewport */}
         <main className="flex-1 relative flex flex-col overflow-y-auto overscroll-y-contain pb-28">
           {profile && activeView !== 'profile' && <div className="px-4"><PushNotificationBanner userId={profile.id}/></div>}
-          {activeView === 'kritic' && (
+          {activeView === 'kritic' && profile && !isValidKriticCourse(profile.course_code) && (
+            <div className="flex-1 min-h-[65vh] flex items-center justify-center p-6 text-center">
+              <div className="max-w-sm space-y-4 rounded-3xl border border-pine/40 bg-surface p-6">
+                <Lock className="mx-auto text-pine w-9 h-9" aria-hidden="true"/>
+                <h2 className="text-white text-xl font-black">Kritic needs your course first</h2>
+                <p className="text-sage text-sm leading-relaxed">Choose your actual programme so the AI can tailor exam revision to your subject. Your tokens cannot be used until you do.</p>
+                <button onClick={()=>setCoursePromptOpen(true)} className="w-full min-h-11 rounded-xl bg-pine text-black font-black text-sm">Choose my programme</button>
+                <p className="text-[11px] text-sage">Kritic helps you prepare. It does not guarantee exam results.</p>
+              </div>
+            </div>
+          )}
+          {activeView === 'kritic' && profile && isValidKriticCourse(profile.course_code) && (
             <KampusKritic
               sourcePostId={destination.source}
               onReturnToSource={(id) => onNavigate({module:"community",post:id})}
@@ -1186,6 +1204,14 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
           onClose={() => setAdminQueueOpen(false)}
         />
         <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
+        {coursePromptOpen && profile && !isValidKriticCourse(profile.course_code) && (
+          <KriticCourseGate
+            profile={profile}
+            mandatory={activeView === 'kritic'}
+            onSaved={updated => { setProfile(updated); setCoursePromptOpen(false); }}
+            onDismiss={() => { setCoursePromptOpen(false); if (activeView === 'kritic') onNavigate({module:'community'}); }}
+          />
+        )}
 
         {showOtp && profile && (
           <OtpModal

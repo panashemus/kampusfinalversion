@@ -104,3 +104,16 @@ test('Gemini Files API refuses unexpected upload URLs',async()=>{
  const fakeFetch=async ()=>({ok:true,headers:{get:()=> 'http://untrusted.example/upload'}});
  await assert.rejects(()=>uploadPrivateKriticFile('test-placeholder',Buffer.from('PDF'),'application/pdf',fakeFetch),/could not be started/);
 });
+
+test('exam quality floor triggers fallback instead of accepting a one-line non-critique', async () => {
+  let calls=0;
+  const result=await generateKriticReply({...base,minReplyChars:120,fetcher:async()=>{
+    calls++;
+    return validReply(calls===1 ? 'Looks good.' : 'Kritic overview: The sample reasoning lacks a clear explanation. Study the underlying concepts, practise two worked problems, and check your answer against the supplied marking rubric.');
+  }});
+  assert.equal(calls,2);
+  assert.equal(result.fallbackUsed,true);
+});
+test('exam quality floor rejects both inadequate responses', async () => {
+  await assert.rejects(()=>generateKriticReply({...base,minReplyChars:500,fetcher:async()=>validReply('Too brief for a detailed assessment')}),/All configured academic AI providers failed/);
+});

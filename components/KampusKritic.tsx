@@ -24,6 +24,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { supabase,authHeaders } from '@/lib/supabase';
+import KriticExamIntake from '@/components/KriticExamIntake';
+import { KRITIC_MAX_FILES,KRITIC_MAX_TOTAL_BYTES,validateKriticPrompt,type KriticMode,type KriticFileKind } from '@/lib/kritic-intake';
 
 import {
   classifyUniversity,
@@ -57,6 +59,7 @@ const PROMPT_STARTERS = [
   'Convert these lecture notes into presentation slide points:',
   'Draft a formal email to my lecturer regarding my continuous assessment mark:',
 ];
+const EXAM_STARTERS = ['help me pass','Find the weak areas in my marked work and lecture slides','quiz me','Make a revision plan for the topics I am struggling with'];
 
 function renderInlineBold(text: string, isUser: boolean) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -173,7 +176,12 @@ export default function KampusKritic({
   const [sourceError,setSourceError]=useState('');
   useEffect(()=>{if(!sourcePostId)return;const controller=new AbortController();setSourceError('');
   (async()=>{try{const res=await fetch('/api/interconnect/source?post='+sourcePostId,{headers:await authHeaders(),signal:controller.signal});const body=await res.json();if(!res.ok)throw new Error(body.error);setInput(body.text);setActiveSessionId(null);setMessages([]);}catch(e){if(!controller.signal.aborted)setSourceError(e instanceof Error?e.message:'Source unavailable.');}})();return()=>controller.abort();},[sourcePostId]);
+  const [mode,setMode]=useState<KriticMode>(sourcePostId?'coursework_review':'exam_rescue');
+  const [examTopic,setExamTopic]=useState('');
+  const [examDate,setExamDate]=useState('');
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [pendingKinds,setPendingKinds]=useState<KriticFileKind[]>([]);
+  const [pendingNames,setPendingNames]=useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -309,16 +317,18 @@ export default function KampusKritic({
     });
   };
 
-  const handleFilesSelected = async (files: File[]) => {
+  const handleFilesSelected = async (files: File[],kind:KriticFileKind='other') => {
     if (!files.length) return;
-    if(files.length+pendingImages.length>2 || files.some(f=>!['jpg','jpeg','png','webp','pdf','docx','doc','txt'].includes(f.name.split('.').pop()?.toLowerCase()||'')||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Attach up to two PDF, DOCX, DOC, TXT, JPEG, PNG or WebP files, each 10 MB or smaller.',variant:'destructive'});return;}
+    const currentBytes=pendingImages.reduce((sum,url)=>sum+Math.floor((url.split(',')[1]?.length||0)*0.75),0);
+    if(files.length+pendingImages.length>KRITIC_MAX_FILES || currentBytes+files.reduce((sum,file)=>sum+file.size,0)>KRITIC_MAX_TOTAL_BYTES || files.some(f=>!['jpg','jpeg','png','webp','pdf','docx','doc','txt'].includes(f.name.split('.').pop()?.toLowerCase()||'')||f.size===0||f.size>10*1024*1024)){toast({title:'Attachment limit',description:'Up to 4 PDF, DOCX, DOC, TXT, JPEG, PNG or WebP files; 10 MB each and 25 MB combined.',variant:'destructive'});return;}
     setUploadingImage(true);
 
     try {
       const base64Promises = files.map(
         (file) =>
-          new Promise<string>((resolve) => {
+          new Promise<string>((resolve,reject) => {
             const reader = new FileReader();
+            reader.onerror=()=>reject(new Error('Could not read the file.'));
             reader.onload = () => {
               const ext = file.name.split('.').pop()?.toLowerCase();
               const mime = ext === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -332,6 +342,8 @@ export default function KampusKritic({
       );
       const dataUrls = await Promise.all(base64Promises);
       setPendingImages((prev) => [...prev, ...dataUrls]);
+      setPendingKinds((prev)=>[...prev,...files.map(()=>kind)]);
+      setPendingNames((prev)=>[...prev,...files.map(file=>file.name.slice(0,100))]);
     } catch {
       toast({
         title: 'Attachment error',
@@ -390,17 +402,21 @@ export default function KampusKritic({
   const handleSend = async () => {
     const textToSend = input.trim();
     if ((!textToSend && pendingImages.length === 0) || sending) return;
+    const inputError=validateKriticPrompt(textToSend,pendingImages.length>0||!!sourcePostId,!!examTopic.trim());
+    if(inputError){toast({title:'Academic request needed',description:inputError,variant:'destructive'});return;}
 
 
     const attachedImages = [...pendingImages];
+    const attachedKinds=[...pendingKinds];
+    const attachedNames=[...pendingNames];
     setInput('');
-    setPendingImages([]);
+    setPendingImages([]);setPendingKinds([]);setPendingNames([]);
     setSending(true);
 
     const userMsg: KriticMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: textToSend || 'Attached file for academic review.',
+      content: textToSend || (mode==='exam_rescue'?'Evaluate the uploaded academic work to help me revise for my exam.':'Attached file for academic review.'),
       images: attachedImages.map(url => url.startsWith('data:image/') ? 'kritic-file:Image' : 'kritic-file:Document'),
       created_at: new Date().toISOString(),
     };
@@ -458,6 +474,8 @@ export default function KampusKritic({
           promptText: textToSend,
           images: [],
           filePaths: uploadedPaths,
+          fileKinds:attachedKinds,
+          mode,examTopic:examTopic.trim(),examDate,
           history: updatedMessages,
           sourcePostId,
           courseCode: profile?.course_code || '',
@@ -542,7 +560,7 @@ export default function KampusKritic({
     } catch (error) {
       // Undo the optimistic message; the student's draft and files remain in the composer.
       setMessages(messages);
-      setInput(textToSend);setPendingImages(attachedImages);
+      setInput(textToSend);setPendingImages(attachedImages);setPendingKinds(attachedKinds);setPendingNames(attachedNames);
       toast({
         title: 'Kritic unavailable',
         description: error instanceof Error?error.message:'Please try again.',
@@ -563,7 +581,7 @@ export default function KampusKritic({
   return (
     <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
       {sourcePostId&&<div className="p-4 border-b border-gray-800 text-sm"><button className="text-pine min-h-11" onClick={()=>onReturnToSource?.(sourcePostId)}>← Return to the original discussion</button><p className="text-sage">Review the question before sending. Your critique stays private.</p>{sourceError&&<p role="alert" className="text-red-300">{sourceError}</p>}</div>}
-      <p className="px-4 py-2 text-xs text-sage">Service safety limit: up to 20 requests per account per UTC day, subject to the shared service budget and your current plan. Attachments: 2 files, 10 MB each.</p>
+      <KriticExamIntake mode={mode} onModeChange={setMode} topic={examTopic} onTopicChange={setExamTopic} examDate={examDate} onDateChange={setExamDate} onFiles={handleFilesSelected} uploading={uploadingImage||sending}/>
       {/* Minimal, Clean Sub-Row */}
       <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
         <button
@@ -711,7 +729,7 @@ export default function KampusKritic({
                   Prompt Starters
                 </span>
                 <div className="flex flex-col gap-2">
-                  {PROMPT_STARTERS.map((starter) => (
+                  {(mode==='exam_rescue'?EXAM_STARTERS:PROMPT_STARTERS).map((starter) => (
                     <button
                       key={starter}
                       type="button"
@@ -834,9 +852,11 @@ export default function KampusKritic({
                 )}
                 <button
                   type="button"
-                  onClick={() =>
-                    setPendingImages((prev) => prev.filter((_, i) => i !== idx))
-                  }
+                  onClick={() => {
+                    setPendingImages(prev=>prev.filter((_,i)=>i!==idx));
+                    setPendingKinds(prev=>prev.filter((_,i)=>i!==idx));
+                    setPendingNames(prev=>prev.filter((_,i)=>i!==idx));
+                  }}
                   className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/80 text-white flex items-center justify-center"
                 >
                   <X className="w-3 h-3" />
@@ -846,6 +866,7 @@ export default function KampusKritic({
           </div>
         )}
 
+        {pendingNames.length>0 && <p className="text-sage text-[11px] leading-relaxed" aria-live="polite">{pendingNames.map((name,i)=>name+' ('+(pendingKinds[i]==='graded_work'?'marked work':pendingKinds[i]==='lecture_material'?'lecture notes':'other')+')').join(' · ')}</p>}
         <div className="flex items-center gap-2">
           <input
             ref={fileInputRef}
@@ -855,14 +876,14 @@ export default function KampusKritic({
             className="hidden"
             onChange={(e) => {
               if (e.target.files) {
-                handleFilesSelected(Array.from(e.target.files));
+                handleFilesSelected(Array.from(e.target.files),'other');
                 e.target.value = '';
               }
             }}
           />
           <button
             type="button"
-            disabled={uploadingImage}
+            disabled={uploadingImage||sending}
             onClick={() => fileInputRef.current?.click()}
             title="Attach image or PDF"
             className="w-11 h-11 rounded-xl bg-ink border border-gray-800 hover:border-pine/50 text-sage hover:text-pine flex items-center justify-center shrink-0 active:scale-95 transition-all disabled:opacity-40"
@@ -887,7 +908,7 @@ export default function KampusKritic({
 
             rows={1}
             placeholder={
-              'Message Kampus Kritic or attach PDF / images...'
+              mode==='exam_rescue' ? 'Ask for a revision plan, exam practice, or evaluation…' : 'Message Kritic or attach your assignment…'
             }
             className="flex-1 h-11 max-h-24 rounded-xl bg-ink border border-gray-800 px-3.5 py-3 text-white placeholder:text-sage/60 text-xs outline-none focus:border-pine transition-colors resize-none overflow-hidden no-scrollbar"
           />
@@ -896,7 +917,7 @@ export default function KampusKritic({
             type="button"
             onClick={handleSend}
             disabled={
-              sending ||
+              sending || uploadingImage ||
               (!input.trim() && pendingImages.length === 0)
             }
             className="w-11 h-11 rounded-xl bg-pine text-black flex items-center justify-center shrink-0 active:scale-95 transition-transform disabled:opacity-40"
