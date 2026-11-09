@@ -3,7 +3,8 @@ BEGIN;
 
 ALTER TABLE public.feed_posts ADD COLUMN IF NOT EXISTS post_kind text;
 UPDATE public.feed_posts SET post_kind = CASE WHEN coalesce(is_anonymous,false) THEN 'confession' ELSE 'question' END WHERE post_kind IS NULL;
-ALTER TABLE public.feed_posts ALTER COLUMN post_kind SET DEFAULT 'question';
+-- No default yet: older installed clients still send is_anonymous and must not have their confessions exposed.
+ALTER TABLE public.feed_posts ALTER COLUMN post_kind DROP DEFAULT;
 ALTER TABLE public.feed_posts ALTER COLUMN post_kind SET NOT NULL;
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='feed_posts_post_kind_check' AND conrelid='public.feed_posts'::regclass) THEN
@@ -19,7 +20,8 @@ BEGIN
    RAISE EXCEPTION 'Post type cannot be changed after publishing';
   END IF;
  ELSE
-  NEW.post_kind := coalesce(NEW.post_kind,'question');
+  -- Backward-compatible with already-installed clients: an old Confess submission remains private.
+  NEW.post_kind := coalesce(NEW.post_kind,CASE WHEN coalesce(NEW.is_anonymous,false) THEN 'confession' ELSE 'question' END);
  END IF;
  IF NEW.post_kind NOT IN ('question','confession') THEN
   RAISE EXCEPTION 'Invalid post type';
