@@ -189,7 +189,8 @@ export default function KampusKritic({
   const [promptsUsed, setPromptsUsed] = useState<number>(profile?.kritic_prompts_used ?? 0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const conversationScrollRef = useRef<HTMLDivElement>(null);
+  const followNewMessagesRef = useRef(false);
 
   useEffect(() => {
     if (typeof profile?.kritic_prompts_used === 'number') {
@@ -272,7 +273,12 @@ export default function KampusKritic({
   }, [profile?.id]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Only follow messages the student actively sends. Restored history should
+    // not jump past the Exam Rescue upload area on initial page load.
+    if (!followNewMessagesRef.current) return;
+    const stream = conversationScrollRef.current;
+    if (stream) stream.scrollTo({ top: stream.scrollHeight, behavior: 'smooth' });
+    if (!sending) followNewMessagesRef.current = false;
   }, [messages, sending]);
 
   const persistSessions = (updated: KriticChatSession[]) => {
@@ -382,6 +388,7 @@ export default function KampusKritic({
     setActiveSessionId(null);
     setMessages([]);
     setShowHistory(false);
+    conversationScrollRef.current?.scrollTo({top:0});
   };
 
   const deleteSession = async (id: string, e: React.MouseEvent) => {
@@ -406,6 +413,7 @@ export default function KampusKritic({
     if(inputError){toast({title:'Academic request needed',description:inputError,variant:'destructive'});return;}
 
 
+    followNewMessagesRef.current = true;
     const attachedImages = [...pendingImages];
     const attachedKinds=[...pendingKinds];
     const attachedNames=[...pendingNames];
@@ -579,10 +587,8 @@ export default function KampusKritic({
 
 
   return (
-    <div className="flex-1 bg-midnight flex flex-col h-full overflow-hidden relative">
-      {sourcePostId&&<div className="p-4 border-b border-gray-800 text-sm"><button className="text-pine min-h-11" onClick={()=>onReturnToSource?.(sourcePostId)}>← Return to the original discussion</button><p className="text-sage">Review the question before sending. Your critique stays private.</p>{sourceError&&<p role="alert" className="text-red-300">{sourceError}</p>}</div>}
-      <KriticExamIntake mode={mode} onModeChange={setMode} topic={examTopic} onTopicChange={setExamTopic} examDate={examDate} onDateChange={setExamDate} onFiles={handleFilesSelected} uploading={uploadingImage||sending}/>
-      {/* Minimal, Clean Sub-Row */}
+    <div className="flex-1 min-h-0 bg-midnight flex flex-col overflow-hidden relative">
+      {/* Course and conversation controls stay in their own row above the scrollable content. */}
       <div className="px-4 py-2 bg-midnight border-b border-gray-800 flex items-center justify-between shrink-0">
         <button
           onClick={onOpenProfile}
@@ -682,8 +688,13 @@ export default function KampusKritic({
         </div>
       )}
 
-      {/* Main Chat Stream */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 no-scrollbar">
+      {/* One scrollable content pane for Exam Rescue, notices and messages.
+          This prevents the upload card, course row and chat from squeezing
+          into overlapping nested scroll areas on smaller screens. */}
+      <div ref={conversationScrollRef} aria-label="Kritic study materials and conversation" className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain no-scrollbar">
+        {sourcePostId&&<div className="p-4 border-b border-gray-800 text-sm"><button className="text-pine min-h-11" onClick={()=>onReturnToSource?.(sourcePostId)}>← Return to the original discussion</button><p className="text-sage">Review the question before sending. Your critique stays private.</p>{sourceError&&<p role="alert" className="text-red-300">{sourceError}</p>}</div>}
+        <KriticExamIntake mode={mode} onModeChange={setMode} topic={examTopic} onTopicChange={setExamTopic} examDate={examDate} onDateChange={setExamDate} onFiles={handleFilesSelected} uploading={uploadingImage||sending}/>
+        <div className="px-4 py-4 flex flex-col gap-4">
         {/* Explicit Pre-Launch Disclaimer Banner */}
         <div className="bg-surface border border-pine/40 rounded-2xl p-3.5 flex items-start gap-3">
           <AlertCircle className="w-4 h-4 text-pine shrink-0 mt-0.5" />
@@ -826,9 +837,10 @@ export default function KampusKritic({
           </div>
         )}
 
-        <div ref={bottomRef} />
+        </div>
       </div>
 
+      {/* Composer stays outside the scrolling pane and above bottom navigation. */}
       {/* Bottom Chat, Image & PDF Composer */}
       <div className="p-3 bg-surface border-t border-gray-800 flex flex-col gap-2 shrink-0">
         {pendingImages.length > 0 && (
