@@ -14,7 +14,7 @@ const accept='.pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.webp';
 export default function KriticExamIntake({mode,onModeChange,topic,onTopicChange,examDate,onDateChange,onFiles,uploading}:Props){
   const markedRef=useRef<HTMLInputElement>(null);
   const notesRef=useRef<HTMLInputElement>(null);
-  return <section aria-label="Kritic study options" className="border-b border-gray-800 p-3.5 sm:p-4 space-y-3">
+  return <section aria-label="Kritic study options" className="border-b border-gray-800 p-3.5 sm:p-4 space-y-3 max-h-[44dvh] overflow-y-auto overscroll-contain">
     <div role="group" aria-label="Study mode" className="grid grid-cols-2 gap-2">
       <button type="button" aria-pressed={mode==='exam_rescue'} onClick={()=>onModeChange('exam_rescue')}
         className={'min-h-11 rounded-xl border px-2 text-xs font-black transition-colors '+(mode==='exam_rescue'?'bg-pine border-pine text-black':'border-gray-700 bg-surface text-sage hover:text-white')}>Exam Rescue · Finals</button>
@@ -57,7 +57,7 @@ export default function KriticExamIntake({mode,onModeChange,topic,onTopicChange,
         <input aria-label="Upload lecture slides or notes" type="file" multiple accept={accept} ref={notesRef} className="hidden" onChange={e=>{if(e.target.files)onFiles(Array.from(e.target.files),'lecture_material');e.target.value='';}}/>
       </div>
       <div className="flex gap-2 items-start"><ShieldAlert className="text-sage w-4 h-4 shrink-0 mt-0.5"/>
-        <p className="text-[11px] leading-relaxed text-sage">4 files maximum; 10 MB per file, 25 MB combined. Remove personal details before uploading. <strong className="text-white">This is a study aid, not official marking. It cannot predict your exam or guarantee a pass.</strong></p>
+        <p className="text-[11px] leading-relaxed text-sage">4 files maximum; 10 MB per file, 25 MB combined. Files are processed by Google Gemini AI. Remove student numbers, names and other personal details before uploading. <strong className="text-white">This is a study aid, not official marking. It cannot predict your exam or guarantee a pass.</strong></p>
       </div>
     </div>:<p className="text-xs leading-relaxed text-sage">Review drafts, rubrics, calculations or citations. Upload coursework in the composer below. Feedback is independent, not a lecturer&apos;s official grade.</p>}
     <p className="text-[11px] text-sage">20 requests per student per UTC day, subject to shared daily capacity. Greetings and empty prompts are rejected before AI usage.</p>
