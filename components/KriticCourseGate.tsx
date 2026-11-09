@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { BookOpen, Check, GraduationCap, Search, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { classifyUniversity } from '@/lib/utils';
@@ -19,10 +19,7 @@ export default function KriticCourseGate({
   const [manualName, setManualName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const filtered = useMemo(() =>
-    school.courses.filter(name => name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 25),
-    [school.code, search]
-  );
+  const filtered = school.courses.filter(name => name.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 25);
   const choice = manual ? manualName.trim() : selected;
   const valid = isValidKriticCourse(choice);
   const save = async () => {
@@ -65,9 +62,9 @@ export default function KriticCourseGate({
                   className={'w-full p-3 text-left text-xs leading-relaxed flex gap-2 items-start hover:bg-pine/10 ' + (selected===name ? 'text-pine bg-pine/10' : 'text-white')}>
                   <span className="flex-1">{name}</span>{selected===name&&<Check className="w-4 h-4 shrink-0"/>}
                 </button>
-              )):<p className="px-3 py-4 text-xs text-sage">No exact match. Use “My course isn't listed” below.</p>}
+              )):<p className="px-3 py-4 text-xs text-sage">No exact match. Use “My course isn&apos;t listed” below.</p>}
             </div>
-            <button className="mt-3 text-xs text-pine underline min-h-10" type="button" onClick={()=>{setManual(true);setSelected('');setError('');}}>My course isn't listed</button>
+            <button className="mt-3 text-xs text-pine underline min-h-10" type="button" onClick={()=>{setManual(true);setSelected('');setError('');}}>My course isn&apos;t listed</button>
           </>
         ):(
           <div className="mt-5">
