@@ -43,7 +43,7 @@ export default function KriticCourseGate({
     <div role="dialog" aria-modal="true" aria-label="Choose your academic programme"
       className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto rounded-3xl border border-pine/40 bg-surface p-5 sm:p-7 shadow-2xl text-white">
-        {!mandatory && onDismiss && (
+        {onDismiss && (
           <button aria-label="Choose later" onClick={onDismiss} className="absolute right-4 top-4 p-2 rounded-full text-sage hover:text-white hover:bg-ink"><X size={20}/></button>
         )}
         <div className="w-12 h-12 rounded-2xl bg-pine/15 text-pine flex items-center justify-center mb-4"><GraduationCap size={26}/></div>
@@ -84,7 +84,7 @@ export default function KriticCourseGate({
           className="mt-4 w-full min-h-12 rounded-xl bg-pine text-black font-black text-sm disabled:opacity-40">
           {saving?'Saving your course…':'Save course and unlock Kritic'}
         </button>
-        {!mandatory && onDismiss && <button onClick={onDismiss} className="w-full min-h-11 mt-2 text-sage text-xs font-semibold">Not now — explore Kampus</button>}
+        {onDismiss && <button onClick={onDismiss} className="w-full min-h-11 mt-2 text-sage text-xs font-semibold">{mandatory ? 'Back to campus' : 'Not now — explore Kampus'}</button>}
         <p className="text-center text-[11px] text-sage mt-3">Your course can be changed later in your profile. No exam grades or pass results are guaranteed.</p>
       </div>
     </div>
