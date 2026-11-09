@@ -59,7 +59,7 @@ export default function KriticExamIntake({mode,onModeChange,topic,onTopicChange,
       <div className="flex gap-2 items-start"><ShieldAlert className="text-sage w-4 h-4 shrink-0 mt-0.5"/>
         <p className="text-[11px] leading-relaxed text-sage">4 files maximum; 10 MB per file, 25 MB combined. Remove personal details before uploading. <strong className="text-white">This is a study aid, not official marking. It cannot predict your exam or guarantee a pass.</strong></p>
       </div>
-    </div>:<p className="text-xs leading-relaxed text-sage">Review drafts, rubrics, calculations or citations. Upload coursework in the composer below. Feedback is independent, not a lecturer's official grade.</p>}
+    </div>:<p className="text-xs leading-relaxed text-sage">Review drafts, rubrics, calculations or citations. Upload coursework in the composer below. Feedback is independent, not a lecturer&apos;s official grade.</p>}
     <p className="text-[11px] text-sage">20 requests per student per UTC day, subject to shared daily capacity. Greetings and empty prompts are rejected before AI usage.</p>
   </section>;
 }
