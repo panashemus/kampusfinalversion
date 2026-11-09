@@ -99,7 +99,8 @@ export async function POST(req: Request) {
         const { error } = await admin.storage.from('kritic_attachments').remove(input.filePaths);
         if (error) console.error('[Kritic attachment] Cleanup failed.');
       };
-      for (const [index, path] of input.filePaths.entries()) {
+      for (let index=0; index<input.filePaths.length; index++) {
+        const path=input.filePaths[index];
         const { data: file, error } = await admin.storage.from('kritic_attachments').download(path);
         if (error || !file) throw new HttpError(400, 'Could not read your private attachment. Reattach it and retry.');
         const bytes = Buffer.from(await file.arrayBuffer());
@@ -160,7 +161,8 @@ export async function POST(req: Request) {
       // Collect successful references even when a sibling upload fails so finally can delete all of them.
       const fileResults = await Promise.allSettled(privateFiles.map(file =>
         uploadPrivateKriticFile(apiKey, file.bytes, file.mimeType)));
-      for (const [index, result] of fileResults.entries()) {
+      for (let index=0; index<fileResults.length; index++) {
+        const result=fileResults[index];
         if (result.status === 'fulfilled') {
           providerFileNames.push(result.value.name);
           parts.push({ text: kindLabel(privateFiles[index].kind) });
