@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS public.push_delivery_claims(
 );
 ALTER TABLE public.push_delivery_claims ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.push_delivery_claims FROM PUBLIC,anon,authenticated;
+GRANT SELECT,INSERT,DELETE ON public.push_delivery_claims TO service_role;
 
 -- pg_net runs after commit. The only transmitted data is a notification UUID;
 -- the secret is fetched from Vault, never embedded in SQL source or client JS.
