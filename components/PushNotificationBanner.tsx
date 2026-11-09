@@ -17,16 +17,20 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
   const [error, setError] = useState('');
   const [testStatus, setTestStatus] = useState('');
   const [dismissed, setDismissed] = useState(false);
+  const [iphoneInstallNeeded, setIphoneInstallNeeded] = useState(false);
 
   useEffect(() => {
     let alive = true;
     if (typeof window === 'undefined') return;
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    const isIos=/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    const supportsPush='Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+    setIphoneInstallNeeded(isIos && !supportsPush);
+    setDismissed(Number(localStorage.getItem('kampus:push-remind-after')||0)>Date.now());
+    if (!supportsPush) {
       setPermission('unsupported');
       return;
     }
     setPermission(Notification.permission);
-    setDismissed(sessionStorage.getItem('kampus:push-dismissed') === '1');
     const inspect = async () => {
       try {
         const existing = await navigator.serviceWorker.getRegistration('/');
@@ -51,13 +55,14 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
     setBusy(true); setError(''); setTestStatus('');
     try {
       if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Web push is unavailable in this browser. On iPhone, install KAMPUS to your Home Screen first.');
+      // The OS permission prompt must happen directly in the user's tap, especially on iOS.
+      const access = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+      setPermission(access);
+      if (access !== 'granted') throw new Error('Allow notifications in your browser settings to receive campus alerts.');
       const configResponse = await fetch('/api/push/config', {cache:'no-store'});
       if (!configResponse.ok) throw new Error('KAMPUS push signing key is not ready. Please try again later.');
       const config = await configResponse.json() as {publicKey:string};
       const publicKey = config.publicKey;
-      const access = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-      setPermission(access);
-      if (access !== 'granted') throw new Error('Allow notifications in your browser settings to receive campus alerts.');
       const registration = await navigator.serviceWorker.register('/sw.js');
       await navigator.serviceWorker.ready;
       let subscription = await registration.pushManager.getSubscription();
@@ -102,7 +107,19 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
     finally { setBusy(false); }
   };
 
-  if (permission === 'unsupported') return null;
+  if (permission === 'unsupported') {
+    if (!iphoneInstallNeeded || dismissed) return null;
+    return (
+      <div className="rounded-xl border border-pine/30 bg-pine/10 p-3 my-2 flex items-start gap-3">
+        <Bell className="h-5 w-5 text-pine shrink-0 mt-1"/>
+        <div className="flex-1 text-xs space-y-2">
+          <strong className="text-white">Get Campus Feed alerts on your iPhone lock screen</strong>
+          <p className="text-sage">In Safari, tap Share → Add to Home Screen, then open KAMPUS from your new Home Screen icon. You can enable notifications inside the installed app.</p>
+          <button onClick={() => {const until=Date.now()+7*24*60*60*1000;localStorage.setItem('kampus:push-remind-after',String(until));setDismissed(true);}} className="text-pine underline">Got it</button>
+        </div>
+      </div>
+    );
+  }
   if (subscribed) return (
     <div className="rounded-xl border border-pine/20 bg-pine/5 px-3 py-2 my-1 text-sage text-xs">
       <div className="flex gap-2 items-center flex-wrap"><CheckCircle2 className="text-pine w-4 h-4"/><strong className="text-white">Alerts on</strong><button type="button" onClick={test} disabled={busy} className="ml-auto underline text-pine min-h-8 disabled:opacity-60">{busy ? 'Sending…' : 'Test notification'}</button></div>
@@ -115,13 +132,13 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
     <div className="rounded-xl border border-pine/30 bg-pine/10 p-3 my-2 flex items-start gap-3">
       <Bell className="h-5 w-5 text-pine shrink-0 mt-1"/>
       <div className="flex-1 text-xs space-y-2">
-        <strong className="text-white">Get KAMPUS alerts</strong>
-        <p className="text-sage">Enable browser notifications for campus messages and safety updates, even when KAMPUS isn’t open.</p>
+        <strong className="text-white">Get Campus Feed alerts</strong>
+        <p className="text-sage">Get new campus questions, anonymous confessions and replies on your phone’s lock screen, even when KAMPUS is closed. Only students who enable alerts receive these pushes.</p>
         {permission === 'denied' && <p className="text-amber-300">Notifications are blocked. Allow them in your browser’s site settings, then return here.</p>}
         {error && <p role="alert" className="text-red-300">{error}</p>}
         <div className="flex gap-3 items-center flex-wrap">
           <button disabled={busy || permission === 'denied'} onClick={enable} className="rounded-lg bg-pine text-black px-3 py-2 font-bold disabled:opacity-50">{busy ? 'Setting up…' : permission === 'granted' ? 'Finish setting up alerts' : 'Enable notifications'}</button>
-          <button onClick={() => {setDismissed(true);sessionStorage.setItem('kampus:push-dismissed','1');}} className="text-sage underline">Not now</button>
+          <button onClick={() => {setDismissed(true);localStorage.setItem('kampus:push-remind-after',String(Date.now()+7*24*60*60*1000));}} className="text-sage underline">Not now</button>
         </div>
       </div>
     </div>
