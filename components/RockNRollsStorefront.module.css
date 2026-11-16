@@ -15,3 +15,5 @@
 @media(max-width:360px){.utility>a span{display:none}.bag>span{display:none}.nav nav{gap:23px}.hero{padding-left:20px;padding-right:20px}.hero h1{font-size:61px}.actions{gap:10px}.cardInfo h3{font-size:22px}.cardTag{font-size:6px}.stickyEnquiry small{max-width:150px}.stickyEnquiry .primary svg{display:none}}
 @media(prefers-reduced-motion:reduce){.store{scroll-behavior:auto}.photo:before{animation:none}.photo img{transition:none}.cardPhoto:hover img,.gallery>button:hover img{transform:none}}
 @keyframes shimmer{to{background-position:-200% 0}}
+
+.brand{display:inline-flex;align-items:center;gap:12px;flex-shrink:0}.brand>img{object-fit:contain;border-radius:50%;border:1px solid var(--line);flex-shrink:0}.footer>.brand{justify-self:start}.heroFoot img{flex-shrink:0}@media(max-width:760px){.nav .brand{gap:8px}.nav .brand>img{width:48px;height:48px}.nav .brand .wordmark{font-size:24px}.nav .bag>span{display:none}}@media(max-width:360px){.nav .brand{gap:7px}.nav .brand>img{width:44px;height:44px}.nav .brand .wordmark{font-size:22px}}
