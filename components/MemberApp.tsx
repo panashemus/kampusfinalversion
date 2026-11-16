@@ -738,7 +738,16 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                 </div>
               )}
 
-              {!destination.search?.toLowerCase().includes('tlokweng') && activeSosAlerts.filter((a) => a.active).length === 0 && (
+              {destination.search?.toLowerCase() === 'gaborone rock n rolls' && (
+                <div className="absolute top-4 left-4 right-4 z-[900] pointer-events-none">
+                  <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 p-3.5 text-white shadow-xl">
+                    <p className="text-xs font-bold">Gaborone · Rock ’n Rolls city area</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-sage">This is the general city area, not the bakery’s address. Ask Rock ’n Rolls for delivery or collection details.</p>
+                    <Link className="pointer-events-auto mt-2 inline-flex min-h-8 items-center text-xs font-bold text-pine underline" href="/store/rock-n-rolls">Return to Rock ’n Rolls</Link>
+                  </div>
+                </div>
+              )}
+              {!destination.search?.toLowerCase().includes('tlokweng') && destination.search?.toLowerCase() !== 'gaborone rock n rolls' && activeSosAlerts.filter((a) => a.active).length === 0 && (
                 <div className="absolute top-4 left-4 right-4 z-[500] pointer-events-none">
                   <div className="bg-surface/95 backdrop-blur-md rounded-2xl border border-gray-800 p-3.5 flex items-center gap-3 shadow-lg">
                     <div className="w-9 h-9 rounded-xl bg-ink border border-pine/40 flex items-center justify-center shrink-0">

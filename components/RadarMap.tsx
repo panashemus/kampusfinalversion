@@ -228,6 +228,7 @@ function RequestedPlaceFocus({place}:{place?:string}){
   const map=useMap();
   useEffect(()=>{
     if(place?.toLowerCase().includes('tlokweng'))map.flyTo([-24.66861,25.97111],13,{animate:true,duration:0.65});
+    if(place?.toLowerCase() === 'gaborone rock n rolls')map.flyTo([-24.6282,25.9231],12,{animate:true,duration:0.65});
   },[place,map]);
   return null;
 }
