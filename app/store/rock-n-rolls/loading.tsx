@@ -1,0 +1,3 @@
+export default function Loading() {
+  return <main role="status" aria-label="Loading Rock ’n Rolls storefront" className="h-[100dvh] overflow-y-auto bg-[#fff7e9] p-6 text-[#641d30]"><div className="mx-auto max-w-6xl"><p className="font-serif text-3xl italic">rock ’n rolls</p><p className="mt-4 text-sm">Getting something sweet ready…</p><div className="mt-8 grid gap-8 sm:grid-cols-2 motion-safe:animate-pulse" aria-hidden="true"><div className="space-y-5 py-10"><div className="h-16 w-4/5 rounded bg-[#f1c5ce]" /><div className="h-16 w-3/5 rounded bg-[#f1c5ce]" /><div className="h-6 rounded bg-[#f3e2db]" /></div><div className="aspect-square rounded-t-full bg-[#f1c5ce]" /></div></div></main>;
+}

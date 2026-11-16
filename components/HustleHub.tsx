@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import RockNRollsHubCard from './RockNRollsHubCard';
 import SecureImage from './SecureImage';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -296,6 +297,7 @@ export default function HustleHub({
         )}
 
         {/* STATIC LIST GIG BUTTON */}
+        {!selectedListingId && activeFilter === 'All' && (!searchQuery.trim() || /rock|roll|brownie|brookie|cake|muffin|bakery|bakes|food|gaborone/i.test(searchQuery)) && <RockNRollsHubCard />}
         <button
           onClick={() => requireVerified(() => { setShowModal(true); })}
           className="w-full mb-5 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg"
