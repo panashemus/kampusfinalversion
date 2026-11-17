@@ -71,7 +71,7 @@ export default function AuthScreen({
           setCode('');
           setStep('verify');
           setResendCooldown(45);
-          setNotice('We sent a 6-digit verification code. Check your university inbox, including spam or junk.');
+          setNotice('Verification code requested. If it does not arrive, check spam, confirm the address and ask your university IT desk whether the mailbox accepts external mail.');
           return;
         }
       } else {
@@ -133,7 +133,7 @@ export default function AuthScreen({
       if (resendError) throw resendError;
       setCode('');
       setResendCooldown(60);
-      setNotice('New code requested. Check your inbox and spam or junk folder. Use the most recent code.');
+      setNotice('New code requested. Check spam or junk and use the newest code. If it still does not arrive, your university mailbox may be rejecting delivery: verify its spelling and contact university IT.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to resend a code right now. Please try again later.');
     } finally {
@@ -149,11 +149,25 @@ export default function AuthScreen({
     setNotice('');
   };
 
+  // A university mailbox can reject a message *after* SMTP accepts it.
+  // Let someone with an unverified account correct a typo or use another
+  // active, approved student address. Do not bypass ownership verification.
+  const correctUnreachableEmail = () => {
+    setStep('form');
+    setSignup(true);
+    setEmail(pendingEmail || email);
+    setPendingEmail('');
+    setCode('');
+    setResendCooldown(0);
+    setError('');
+    setNotice('Check the address carefully. If your university inbox is unavailable, use another active university-issued email. A new address must receive and confirm its own code.');
+  };
+
   return (
     <main className="min-h-[100dvh] w-full bg-midnight text-white overflow-y-auto grid place-items-center p-5">
       <div className="w-full max-w-md rounded-3xl border border-gray-800 bg-surface p-7 space-y-6">
         <button type="button" onClick={step === 'verify' ? returnToForm : onExplore} className="min-h-11 flex items-center gap-2 text-sage text-sm">
-          <ArrowLeft size={18} />{step === 'verify' ? 'Back to sign in' : 'Back to exploring'}
+          <ArrowLeft size={18} />{step === 'verify' ? 'Back to account details' : 'Back to exploring'}
         </button>
         <KampusLogo className="h-16 w-auto" />
         {step === 'verify' ? (
@@ -161,7 +175,7 @@ export default function AuthScreen({
             <div className="space-y-2">
               <MailCheck className="text-pine" size={30} aria-hidden="true" />
               <h1 className="text-3xl font-black">Verify your student email</h1>
-              <p className="text-sage text-sm">Enter the 6-digit code we sent to <span className="font-semibold text-white break-all">{pendingEmail}</span>.</p>
+              <p className="text-sage text-sm">Enter the 6-digit code requested for <span className="font-semibold text-white break-all">{pendingEmail}</span>.</p>
               <p className="text-sage text-xs">Check spam or junk if you do not see it. Codes expire, so use the newest email.</p>
             </div>
             <form onSubmit={verify} className="space-y-4">
@@ -190,7 +204,13 @@ export default function AuthScreen({
             <button type="button" disabled={busy || resendCooldown > 0} onClick={resendCode} className="min-h-11 text-sage text-sm underline disabled:opacity-50">
               {resendCooldown > 0 ? 'Request another code in ' + resendCooldown + 's' : 'Didn’t receive it? Resend code'}
             </button>
-            <p className="text-xs text-sage">If you already confirmed your email, go back and sign in instead.</p>
+            <div className="rounded-xl border border-sage/25 bg-midnight/40 p-3 space-y-2">
+              <p className="text-xs text-sage">No email after checking spam? Student mailboxes sometimes reject external messages even when Kampus successfully requests delivery. Confirm you can access that mailbox and ask your university IT desk if needed.</p>
+              <button type="button" onClick={correctUnreachableEmail} disabled={busy} className="min-h-11 text-left text-sm text-pine underline disabled:opacity-50">
+                Wrong email or inbox not working? Use another student email
+              </button>
+            </div>
+            <p className="text-xs text-sage">A new address must be verified before account access is granted. If your email is already confirmed, go back and sign in.</p>
           </>
         ) : (
           <>
