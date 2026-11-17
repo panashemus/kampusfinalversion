@@ -117,3 +117,94 @@ test('exam quality floor triggers fallback instead of accepting a one-line non-c
 test('exam quality floor rejects both inadequate responses', async () => {
   await assert.rejects(()=>generateKriticReply({...base,minReplyChars:500,fetcher:async()=>validReply('Too brief for a detailed assessment')}),/All configured academic AI providers failed/);
 });
+
+test('Kritic uses free Hydrogen before both established Gemini fallback models', async () => {
+  const {selectKriticModels, FREE_KRITIC_MODELS} = require('../lib/kritic-provider.ts');
+  assert.deepEqual(
+    selectKriticModels('gemini-4-hydrogen', ['gemini-3.6-flash']),
+    ['gemini-4-hydrogen', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
+  );
+  assert.ok(FREE_KRITIC_MODELS.includes('gemini-4-hydrogen'));
+  const seen = [];
+  const result = await generateKriticReply({
+    ...base,
+    primaryModel: 'gemini-4-hydrogen',
+    fallbackModels: ['gemini-3.6-flash'],
+    fetcher: async (url,opts) => {
+      seen.push(url);
+      assert.ok(!opts.body.includes('OPENAI_API_KEY'));
+      return seen.length === 3 ? validReply('Here is the improved review with evidence.') : failure(503);
+    },
+  });
+  assert.deepEqual(seen.map(url => url.split('/models/')[1].split(':')[0]), [
+    'gemini-4-hydrogen','gemini-3.6-flash','gemini-3.5-flash-lite',
+  ]);
+  assert.equal(result.model, 'gemini-3.5-flash-lite');
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(result.multiStepUsed, false);
+});
+
+test('Carbon and Argon are never selected with the default zero-paid-model policy', () => {
+  const {selectKriticModels} = require('../lib/kritic-provider.ts');
+  const models = selectKriticModels('gemini-4-carbon', [
+    'gemini-4-argon','gemini-3.6-flash','gemini-2.5-pro',
+  ]);
+  assert.deepEqual(models, ['gemini-4-hydrogen','gemini-3.6-flash','gemini-3.5-flash-lite']);
+  assert.deepEqual(
+    selectKriticModels('gemini-4-argon',['gemini-3.6-flash'],true),
+    ['gemini-4-argon','gemini-3.6-flash','gemini-3.5-flash-lite'],
+  );
+  const route = fs.readFileSync(path.resolve(__dirname,'../app/api/kritic-audit/route.ts'),'utf8');
+  assert.match(route,/KRITIC_PAID_MODELS_ENABLED === 'I_ACCEPT_PAID_API_CHARGES'/);
+  assert.doesNotMatch(route,/process\.env\.OPENAI_API_KEY|api\.openai\.com/);
+});
+
+test('complex coursework first maps evidence, then verifies it in final academic critique', async () => {
+  const calls=[];
+  const result=await generateKriticReply({
+    ...base,
+    primaryModel:'gemini-4-hydrogen',
+    fallbackModels:['gemini-3.6-flash'],
+    multiStep:true,
+    deadlineAt:Date.now()+50_000,
+    contents:[{role:'user',parts:[{text:'Review this supplied synthetic assignment and rubric.'}]}],
+    fetcher:async (url,options) => {
+      calls.push({url,options});
+      return calls.length === 1
+        ? validReply('Supplied rubric: research accuracy; sample argument is vague; source not identified.')
+        : validReply('Kritic verdict: The draft needs evidence. Priority fix: verify the claim against your supplied rubric and substantiate it.');
+    },
+  });
+  assert.equal(calls.length,2);
+  assert.equal(result.model,'gemini-4-hydrogen');
+  assert.equal(result.fallbackUsed,false);
+  assert.equal(result.multiStepUsed,true);
+  const planning=JSON.parse(calls[0].options.body);
+  const final=JSON.parse(calls[1].options.body);
+  assert.match(planning.systemInstruction.parts[0].text,/FACTUAL evidence inventory/);
+  assert.match(JSON.stringify(final.contents),/AUTO-GENERATED EVIDENCE INVENTORY FOR VERIFICATION/);
+  assert.match(JSON.stringify(final.contents),/Supplied rubric/);
+  assert.equal(planning.generationConfig.maxOutputTokens,800);
+});
+
+test('failed evidence mapping never blocks a usable final answer', async () => {
+  let calls=0;
+  const result=await generateKriticReply({
+    ...base, primaryModel:'gemini-4-hydrogen',
+    multiStep:true, deadlineAt:Date.now()+50_000,
+    fetcher:async () => (++calls === 1 ? failure(429) : validReply('Review is available without the optional planning pass.')),
+  });
+  assert.equal(calls,2);
+  assert.equal(result.fallbackUsed,false);
+  assert.equal(result.multiStepUsed,false);
+});
+
+test('short request deadlines skip extra reasoning and avoid unbounded retries', async () => {
+  let calls=0;
+  await assert.rejects(()=>generateKriticReply({
+    ...base, primaryModel:'gemini-4-hydrogen',multiStep:true,
+    deadlineAt:Date.now()+500,
+    fetcher:async()=>{calls++;return failure(503)},
+  }),/All configured academic AI providers failed/);
+  assert.equal(calls,0);
+});

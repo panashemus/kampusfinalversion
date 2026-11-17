@@ -4,7 +4,7 @@ import { requireUser, boundedJson, HttpError, errorResponse } from '@/lib/server
 import { validateKriticInput } from '@/lib/kritic-validation';
 import { isValidKriticCourse, KRITIC_MAX_TOTAL_BYTES } from '@/lib/kritic-intake';
 import { buildBotswanaKriticInstruction, buildExamRescueInstruction } from '@/lib/botswana-kritic';
-import { generateKriticReply, type GeminiContent } from '@/lib/kritic-provider';
+import { generateKriticReply, selectKriticModels, type GeminiContent } from '@/lib/kritic-provider';
 import { uploadPrivateKriticFile, deletePrivateKriticFiles } from '@/lib/kritic-files';
 import { extractKriticDocument } from '@/lib/kritic-document-extract';
 
@@ -35,6 +35,7 @@ async function releaseUnsuccessfulReservation(userId: string, bucket: string) {
 }
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
   let cleanupUploads: (() => Promise<void>) | undefined;
   try {
     const raw = await boundedJson(req, 1_000_000);
@@ -55,9 +56,16 @@ export async function POST(req: Request) {
     try { input = validateKriticInput(raw); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'Invalid request.'); }
 
+    // The existing Vercel Gemini key stays server-side. Never use the pasted
+    // OpenAI API key: ChatGPT subscriptions do not cover API billing.
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.KRITIC_MODEL;
-    if (!apiKey || !model || !/^gemini-[a-z0-9.-]+$/.test(model)) {
+    const legacyModel = process.env.KRITIC_MODEL || 'gemini-3.6-flash';
+    // Paid Argon/Carbon are *disabled* unless the operator deliberately opts
+    // into API charges; no new provider key or paid subscription is required.
+    const allowPaidModels = process.env.KRITIC_PAID_MODELS_ENABLED === 'I_ACCEPT_PAID_API_CHARGES';
+    const primaryModel = process.env.KRITIC_PRIMARY_MODEL || 'gemini-4-hydrogen';
+    const permittedModels = selectKriticModels(primaryModel, [legacyModel], allowPaidModels);
+    if (!apiKey || !permittedModels.length) {
       throw new HttpError(503, 'Kritic is temporarily unavailable. Your draft has been kept.');
     }
 
@@ -179,16 +187,23 @@ export async function POST(req: Request) {
       }));
       contents.push({ role: 'user', parts });
 
-      const { reply, fallbackUsed } = await generateKriticReply({
+      const { reply, fallbackUsed, multiStepUsed } = await generateKriticReply({
         apiKey,
-        primaryModel: model,
+        primaryModel,
+        fallbackModels: [legacyModel],
+        allowPaidModels,
+        // A bounded evidence-map pass is useful for real assignments and exams,
+        // not for trivial single-sentence questions. No extra user quota used.
+        multiStep: Boolean(input.filePaths.length || input.images.length || input.promptText.length >= 750),
+        deadlineAt: startedAt + 53_000,
         systemInstruction: buildBotswanaKriticInstruction({
           institution: String(profile.university || user.email?.split('@')[1] || 'Botswana higher education'),
           programme: String(profile.course_code),
         }) + (input.mode === 'exam_rescue' ? '\n' + buildExamRescueInstruction() : ''),
         contents,
         greeting: false, // Greetings are rejected before quota reservation.
-        minReplyChars: input.mode === 'exam_rescue' && input.fileKinds.includes('graded_work') && input.fileKinds.includes('lecture_material') ? 450 : 0,
+        minReplyChars: input.mode === 'exam_rescue' && input.fileKinds.includes('graded_work') && input.fileKinds.includes('lecture_material')
+          ? 450 : (input.filePaths.length || input.images.length) ? 240 : 0,
         logger: (event, failedModel, reason) => {
           console.warn('[Kritic provider]', event, failedModel, reason);
         },
@@ -197,7 +212,7 @@ export async function POST(req: Request) {
       if (fallbackUsed) console.info('[Kritic provider] Recovery model succeeded.');
       return NextResponse.json({
         reply,
-        benchmark_used: input.mode === 'exam_rescue' ? 'Exam Rescue · Evidence-informed · No grade guarantees' : 'BQA-informed academic guidance · Not official grading',
+        benchmark_used: input.mode === 'exam_rescue' ? 'Exam Rescue · Evidence-informed · No grade guarantees' : multiStepUsed ? 'Evidence-mapped review · Botswana academic guidance · Not official grading' : 'BQA-informed academic guidance · Not official grading',
         is_preview: false,
       }, { headers: { 'Cache-Control': 'no-store' } });
     } catch {
