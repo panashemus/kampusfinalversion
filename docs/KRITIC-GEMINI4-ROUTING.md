@@ -1,31 +1,25 @@
-# Kritic — Gemini 4 routing and bounded evidence review (November 2026)
+# Kritic emergency reliability hotfix — 17 November 2026
 
-## Safety and pricing policy
-- **Default primary: `gemini-4-hydrogen`** using the existing server-only `GEMINI_API_KEY`. The exact API model ID is documented by Google.
-- **Automatic fallbacks: `gemini-3.6-flash`, then `gemini-3.5-flash-lite`.** The existing production `KRITIC_MODEL` is attempted immediately after Hydrogen when it is on the approved list. No unexpected or deprecated model IDs are accepted.
-- **`gemini-4-argon` and `gemini-4-carbon` are paid API models and are disabled.** Only an explicit operator action setting `KRITIC_PAID_MODELS_ENABLED=I_ACCEPT_PAID_API_CHARGES` *and* selecting a paid `KRITIC_PRIMARY_MODEL` can enable them. Do not do this on the current no-new-charges plan.
-- ChatGPT Plus does not include OpenAI API usage. The user pasted an OpenAI API key in chat: **do not reuse or persist that key**. Its owner should revoke it in OpenAI's key-management console and create a new key only if paid API usage is explicitly desired later.
-- Google AI Studio/API free-tier access depends on the Google project, billing state, geographic eligibility and rate limits. If a Gemini API key is attached to paid billing, even models with a free-tier offering may incur paid API usage. Confirm the actual billing tier before promising zero charges.
-- Model/provider keys must never be stored in the repository, `NEXT_PUBLIC_*` variables, client JavaScript, logs, or students' uploaded documents.
-- Preserve private Supabase Storage, authenticated users, email-verification and course requirements, quota reservation/refund, upload cleanup and existing API request limits. One user request reserves one Kritic quota unit regardless of bounded provider fallback.
+## Incident
+Vercel Production logs confirmed `gemini-4-hydrogen` timeouts and HTTP 503 errors, plus repeated HTTP 503 errors on `gemini-3.6-flash` and intermittent 503/timeouts on `gemini-3.5-flash-lite`. The old Hydrogen-first flow could take nearly a minute and fail. The database's request-quota refund RPC rejected server-side releases due to an unreliable role-claim guard.
 
-## Adaptive evidence-first workflow
-- A substantial draft (>=750 prompt characters) or coursework upload qualifies for a two-stage review. Short questions, greetings and requests near the 60-second function deadline use a single model pass.
-- Stage 1: an 8-second bounded Hydrogen evidence inventory checks what materials and rubric exist, pinpoints observable gaps and notes uncertainty. This is **not internal chain-of-thought**; it is a short working evidence summary, subject to verification.
-- Stage 2: a fresh response verifies the inventory against original materials, marks unsupported claims as unknown, and produces a student-executable review with rubric-led priorities. If stage 1 fails, the regular response still proceeds.
-- On rejection, timeouts, blocked access, provider errors, empty responses, thought-only responses or inadequate exam responses, attempt the next explicitly approved model. A shared absolute deadline caps the entire provider workflow, rather than looping indefinitely.
-- Respect Botswana context and BQA boundaries: do not claim official BQA grades, lecturer expectations, fake citations or guaranteed scores. Academically honest learning support means critique, concrete revisions and practice, not invented evidence.
-- Logs contain only limited provider status codes and model IDs; never student text or credential values.
+## Current default routing
+- **Short conversational questions:** `gemini-3.5-flash-lite`, then `gemini-2.5-flash-lite`, then `gemini-3.8-flash`. Use shorter per-model timeouts, low thinking and constrained response length.
+- **Substantial tasks and attachments:** `gemini-3.8-flash`, then `gemini-2.5-flash`, then `gemini-3.5-flash-lite`. Keep Botswana-specific rubric and BQA context, with larger response budgets but bounded request time.
+- Google's older 2.5 models may not be available to new projects. Provider 404/429/503 will fall through, not get mistaken for actual student feedback. No guaranteed availability during upstream outages.
+- **Hydrogen** remains a selectable model ID, but is not the default during the ongoing instability. Argon and Carbon remain disabled unless explicitly opted into paid API use. No OpenAI API calls, and never use the key pasted into chat.
+- **Extra evidence-inventory model pass is OFF by default.** Enable only with `KRITIC_EVIDENCE_PASS_ENABLED=true` after monitoring latency, billing and reliability.
+- **Provider-status FAQs** are answered locally without consuming a quota reservation, with accurate statements about adaptive routing.
 
-## Configuration
-| Name | Purpose | Current recommended value |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | Existing private server key | Leave unchanged; only in Vercel Production |
-| `KRITIC_PRIMARY_MODEL` | Optional override of first model | Unset (defaults to `gemini-4-hydrogen`) |
-| `KRITIC_MODEL` | Compatibility setting / first approved backup | Existing working `gemini-3.6-flash` |
-| `KRITIC_PAID_MODELS_ENABLED` | Explicit paid-model opt-in | **Unset** |
+## Technical safeguards
+- Gemini 2.5 models use `thinkingBudget` rather than unsupported `thinkingLevel`. 
+- Server-side Supabase auth and student course requirement remain mandatory for academic review; document uploads and clean-up unchanged.
+- On provider failure, return a clear error, do not fabricate a critique, and attempt a backend-only quota refund.
+- Supabase migration `kritic_secure_refund_grants_20261117` removed the optional JWT-claim guard while preserving EXECUTE **only** for `service_role` (both `anon` and `authenticated` forbidden). Two historically failed requests for the owner's authenticated account were refunded after verifying logs and usage counts, reducing today's used count from 3 to 1.
+- Production keys are server-side. `KRITIC_PRIMARY_MODEL` may override the first model, but not whitelist restrictions. The legacy `KRITIC_MODEL` environment setting is retained in Vercel but no longer drives the adaptive default. The override should remain **unset**.
 
-## Verification and rollout
-Run `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build` on a feature branch, then deploy a preview. Check public unauthorized requests return their existing auth errors, without exposing any model key or user content.
-The synthetic provider smoke script `pnpm test:kritic:live` only runs on an explicitly permitted environment holding a **verified non-billable** Google key. Do not run it against an unknown-billing key. Mocks and build checks validate the fallback algorithm but cannot prove actual live Gemini 4 entitlement.
-Rollback by setting `KRITIC_PRIMARY_MODEL=gemini-3.6-flash` and redeploying the approved revision or reverting the commit if necessary.
+## Validation
+Run `pnpm test`, `pnpm typecheck`, `pnpm lint` and `pnpm build` before deployment. Verify preview and production routes. Observe server logs for 502s, upstream 503s, failed refund attempts, and actual latency over time. Unit tests with mock fetch validate routing logic, **not** live Google availability; a real API smoke test was deliberately not made without verifying the Google project's billing state.
+
+## Rollback
+If the new route fails, restore the previous commit or set an approved `KRITIC_PRIMARY_MODEL` and redeploy. Never silently enable a paid model.

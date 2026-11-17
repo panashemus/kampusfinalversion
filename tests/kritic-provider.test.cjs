@@ -48,7 +48,7 @@ test('timeout on primary model falls back to Flash-Lite with no second quota res
   }});
   assert.equal(seen.length,2);
   assert.match(seen[0],/gemini-3.6-flash/);
-  assert.match(seen[1],/gemini-3.5-flash-lite/);
+  assert.match(seen[1],/gemini-2.5-flash-lite/);
   assert.equal(output.fallbackUsed,true);
   assert.match(output.reply,/academic feedback/);
 });
@@ -122,7 +122,7 @@ test('Kritic uses free Hydrogen before both established Gemini fallback models',
   const {selectKriticModels, FREE_KRITIC_MODELS} = require('../lib/kritic-provider.ts');
   assert.deepEqual(
     selectKriticModels('gemini-4-hydrogen', ['gemini-3.6-flash']),
-    ['gemini-4-hydrogen', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'],
+    ['gemini-4-hydrogen', 'gemini-3.6-flash', 'gemini-2.5-flash-lite'],
   );
   assert.ok(FREE_KRITIC_MODELS.includes('gemini-4-hydrogen'));
   const seen = [];
@@ -137,9 +137,9 @@ test('Kritic uses free Hydrogen before both established Gemini fallback models',
     },
   });
   assert.deepEqual(seen.map(url => url.split('/models/')[1].split(':')[0]), [
-    'gemini-4-hydrogen','gemini-3.6-flash','gemini-3.5-flash-lite',
+    'gemini-4-hydrogen','gemini-3.6-flash','gemini-2.5-flash-lite',
   ]);
-  assert.equal(result.model, 'gemini-3.5-flash-lite');
+  assert.equal(result.model, 'gemini-2.5-flash-lite');
   assert.equal(result.fallbackUsed, true);
   assert.equal(result.multiStepUsed, false);
 });
@@ -149,10 +149,10 @@ test('Carbon and Argon are never selected with the default zero-paid-model polic
   const models = selectKriticModels('gemini-4-carbon', [
     'gemini-4-argon','gemini-3.6-flash','gemini-2.5-pro',
   ]);
-  assert.deepEqual(models, ['gemini-4-hydrogen','gemini-3.6-flash','gemini-3.5-flash-lite']);
+  assert.deepEqual(models, ['gemini-3.5-flash-lite','gemini-3.6-flash','gemini-2.5-flash-lite']);
   assert.deepEqual(
     selectKriticModels('gemini-4-argon',['gemini-3.6-flash'],true),
-    ['gemini-4-argon','gemini-3.6-flash','gemini-3.5-flash-lite'],
+    ['gemini-4-argon','gemini-3.6-flash','gemini-2.5-flash-lite'],
   );
   const route = fs.readFileSync(path.resolve(__dirname,'../app/api/kritic-audit/route.ts'),'utf8');
   assert.match(route,/KRITIC_PAID_MODELS_ENABLED === 'I_ACCEPT_PAID_API_CHARGES'/);
@@ -207,4 +207,47 @@ test('short request deadlines skip extra reasoning and avoid unbounded retries',
     fetcher:async()=>{calls++;return failure(503)},
   }),/All configured academic AI providers failed/);
   assert.equal(calls,0);
+});
+
+
+test('fast short answers skip heavyweight thinking and limit visible tokens', async () => {
+ const seen=[];
+ const result=await generateKriticReply({
+   ...base,primaryModel:'gemini-3.5-flash-lite',quickAnswer:true,
+   fallbackModels:['gemini-2.5-flash-lite'],
+   fetcher:async (url,opts)=>{seen.push({url,body:JSON.parse(opts.body)});return validReply('Kritic uses different Gemini models based on availability.');},
+ });
+ assert.equal(result.fallbackUsed,false);
+ assert.equal(seen.length,1);
+ assert.match(seen[0].url,/gemini-3.5-flash-lite/);
+ assert.equal(seen[0].body.generationConfig.thinkingConfig.thinkingLevel,'low');
+ assert.equal(seen[0].body.generationConfig.maxOutputTokens,1300);
+});
+
+test('2.5-model requests use thinkingBudget, not unsupported thinkingLevel', async () => {
+ for (const model of ['gemini-2.5-flash','gemini-2.5-flash-lite']) {
+   let body;
+   await generateKriticReply({...base,primaryModel:model,quickAnswer:true,
+     fetcher:async (_,opts)=>{body=JSON.parse(opts.body);return validReply('Test reply');}});
+   assert.equal(body.generationConfig.thinkingConfig.thinkingBudget,0);
+   assert.equal(body.generationConfig.thinkingConfig.thinkingLevel,undefined);
+ }
+});
+
+test('route disables extra model pass unless explicitly enabled and defaults away from Hydrogen',()=>{
+ const route=fs.readFileSync(path.resolve(__dirname,'../app/api/kritic-audit/route.ts'),'utf8');
+ assert.match(route,/KRITIC_EVIDENCE_PASS_ENABLED === 'true'/);
+ assert.match(route,/quickAnswer \? 'gemini-3.5-flash-lite' : 'gemini-3.8-flash'/);
+ assert.match(route,/Answer the actual question directly/);
+ assert.doesNotMatch(route,/process\.env\.OPENAI_API_KEY/);
+});
+
+test('model-status questions return a truthful no-quota fast path without the provider',()=>{
+ const route=fs.readFileSync(path.resolve(__dirname,'../app/api/kritic-audit/route.ts'),'utf8');
+ assert.match(route,/modelStatusQuestion/);
+ assert.match(route,/Hydrogen is temporarily not the default/);
+ assert.match(route,/is_preview: true, \/\/ informational system reply/);
+ const statusIndex=route.indexOf('if (modelStatusQuestion)');
+ const quotaIndex=route.indexOf("db.rpc('reserve_kritic_request')");
+ assert.ok(statusIndex > 0 && statusIndex < quotaIndex);
 });

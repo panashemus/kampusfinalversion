@@ -9,9 +9,12 @@ export type GeminiContent = {
 };
 
 export const FREE_KRITIC_MODELS = [
-  'gemini-4-hydrogen',
+  'gemini-3.5-flash-lite', // fast conversations
+  'gemini-3.8-flash',      // substantive academic feedback
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
   'gemini-3.6-flash',
-  'gemini-3.5-flash-lite',
+  'gemini-4-hydrogen',     // optional, not default during upstream instability
 ] as const;
 export const PAID_KRITIC_MODELS = [
   'gemini-4-argon',
@@ -38,6 +41,7 @@ export type KriticGenerationOptions = {
   systemInstruction: string;
   contents: GeminiContent[];
   greeting?: boolean;
+  quickAnswer?: boolean;
   multiStep?: boolean;
   deadlineAt?: number;
   minReplyChars?: number;
@@ -60,9 +64,9 @@ export function selectKriticModels(
 ): string[] {
   const permitted = new Set<string>(FREE_KRITIC_MODELS);
   if (allowPaidModels) PAID_KRITIC_MODELS.forEach(model => permitted.add(model));
-  const requested = permitted.has(primaryModel) ? primaryModel : 'gemini-4-hydrogen';
-  const candidates = [requested, ...fallbackModels, 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
-  return candidates.filter((model, index) => permitted.has(model) && candidates.indexOf(model) === index).slice(0, 4);
+  const requested = permitted.has(primaryModel) ? primaryModel : 'gemini-3.5-flash-lite';
+  const candidates = [requested, ...fallbackModels, 'gemini-2.5-flash-lite', 'gemini-3.5-flash-lite'];
+  return candidates.filter((model, index) => permitted.has(model) && candidates.indexOf(model) === index).slice(0, 3);
 }
 
 function visibleGoogleText(payload: GeminiResponse): string {
@@ -82,6 +86,7 @@ type AttemptConfig = {
   timeoutMs: number;
   maxOutputTokens: number;
   thinkingLevel: 'low' | 'medium' | 'high';
+  quickAnswer?: boolean;
   minReplyChars?: number;
   fetcher: typeof fetch;
   logger: (event: string, model: string, reason: string) => void;
@@ -89,7 +94,7 @@ type AttemptConfig = {
 
 async function attemptGemini({
   model, apiKey, systemInstruction, contents, timeoutMs, maxOutputTokens,
-  thinkingLevel, minReplyChars = 0, fetcher, logger,
+  thinkingLevel, quickAnswer = false, minReplyChars = 0, fetcher, logger,
 }: AttemptConfig): Promise<string | null> {
   try {
     const response = await fetcher(
@@ -103,7 +108,11 @@ async function attemptGemini({
           contents,
           generationConfig: {
             maxOutputTokens,
-            thinkingConfig: { thinkingLevel },
+            // Gemini 2.5 uses thinkingBudget, NOT thinkingLevel.
+            // A mismatched setting results in a rejected provider request.
+            thinkingConfig: model.startsWith('gemini-2.5-')
+              ? { thinkingBudget: model.includes('flash-lite') || quickAnswer ? 0 : 1024 }
+              : { thinkingLevel },
           },
         }),
       },
@@ -140,7 +149,7 @@ async function attemptGemini({
  */
 export async function generateKriticReply({
   apiKey, primaryModel, fallbackModels = [], allowPaidModels = false,
-  systemInstruction, contents, greeting = false, multiStep = false,
+  systemInstruction, contents, greeting = false, quickAnswer = false, multiStep = false,
   deadlineAt = Date.now() + 50_000, minReplyChars = 0,
   fetcher = fetch, logger = () => {},
 }: KriticGenerationOptions): Promise<KriticGeneration> {
@@ -185,14 +194,14 @@ export async function generateKriticReply({
     const remainingBackups = models.length - index - 1;
     const recoveryReserve = remainingBackups * 5_000 + 1_000;
     const timeoutMs = Math.min(
-      lite ? 11_000 : fallback ? 14_000 : 20_000,
-      Math.max(3_500, remaining - recoveryReserve),
+      quickAnswer ? (fallback ? 6_000 : 9_000) : (lite ? 9_000 : fallback ? 10_000 : 16_000),
+      Math.max(3_000, remaining - recoveryReserve),
     );
     const reply = await attemptGemini({
       model, apiKey, systemInstruction, contents: finalContents, fetcher, logger,
-      timeoutMs, minReplyChars,
-      thinkingLevel: greeting || lite ? 'low' : 'medium',
-      maxOutputTokens: greeting ? 512 : lite ? 6144 : 8192,
+      timeoutMs, minReplyChars, quickAnswer,
+      thinkingLevel: greeting || lite || quickAnswer ? 'low' : 'medium',
+      maxOutputTokens: greeting ? 512 : quickAnswer ? 1300 : lite ? 4096 : 6144,
     });
     if (reply) {
       return { reply, model, fallbackUsed: fallback, multiStepUsed: Boolean(evidenceMap) };
