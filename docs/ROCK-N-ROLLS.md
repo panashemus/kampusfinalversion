@@ -16,3 +16,6 @@ Local verification (16 November 2026): 73 tests PASS; standalone typecheck PASS;
 
 ## Merchant-requested menu refresh (17 November 2026)
 The owner has explicitly discontinued muffins for the upcoming reopening. Remove muffins from the product catalogue, category wording and product routes; reject any stale muffin selections from saved enquiry lists on hydration. Other prices and bakery availability remain unmodified. Seven additional merchant-supplied photos (cakes and brownies) are provided for the gallery; no new menu prices are authorized.
+
+### Featured gallery
+Seven new owner-provided cake and brownie photos appear in a curated featured section, with real-image zoom. They are past custom creations, not fixed-size/price menu products. The confirmed WhatsApp business number is +267 76 454 533. These initial repository assets were ingested through compressed media previews, so replacement with the supplied full-resolution originals is recommended before large campaigns; owner photo provenance is preserved.

@@ -2,7 +2,7 @@ export const STORE_PATH = '/store/rock-n-rolls';
 export const WHATSAPP = '26776454533';
 export const TIKTOK = 'https://www.tiktok.com/@_rocknrolls_';
 export const AVAILABILITY = 'Temporary hiatus · no orders until 26 November 2026. Reopening and future dates must be confirmed directly.';
-export const CONTACT_NOTE = 'Using the WhatsApp number in the newer TikTok bio: +267 76454533. The menu lists +267 77856035; preferred contact is awaiting confirmation.';
+export const CONTACT_NOTE = 'Enquiries go to the Rock ’n Rolls confirmed WhatsApp business number: +267 76 454 533.';
 export type Category = 'Brownie boxes' | 'Cakes & cupcakes' | 'Cinnamon rolls';
 export type AddOn = { id: string; name: string; price: number | null };
 export type Product = { slug: string; name: string; category: Category; description: string; note?: string; image?: string; variants: { name: string; price: number }[]; addOns: AddOn[] };
@@ -23,7 +23,15 @@ export const PRODUCTS: Product[] = [
   { slug: 'bento-cakes', name: 'Bento cakes', category: 'Cakes & cupcakes', description: 'Small cake, big occasion. Go minimalist, pair your cake with two cupcakes, or get creative with a DIY bento.', variants: [{ name: 'Minimalist bento', price: 160 }, { name: 'Cake + 2 cupcakes', price: 220 }, { name: 'DIY bento', price: 180 }], addOns: [...cakeExtras, { id: 'bento-filling', name: 'Bento filling', price: 40 }] },
   { slug: 'sheet-cake', name: 'Sheet cake', category: 'Cakes & cupcakes', description: 'Something sweet for the whole celebration. A 12 × 9 inch sheet cake, with design and flavours to discuss directly.', variants: [{ name: '12 × 9 inches', price: 580 }], addOns: cakeExtras },
 ];
+export const OWNER_FEATURED_COUNT = 7;
 export const GALLERY = [
+  { image: 'owner-bee-birthday-cake', alt: 'Yellow bee-themed first birthday cake with piped flowers and custom lettering' },
+  { image: 'owner-midnight-birthday-cake', alt: 'Deep navy birthday cake with gold script and metallic chocolate decorations' },
+  { image: 'owner-graduation-cake', alt: 'Graduation cake with white roses, a black graduation cap, scroll and pearl decorations' },
+  { image: 'owner-love-drizzle-brownies', alt: 'Chocolate brownies drizzled pink and white with I LOVE YOU chocolate lettering' },
+  { image: 'owner-pink-birthday-cake', alt: 'Pink celebration cake with ribbon accents, tiny hearts and piped frosting' },
+  { image: 'owner-oreo-brownies', alt: 'Six chocolate brownies topped with crushed Oreos and rich chocolate sauce' },
+  { image: 'owner-love-heart-brownies', alt: 'Chocolate brownies decorated with pink and white drizzle and LOVE YOU letters' },
   { image: 'brownie-box', alt: 'A box of brownies with toasted marshmallow, cookie and Oreo toppings' },
   { image: 'brownie-assortment', alt: 'Rock ’n Rolls mixed brownie box with marshmallow-topped s’mores brownies' },
   { image: 'rolls-box', alt: 'Glazed cinnamon rolls inside a white window box' },

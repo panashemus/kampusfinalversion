@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
 require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, file);
-const { PRODUCTS, GALLERY, AVAILABILITY, CONTACT_NOTE, linePrice, readSelections, buildEnquiry, whatsappLink } = require('../lib/rock-n-rolls.ts');
+const { PRODUCTS, GALLERY, OWNER_FEATURED_COUNT, AVAILABILITY, CONTACT_NOTE, linePrice, readSelections, buildEnquiry, whatsappLink } = require('../lib/rock-n-rolls.ts');
 
 test('menu variants match the supplied price sheet transcription', () => {
   assert.deepEqual(PRODUCTS.map(p => [p.slug, p.variants.map(v => v.price)]), [
@@ -20,7 +20,7 @@ test('quantities multiply the variant and chosen add-ons without inventing a top
 test('corrupt and tampered saved selections cannot replace catalogue prices or create invalid items', () => {
   for (const raw of ['broken', '{}', 'null', '[null,1,"bad"]']) assert.deepEqual(readSelections(raw), []);
   const valid = { slug: 'brookies', variant: 1, quantity: 2, extras: ['oreos', 'oreos', 'fake', '<script>'], price: 1 };
-  assert.deepEqual(readSelections(JSON.stringify([valid, valid, { ...valid, quantity: -1 }, { ...valid, quantity: 21 }, { ...valid, variant: '1' }, { ...valid, slug: 'fake' }])) , [{ slug: 'brookies', variant: 1, quantity: 2, extras: ['oreos'] }]);
+  assert.deepEqual(readSelections(JSON.stringify([valid, valid, { ...valid, quantity: -1 }, { ...valid, quantity: 21 }, { ...valid, variant: '1' }, { ...valid, slug: 'fake' }, {slug:'muffins',variant:0,quantity:1,extras:[]}])) , [{ slug: 'brookies', variant: 1, quantity: 2, extras: ['oreos'] }]);
 });
 test('WhatsApp message carries exact choices, delivery caveats, custom text and future availability', () => {
   const lines = [{ slug: 'bento-cakes', variant: 2, extras: ['bento-filling', 'cake-topper'], quantity: 2 }, { slug: 'fudgy-brownies', variant: 0, extras: ['oreos'], quantity: 1 }];
@@ -36,11 +36,16 @@ test('WhatsApp message carries exact choices, delivery caveats, custom text and 
   assert.equal(url.hostname, 'wa.me');
   assert.equal(url.pathname, '/26776454533');
   assert.equal(url.searchParams.get('text'), msg);
-  assert.match(CONTACT_NOTE, /77856035/);
+  assert.match(CONTACT_NOTE, /76 454 533/);
   assert.match(AVAILABILITY, /must be confirmed/);
 });
 test('all referenced photos exist, and every product image opens its exact image in the gallery', () => {
-  for (const g of GALLERY) assert.ok(fs.statSync(`public/images/rock-n-rolls/${g.image}.jpg`).size > 10000);
+  for (const g of GALLERY) {
+    const ext = g.image.startsWith('owner-') ? 'webp' : 'jpg';
+    assert.ok(fs.statSync(`public/images/rock-n-rolls/${g.image}.${ext}`).size > (ext === 'webp' ? 4000 : 10000));
+  }
+  assert.equal(OWNER_FEATURED_COUNT, 7);
+  assert.ok(GALLERY.slice(0, OWNER_FEATURED_COUNT).every(g => g.image.startsWith('owner-')));
   for (const p of PRODUCTS.filter(p => p.image)) assert.ok(GALLERY.some(g => g.image === p.image));
   const jpeg = fs.readFileSync('public/images/rock-n-rolls/brownie-box.jpg');
   assert.ok(jpeg.length > 50000);
