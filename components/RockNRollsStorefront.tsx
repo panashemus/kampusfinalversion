@@ -9,7 +9,7 @@ import { AVAILABILITY, CONTACT_NOTE, GALLERY, PRODUCTS, STORE_PATH, TIKTOK, buil
 import s from './RockNRollsStorefront.module.css';
 
 const STORAGE = 'kampus:rock-n-rolls:enquiry:v1';
-const CATEGORIES: ('All bakes' | Category)[] = ['All bakes', 'Brownie boxes', 'Cakes & cupcakes', 'Rolls & muffins'];
+const CATEGORIES: ('All bakes' | Category)[] = ['All bakes', 'Brownie boxes', 'Cakes & cupcakes', 'Cinnamon rolls'];
 function Photo({ image, alt, priority = false, className = '', sizes = '(max-width: 640px) 50vw, 33vw' }: { image: string; alt: string; priority?: boolean; className?: string; sizes?: string }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);

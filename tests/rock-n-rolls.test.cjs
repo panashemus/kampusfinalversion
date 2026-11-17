@@ -7,7 +7,7 @@ const { PRODUCTS, GALLERY, AVAILABILITY, CONTACT_NOTE, linePrice, readSelections
 
 test('menu variants match the supplied price sheet transcription', () => {
   assert.deepEqual(PRODUCTS.map(p => [p.slug, p.variants.map(v => v.price)]), [
-    ['fudgy-brownies', [90, 130]], ['brookies', [120, 160]], ['smores-brownies', [140, 180]], ['cinnamon-rolls', [130, 150]], ['muffins', [50, 70]], ['cupcakes', [120, 120, 130, 140]], ['bento-cakes', [160, 220, 180]], ['sheet-cake', [580]],
+    ['fudgy-brownies', [90, 130]], ['brookies', [120, 160]], ['smores-brownies', [140, 180]], ['cinnamon-rolls', [130, 150]], ['cupcakes', [120, 120, 130, 140]], ['bento-cakes', [160, 220, 180]], ['sheet-cake', [580]],
   ]);
   assert.deepEqual(PRODUCTS[0].addOns.map(a => a.price), [10, 10, 10, 20, 5]);
   assert.equal(PRODUCTS.find(p => p.slug === 'sheet-cake').addOns.find(a => a.id === 'cake-topper').price, null);
