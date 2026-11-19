@@ -39,9 +39,17 @@ export function locationLabel(lat: number, lng: number): string {
   return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 }
 
-export type SchoolCode = 'UB' | 'BAC / BSBS' | 'BIUST' | 'BOTHO' | 'BUAN';
+export type SchoolCode = 'UB' | 'BAC / BSBS' | 'BIUST' | 'BOTHO' | 'BUAN' | 'BOITEKANELO';
 
 export const SCHOOL_COURSES: Record<SchoolCode, string[]> = {
+  // These titles are from Boitekanelo College's own published programme pages,
+  // not a claim that BQA has independently confirmed each current accreditation.
+  BOITEKANELO: [
+    'Bachelor of Science (Honours) in Nursing',
+    'Bachelor of Science in Health Promotion and Education',
+    'Diploma in Health Education and Promotion',
+    'Certificate in Health Education and Assistance',
+  ],
   UB: [
     'Bachelor of Laws (LLB)',
     'BA Criminal Justice Studies',
@@ -185,6 +193,13 @@ export function classifyUniversity(emailOrUni?: string | null): {
   courses: string[];
 } {
   const clean = (emailOrUni || '').trim().toLowerCase();
+  if (clean.includes('boitekanelo.ac.bw') || clean.includes('boitekanelo')) {
+    return {
+      code: 'BOITEKANELO',
+      fullName: 'Boitekanelo College',
+      courses: combinedCourses('BOITEKANELO'),
+    };
+  }
   if (
     clean.includes('bac.ac.bw') ||
     clean.includes('bsbs.ac.bw') ||
