@@ -9,6 +9,9 @@ import type { SchoolCode } from './utils';
 export const BQA_PROGRAMME_REGISTER = 'https://www.bqa.org.bw/accredited-learning-programmes-ncqf';
 
 export const BQA_DEGREES_BY_SCHOOL: Record<SchoolCode, string[]> = {
+  // No Boitekanelo titles have been transcribed from the BQA register yet.
+  // Its own published course titles are listed separately in SCHOOL_COURSES.
+  BOITEKANELO: [],
   UB: [
     'Bachelor of Education (Computer Science)',
     'Bachelor of Education (Early Childhood Development and Education)',
