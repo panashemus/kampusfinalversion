@@ -9,7 +9,7 @@ import ContextActions from './ContextActions';
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from './ui/dialog';
 type PublicItem={id:string;text?:string;title?:string;description?:string;category?:string;price?:number;author_name?:string;seller_name?:string;seller_id?:string;user_id?:string;institution?:string;is_anonymous?:boolean;username?:string;university?:string;verified?:boolean;created_at?:string};
 const titles:Record<Module,string>={discover:'Your campus. Connected.',community:'Campus Feed',hustle:'Hustle Hub',kritic:'Meet Kampus Kritic',chat:'Conversations with context',radar:'Know your campus',escrow:'Payments paused',profile:'Student profiles',auth:'Join Kampus'};
-const institutions=['University of Botswana','Botswana Accountancy College','Botswana International University of Science and Technology','Botho University','Botswana University of Agriculture and Natural Resources'];
+const institutions=['University of Botswana','Botswana Accountancy College','Botswana International University of Science and Technology','Botho University','Botswana University of Agriculture and Natural Resources','Boitekanelo College'];
 export default function GuestPreview({destination,onNavigate,onSignIn,sessionError}:{destination:Destination;onNavigate:(d:Destination)=>void;onSignIn:(d?:Destination)=>void;sessionError?:string}){
  const [institution,setInstitution]=useState('');const [search,setSearch]=useState(destination.search||'');const [query,setQuery]=useState(destination.search||'');
  const [items,setItems]=useState<PublicItem[]>([]);const [comments,setComments]=useState<PublicItem[]>([]);const [loading,setLoading]=useState(false);
