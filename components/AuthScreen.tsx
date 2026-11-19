@@ -7,7 +7,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { loadMyProfile } from '@/lib/profile';
 import type { Profile } from '@/lib/types';
 
-const domains = ['ub.ac.bw', 'mopipi.ub.bw', 'student.ub.ac.bw', 'bac.ac.bw', 'thuto.bac.ac.bw', 'bsbs.ac.bw', 'biust.ac.bw', 'student.biust.ac.bw', 'botho.ac.bw', 'student.botho.ac.bw', 'buan.ac.bw', 'student.buan.ac.bw'];
+const domains = ['ub.ac.bw', 'student.boitekanelo.ac.bw', 'mopipi.ub.bw', 'student.ub.ac.bw', 'bac.ac.bw', 'thuto.bac.ac.bw', 'bsbs.ac.bw', 'biust.ac.bw', 'student.biust.ac.bw', 'botho.ac.bw', 'student.botho.ac.bw', 'buan.ac.bw', 'student.buan.ac.bw'];
 
 export default function AuthScreen({
   onVerified,
