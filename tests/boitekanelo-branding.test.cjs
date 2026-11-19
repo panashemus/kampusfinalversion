@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const read = name => fs.readFileSync(path.resolve(__dirname, '..', name), 'utf8');
-const migration = read('supabase/migrations/20261119163000_add_boitekanelo_student_domain.sql');
+const migration = read('supabase/migrations/20261119131916_add_boitekanelo_student_domain.sql');
 
 test('Boitekanelo is accepted in signup and the exact server-side domain allowlist', () => {
   assert.match(read('components/AuthScreen.tsx'), /'student\.boitekanelo\.ac\.bw'/);
