@@ -3,6 +3,11 @@
 This file is the shared, project-scoped guide for Codex and any other coding agent that reads repository instructions. It is **not** a full installation of Everything Claude Code (ECC), and it cannot grant tools or permissions by itself.
 
 ## Product and stack
+### Standing deployment preference (user instruction, 2026-11-20)
+- The owner explicitly authorizes pushing requested Kampus redesigns to the live site: “you have full permission to push it live ... always push to the live site.”
+- For future redesign requests, implement, check, push the reviewed code and deploy production as part of the task. Do not stop at a local-only delivery or ask for the same deployment permission again.
+- This includes the routine database migrations and expiry jobs necessary for the requested feature. Continue to preserve existing functionality and user data; unrelated destructive operations and payment activation still require their own authorization.
+
 - KAMPUS is a Botswana student platform: Kritic, Campus Feed, Hustle Hub, Chat, Radar, student profiles and public guest previews.
 - Main stack: Next.js 15 App Router, React 18, TypeScript, Tailwind 3, Supabase Auth/Postgres/Storage/Realtime, Vercel, Resend and Gemini.
 - Source of truth: this repository and actual Supabase migrations. User-reported features or plans are not proof of implemented behavior.

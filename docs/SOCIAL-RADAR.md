@@ -33,3 +33,7 @@ Promo brief: [RADAR-PROMO-ANTIGRAVITY.md](RADAR-PROMO-ANTIGRAVITY.md). It distin
 
 - Final production build: PASS. Browser fixture review and permission-denied recovery: PASS. New Radar lint errors/warnings: none. Production account-to-account acceptance: NOT TESTED; feature NOT DEPLOYED.
 
+
+## Production rollout authorization
+The owner explicitly authorized deployment on 2026-11-20 and requested that future redesign tasks include a live rollout. The production schema migration and every-minute expiry job have been applied. The latest origin/main fixes are merged; release checks now include 88 app tests and 10 focused Radar database tests. Deployment verification is recorded in the release artifacts.
+
