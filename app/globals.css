@@ -160,3 +160,11 @@
   button:not(:disabled):hover, a[href]:hover { translate: 0 -1px; }
   button:not(:disabled):active, a[href]:active { translate: 0 0; }
 }
+
+/* Social Radar: readable initials, clear opt-in invitations. */
+.radar-friend-pin {position:relative;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:#123f31;border:3px solid #6ee7b7;color:#d1fae5;box-shadow:0 4px 16px #0008;font-weight:700;font-size:18px}
+.radar-friend-pin b {position:absolute;top:51px;left:50%;transform:translateX(-50%);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px;border-radius:10px;background:#101f18;color:white;font-size:11px}
+.radar-friend-pin i {position:absolute;bottom:49px;white-space:nowrap;background:#ffde4d;color:#102018;border-radius:12px;padding:3px 8px;font-style:normal;font-size:10px}
+.radar-welcome {border-color:#ffde4d}
+.leaflet-control-attribution {font-size:9px!important}
+@media(prefers-reduced-motion:reduce){.radar-friend-pin,.kampus-user-pin span {animation:none!important}}

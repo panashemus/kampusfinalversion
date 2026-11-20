@@ -1,15 +1,10 @@
 'use client';
 import SecureImage from './SecureImage';
+import RadarSocial from './RadarSocial';
+import {useRadar, escapeRadarText, type RadarShare} from '@/lib/use-radar';
 
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  useMap,
-  useMapEvents,
-} from 'react-leaflet';
 import L from 'leaflet';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
 import type { Hazard, SosAlert, HazardRow, Profile } from '@/lib/types';
@@ -19,11 +14,6 @@ import {
   MapPin as MapPinIcon,
   Clock,
   User,
-  Ghost,
-  Eye,
-  Send,
-  Lock,
-  Unlock,
   Navigation,
   GraduationCap,
   ChevronRight,
@@ -56,16 +46,6 @@ const CAMPUSES = {
     radius: 1500,
     zoom: 17,
   },
-};
-
-type KonnectUser = {
-  user_id: string;
-  username: string;
-  lat: number;
-  lng: number;
-  status_text: string | null;
-  is_ghost_mode: boolean;
-  updated_at: string;
 };
 
 type PromotedLocation = {
@@ -125,25 +105,10 @@ function createSosPin(active: boolean) {
   });
 }
 
-function createKonnectPin(user: KonnectUser) {
-  const initial = user.username.charAt(0).toUpperCase();
-  const statusHtml = user.status_text
-    ? `<div style="position:absolute; top:-28px; left:50%; transform:translateX(-50%); background:#18181B; color:#F4F4F5; border:1px solid rgba(255,255,255,0.1); font-weight:600; font-size:10px; padding:3px 8px; border-radius:9999px; white-space:nowrap; box-shadow:0 4px 10px rgba(0,0,0,0.4); pointer-events:none; z-index:1000;">${user.status_text}</div>`
-    : '';
-
-  const html = `
-    <div style="position:relative; width:28px; height:28px;">
-      ${statusHtml}
-      <div style="width:28px; height:28px; border-radius:50%; background:#064E3B; border:1.5px solid #34D399; display:flex; align-items:center; justify-content:center; color:#A7F3D0; font-weight:700; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.4);">
-        ${initial}
-      </div>
-    </div>`;
-  return L.divIcon({
-    html,
-    className: 'kampus-konnect-pin',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  });
+function createKonnectPin(user: RadarShare) {
+ const label=escapeRadarText((user.username||'Friend').slice(0,30));
+ const initial=escapeRadarText((user.username||'?')[0].toUpperCase());
+ return L.divIcon({html:`<div class="radar-friend-pin ${user.company_welcome?'radar-welcome':''}"><span>${initial}</span><b>${label}</b>${user.company_welcome?'<i>Join me</i>':''}</div>`,className:'kampus-konnect-pin',iconSize:[48,48],iconAnchor:[24,24]});
 }
 
 function createLocationPin() {
@@ -161,76 +126,27 @@ function createLocationPin() {
   });
 }
 
-function LocationTracker({
-  onLocate,
-  onError,
-}: {
-  onLocate: (pos: [number, number]) => void;
-  onError: () => void;
-}) {
-  const map = useMap();
-  const [pos, setPos] = useState<[number, number] | null>(null);
-  const hasCentered = useRef(false);
-  const onLocateRef = useRef(onLocate);
-  const onErrorRef = useRef(onError);
-  onLocateRef.current = onLocate;
-  onErrorRef.current = onError;
-
-  useEffect(() => {
-    if (!('geolocation' in navigator)) return;
-    const watchId = navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const next: [number, number] = [latitude, longitude];
-        setPos(next);
-        onLocateRef.current(next);
-
-        if (!hasCentered.current) {
-          map.setView(next, map.getZoom(), { animate: true });
-          hasCentered.current = true;
-        }
-      },
-      () => onErrorRef.current(),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-    );
-
-  }, [map]);
-
-  if (!pos) return null;
-  return <Marker position={pos} icon={createUserPin()} />;
+function RadarCanvas({onMap,campus}:{onMap:(map:L.Map|null)=>void;campus:string}) {
+ const node=useRef<HTMLDivElement>(null);
+ useEffect(()=>{
+  if(!node.current)return;
+  const centre=/university of botswana|\bub\b/i.test(campus)?CAMPUSES.UB_GBE:/gaborone/i.test(campus)?CAMPUSES.BAC_GBE:null;
+  const map=L.map(node.current,{zoomControl:false,attributionControl:true}).setView(centre?[centre.lat,centre.lng]:DEFAULT_CENTER,15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{className:'dark-osm-tiles',attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+  onMap(map);const resize=new ResizeObserver(()=>map.invalidateSize());resize.observe(node.current);
+  return()=>{resize.disconnect();map.remove();onMap(null);};
+ },[onMap,campus]);
+ return <div ref={node} className="h-full w-full" style={{background:'#0B0F0E'}} aria-label="Campus map"/>;
 }
 
-function CampusDetector({
-  onNearbyCampus,
-}: {
-  onNearbyCampus: (campusKey: string | null) => void;
-}) {
-  const map = useMapEvents({
-    moveend: () => {
-      const center = map.getCenter();
-      let foundCampus = null;
-
-      for (const [key, data] of Object.entries(CAMPUSES)) {
-        const distance = center.distanceTo(L.latLng(data.lat, data.lng));
-        if (distance < data.radius) {
-          foundCampus = key;
-          break;
-        }
-      }
-      onNearbyCampus(foundCampus);
-    },
-  });
-  return null;
-}
-
-/** Focus on the public town centre, never a purported private studio address. */
-function RequestedPlaceFocus({place}:{place?:string}){
-  const map=useMap();
-  useEffect(()=>{
-    if(place?.toLowerCase().includes('tlokweng'))map.flyTo([-24.66861,25.97111],13,{animate:true,duration:0.65});
-    if(place?.toLowerCase() === 'gaborone rock n rolls')map.flyTo([-24.6282,25.9231],12,{animate:true,duration:0.65});
-  },[place,map]);
-  return null;
+/** Storefront links focus a public area, never a private business address. */
+function RequestedPlaceFocus({map,place}:{map:L.Map|null;place?:string}){
+ useEffect(()=>{
+  if(!map)return;
+  if(place?.toLowerCase().includes('tlokweng'))map.flyTo([-24.66861,25.97111],13);
+  if(place?.toLowerCase()==='gaborone rock n rolls')map.flyTo([-24.6282,25.9231],12);
+ },[map,place]);
+ return null;
 }
 
 export default function RadarMap({
@@ -251,20 +167,18 @@ export default function RadarMap({
   const { toast } = useToast();
   const [isMounted,setIsMounted]=useState(false);
   const [locateRequested,setLocateRequested]=useState(false);
-  const [locationFixed,setLocationFixed]=useState(false);
-  const personLocationAvailable=false; // Deferred: recipient consent, expiry and revocation required.
+  const [localPosition,setLocalPosition]=useState<[number,number]|null>(null);
+
+  const radar=useRadar(profile?.id);
+  const [selectedPeer,setSelectedPeer]=useState<RadarShare|null>(null);
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
-  const [konnectUsers, setKonnectUsers] = useState<KonnectUser[]>([]);
+
   const [promotedLocations, setPromotedLocations] = useState<
     PromotedLocation[]
   >([]);
   const [selectedLocation, setSelectedLocation] =
     useState<PromotedLocation | null>(null);
-
-  const [isGhostMode, setIsGhostMode] = useState(false);
-  const [myStatus, setMyStatus] = useState('');
-  const [showStatusInput, setShowStatusInput] = useState(false);
 
   const [nearbyCampus, setNearbyCampus] = useState<string | null>(null);
   const [inCampusMode, setInCampusMode] = useState<string | null>(null);
@@ -295,27 +209,11 @@ export default function RadarMap({
         );
       }
 
-      const { data: kData } = await supabase
-        .from('konnect_locations')
-        .select('*').eq('user_id',profile?.id || '00000000-0000-4000-8000-000000000000');
-      if (kData) setKonnectUsers(kData as KonnectUser[]);
-
       const { data: pData } = await supabase
         .from('promoted_locations')
         .select('*');
       if (pData) setPromotedLocations(pData as PromotedLocation[]);
 
-      if (profile) {
-        const { data: myLoc } = await supabase
-          .from('konnect_locations')
-          .select('is_ghost_mode, status_text')
-          .eq('user_id', profile.id)
-          .maybeSingle();
-        if (myLoc) {
-          setIsGhostMode(myLoc.is_ghost_mode);
-          setMyStatus(myLoc.status_text || '');
-        }
-      }
     };
     loadData();
 
@@ -343,14 +241,6 @@ export default function RadarMap({
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'konnect_locations' },
-        async () => {
-          const { data } = await supabase.from('konnect_locations').select('*').eq('user_id',profile?.id || '00000000-0000-4000-8000-000000000000');
-          if (data) setKonnectUsers(data as KonnectUser[]);
-        }
-      )
-      .on(
-        'postgres_changes',
         { event: '*', schema: 'public', table: 'promoted_locations' },
         async () => {
           const { data } = await supabase
@@ -366,13 +256,27 @@ export default function RadarMap({
     };
   }, [profile]);
 
-  const handleLocate = useCallback(
-    (pos: [number, number]) => {
-      onLocate(pos);
-      setLocationFixed(true);
-    },
-    [onLocate]
-  );
+  const visibleSharesKey=JSON.stringify(radar.data.shares);
+  useEffect(()=>{
+   if(!mapInstance)return;
+   const group=L.layerGroup().addTo(mapInstance);
+   hazards.forEach(h=>L.marker(h.position,{icon:createHazardPin(),title:h.label}).on('click',()=>onOpenHazard(h)).addTo(group));
+   sosAlerts.forEach(alert=>L.marker([alert.lat,alert.lng],{icon:createSosPin(alert.active),title:'SOS alert'}).on('click',()=>setSelectedSos(alert)).addTo(group));
+   (JSON.parse(visibleSharesKey) as RadarShare[]).forEach(peer=>L.marker([peer.lat,peer.lng],{icon:createKonnectPin(peer),title:peer.username||'Friend'}).on('click',()=>setSelectedPeer(peer)).addTo(group));
+   promotedLocations.forEach(place=>L.marker([place.lat,place.lng],{icon:createLocationPin(),title:place.title}).on('click',()=>setSelectedLocation(place)).addTo(group));
+   if(localPosition)L.marker(localPosition,{icon:createUserPin(),title:'Your position (only visible to you)'}).addTo(group);
+   return()=>{group.remove();};
+  },[mapInstance,hazards,sosAlerts,visibleSharesKey,promotedLocations,localPosition,onOpenHazard]);
+  useEffect(()=>{
+   if(!mapInstance)return;
+   const detect=()=>{const center=mapInstance.getCenter();const match=Object.entries(CAMPUSES).find(([,c])=>center.distanceTo([c.lat,c.lng])<c.radius);setNearbyCampus(match?.[0]||null);};
+   detect();mapInstance.on('moveend',detect);return()=>{mapInstance.off('moveend',detect);};
+  },[mapInstance]);
+  const locate=()=>{
+   if(!navigator.geolocation){toast({title:'Location unavailable'});return;}
+   setLocateRequested(true);
+   navigator.geolocation.getCurrentPosition(p=>{const pos:[number,number]=[p.coords.latitude,p.coords.longitude];setLocalPosition(pos);onLocate(pos);mapInstance?.setView(pos,16);setLocateRequested(false);},()=>{setLocateRequested(false);toast({title:'Location unavailable',description:'Allow location access to centre the map. Your position is not shared.'});},{enableHighAccuracy:true,timeout:15000,maximumAge:5000});
+  };
 
   const handleEnterCampusMode = () => {
     if (!nearbyCampus || !mapInstance) return;
@@ -395,7 +299,7 @@ export default function RadarMap({
   return (
     <div className="relative w-full h-full">
       {nearbyCampus && inCampusMode !== nearbyCampus && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
+        <div className="absolute top-[195px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
           <button
             onClick={handleEnterCampusMode}
             className="flex items-center gap-2 bg-zinc-900/90 backdrop-blur-md ring-1 ring-white/10 text-white px-4 py-2 rounded-full font-semibold text-xs shadow-xl active:scale-[0.98] transition-all"
@@ -410,7 +314,7 @@ export default function RadarMap({
       )}
 
       {inCampusMode && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
+        <div className="absolute top-[195px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
           <div className="bg-emerald-950/80 border border-emerald-700/40 backdrop-blur-md text-emerald-300 px-3.5 py-1.5 rounded-full font-medium text-xs flex items-center gap-2 shadow-lg">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>
@@ -434,85 +338,25 @@ export default function RadarMap({
         }}
       />
 
-      <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={14}
-        zoomControl={false}
-        attributionControl={false}
-        className="w-full h-full"
-        style={{ background: '#0B0F0E' }}
-        ref={setMapInstance}
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          className="dark-osm-tiles"
-        />
+      <RadarCanvas onMap={setMapInstance} campus={profile?.university||''}/>
+      <RequestedPlaceFocus map={mapInstance} place={focusPlace}/>
 
-        <CampusDetector onNearbyCampus={setNearbyCampus} />
-        <RequestedPlaceFocus place={focusPlace} />
-        {locateRequested && <LocationTracker onLocate={handleLocate} onError={() => { setLocateRequested(false); toast({ title: 'Location unavailable', description: 'Allow location access to center the map on your position.' }); }} />}
 
-        {hazards.map((h) => (
-          <Marker
-            key={h.id}
-            position={h.position}
-            icon={createHazardPin()}
-            eventHandlers={{ click: () => onOpenHazard(h) }}
-          />
-        ))}
-
-        {sosAlerts.map((s) => (
-          <Marker
-            key={s.id}
-            position={[s.lat, s.lng]}
-            icon={createSosPin(s.active)}
-            eventHandlers={{ click: () => setSelectedSos(s) }}
-          />
-        ))}
-
-        {personLocationAvailable &&
-          konnectUsers.map((user) => {
-            if (user.user_id === profile?.id) return null;
-            if (user.is_ghost_mode) return null;
-            const isStale =
-              new Date().getTime() - new Date(user.updated_at).getTime() >
-              15 * 60 * 1000;
-            if (isStale) return null;
-            return (
-              <Marker
-                key={user.user_id}
-                position={[user.lat, user.lng]}
-                icon={createKonnectPin(user)}
-                eventHandlers={{
-                  click: () =>
-                    onMessageUser && onMessageUser(user.user_id, user.username),
-                }}
-              />
-            );
-          })}
-
-        {
-          promotedLocations.map((loc) => (
-            <Marker
-              key={loc.id}
-              position={[loc.lat, loc.lng]}
-              icon={createLocationPin()}
-              eventHandlers={{ click: () => setSelectedLocation(loc) }}
-            />
-          ))}
-      </MapContainer>
-
-      {!locateRequested && !locationFixed && (
+      {!locateRequested && (
         <button
           type="button"
           aria-label="Center map on my location"
           title="Locate me (only visible to you)"
-          onClick={() => setLocateRequested(true)}
-          className="absolute bottom-28 left-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-full border border-pine/40 bg-surface/95 text-pine shadow-lg hover:bg-ink"
+          onClick={locate}
+          className="absolute bottom-48 right-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-full border border-pine/40 bg-surface/95 text-pine shadow-lg hover:bg-ink"
         >
           <Navigation className="h-5 w-5" aria-hidden="true" />
         </button>
       )}
+
+      <RadarSocial radar={radar} selected={selectedPeer} onSelect={setSelectedPeer} onMessage={onMessageUser} signedIn={!!profile}
+        onFocus={(lat,lng)=>mapInstance?.flyTo([lat,lng],16,{duration:.8,animate:!window.matchMedia('(prefers-reduced-motion: reduce)').matches})}
+        places={[...Object.entries(CAMPUSES).map(([id,c])=>({id,title:c.name,lat:c.lat,lng:c.lng})),...promotedLocations]} />
 
       {/* Selected Promoted Location Sheet */}
       {selectedLocation && (

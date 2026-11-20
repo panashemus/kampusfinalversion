@@ -729,7 +729,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
               />
 
               {destination.search?.toLowerCase().includes('tlokweng') && (
-                <div className="absolute top-4 left-4 right-4 z-[900] pointer-events-none">
+                <div className="absolute top-[195px] left-4 right-4 z-[1100] pointer-events-none">
                   <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 backdrop-blur-xl p-3.5 text-white shadow-xl">
                     <p className="text-xs font-bold">Tlokweng, Metlhabeng · HER NAIL TECH area</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-sage">Radar is showing the general Tlokweng area, not the studio’s exact address. The technician shares precise directions two days before your confirmed booking.</p>
@@ -739,7 +739,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
               )}
 
               {destination.search?.toLowerCase() === 'gaborone rock n rolls' && (
-                <div className="absolute top-4 left-4 right-4 z-[900] pointer-events-none">
+                <div className="absolute top-[195px] left-4 right-4 z-[1100] pointer-events-none">
                   <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 p-3.5 text-white shadow-xl">
                     <p className="text-xs font-bold">Gaborone · Rock ’n Rolls city area</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-sage">This is the general city area, not the bakery’s address. Ask Rock ’n Rolls for delivery or collection details.</p>
@@ -747,28 +747,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                   </div>
                 </div>
               )}
-              {!destination.search?.toLowerCase().includes('tlokweng') && destination.search?.toLowerCase() !== 'gaborone rock n rolls' && activeSosAlerts.filter((a) => a.active).length === 0 && (
-                <div className="absolute top-4 left-4 right-4 z-[500] pointer-events-none">
-                  <div className="bg-surface/95 backdrop-blur-md rounded-2xl border border-gray-800 p-3.5 flex items-center gap-3 shadow-lg">
-                    <div className="w-9 h-9 rounded-xl bg-ink border border-pine/40 flex items-center justify-center shrink-0">
-                      <ShieldCheck
-                        className="w-4 h-4 text-pine"
-                        strokeWidth={1.75}
-                      />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-white text-xs font-bold tracking-tight">
-                        No active emergencies reported nearby
-                      </span>
-                      <span className="text-sage text-[11px]">
-                        Campus radar is clear
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="absolute bottom-28 right-4 z-[1001] flex flex-col items-center gap-3">
+              <div className="absolute top-[270px] right-4 z-[1001] flex flex-col items-center gap-3">
                 <button
                   onClick={() => {
                     setSosGeoStatus('idle');
@@ -789,7 +768,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
               </div>
 
               {activeHelpCard && (
-                <div className="absolute bottom-48 left-4 right-4 z-[1001]">
+                <div className="absolute top-[265px] left-4 right-20 z-[1100] max-h-[45%] overflow-y-auto">
                   <div className="bg-surface border border-red-500/40 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-slide-up">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
