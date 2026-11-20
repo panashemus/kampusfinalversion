@@ -62,6 +62,6 @@ test('API retains authentication, quota and safe provider configuration', () => 
   assert.match(api, /requireUser\(req\)/);
   assert.match(api, /reserve_kritic_request/);
   assert.match(api, /buildBotswanaKriticInstruction/);
-  assert.match(api, /KRITIC_MODEL/);
+  assert.match(api, /KRITIC_PRIMARY_MODEL/);
   assert.doesNotMatch(api, /auto_verify_sms|is_premium:\s*true/);
 });

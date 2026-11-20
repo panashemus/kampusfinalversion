@@ -4,7 +4,7 @@ import { requireUser, boundedJson, HttpError, errorResponse } from '@/lib/server
 import { validateKriticInput } from '@/lib/kritic-validation';
 import { isValidKriticCourse, KRITIC_MAX_TOTAL_BYTES } from '@/lib/kritic-intake';
 import { buildBotswanaKriticInstruction, buildExamRescueInstruction } from '@/lib/botswana-kritic';
-import { generateKriticReply, type GeminiContent } from '@/lib/kritic-provider';
+import { generateKriticReply, selectKriticModels, type GeminiContent } from '@/lib/kritic-provider';
 import { uploadPrivateKriticFile, deletePrivateKriticFiles } from '@/lib/kritic-files';
 import { extractKriticDocument } from '@/lib/kritic-document-extract';
 
@@ -35,6 +35,7 @@ async function releaseUnsuccessfulReservation(userId: string, bucket: string) {
 }
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
   let cleanupUploads: (() => Promise<void>) | undefined;
   try {
     const raw = await boundedJson(req, 1_000_000);
@@ -55,9 +56,38 @@ export async function POST(req: Request) {
     try { input = validateKriticInput(raw); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'Invalid request.'); }
 
+    // The existing Vercel Gemini key stays server-side. Never use the pasted
+    // OpenAI API key: ChatGPT subscriptions do not cover API billing.
+    // A harmless question about Kritic's own provider should never spend a
+    // student's quota or wait for Google's API during an outage.
+    const modelStatusQuestion = !input.filePaths.length && !input.images.length &&
+      !input.sourcePostId && input.promptText.length < 260 &&
+      /\b(gemini|hydrogen|argon|carbon|ai model|which model|what model)\b/i.test(input.promptText) &&
+      /\b(you|your|kritic|using|use|are|running|powered|model|hydrogen)\b/i.test(input.promptText);
+    if (modelStatusQuestion) {
+      return NextResponse.json({
+        reply: 'Kritic uses Google Gemini models, with a faster option for ordinary questions and stronger models for coursework. Hydrogen is temporarily not the default because recent requests timed out or failed, and Kritic switches to available models when necessary.',
+        benchmark_used: 'Kritic provider status · No academic assessment',
+        is_preview: true, // informational system reply, not an AI generation or quota use
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.KRITIC_MODEL;
-    if (!apiKey || !model || !/^gemini-[a-z0-9.-]+$/.test(model)) {
+    // Production incident 2026-11-17: Hydrogen, 3.6 Flash and Lite repeatedly
+    // returned 503 / timed out. Keep the newer model optional until healthy.
+    // Use cheaper/faster models first, keyed by task complexity.
+    const quickAnswer = input.filePaths.length === 0 && input.images.length === 0 &&
+      !input.sourcePostId && input.promptText.length < 600 &&
+      input.mode !== 'exam_rescue';
+    const primaryModel = process.env.KRITIC_PRIMARY_MODEL ||
+      (quickAnswer ? 'gemini-3.5-flash-lite' : 'gemini-3.8-flash');
+    const fallbackModels = quickAnswer
+      ? ['gemini-2.5-flash-lite', 'gemini-3.8-flash']
+      : ['gemini-2.5-flash', 'gemini-3.5-flash-lite'];
+    // Paid frontier models must remain disabled without explicit operator opt-in.
+    const allowPaidModels = process.env.KRITIC_PAID_MODELS_ENABLED === 'I_ACCEPT_PAID_API_CHARGES';
+    const permittedModels = selectKriticModels(primaryModel, fallbackModels, allowPaidModels);
+    if (!apiKey || !permittedModels.length) {
       throw new HttpError(503, 'Kritic is temporarily unavailable. Your draft has been kept.');
     }
 
@@ -179,16 +209,27 @@ export async function POST(req: Request) {
       }));
       contents.push({ role: 'user', parts });
 
-      const { reply, fallbackUsed } = await generateKriticReply({
+      const { reply, fallbackUsed, multiStepUsed } = await generateKriticReply({
         apiKey,
-        primaryModel: model,
-        systemInstruction: buildBotswanaKriticInstruction({
-          institution: String(profile.university || user.email?.split('@')[1] || 'Botswana higher education'),
-          programme: String(profile.course_code),
-        }) + (input.mode === 'exam_rescue' ? '\n' + buildExamRescueInstruction() : ''),
+        primaryModel,
+        fallbackModels,
+        allowPaidModels,
+        quickAnswer,
+        // Disabled by default after timeouts and 503s; an evidence-inventory pass
+        // is an extra provider call, not a reliability improvement during outages.
+        multiStep: process.env.KRITIC_EVIDENCE_PASS_ENABLED === 'true' &&
+          Boolean(input.filePaths.length || input.images.length || input.promptText.length >= 1500),
+        deadlineAt: startedAt + (quickAnswer ? 27_000 : 44_000),
+        systemInstruction: (quickAnswer
+          ? 'You are KAMPUS KRITIC, a friendly, grounded academic assistant for students in Botswana. Answer the actual question directly in 1-3 short sentences, without headings, a self-introduction, repetitive branding or an unsolicited list of services. When asked which model you use, explain that the backend selects a fast Gemini model and may switch providers when one is unavailable; do not claim to know which model handled an earlier request. No fabricated citations, guaranteed marks or pretending to have reviewed unseen work. Focus on the question, not your identity.'
+          : buildBotswanaKriticInstruction({
+            institution: String(profile.university || user.email?.split('@')[1] || 'Botswana higher education'),
+            programme: String(profile.course_code),
+          }) + (input.mode === 'exam_rescue' ? '\n' + buildExamRescueInstruction() : '')),
         contents,
         greeting: false, // Greetings are rejected before quota reservation.
-        minReplyChars: input.mode === 'exam_rescue' && input.fileKinds.includes('graded_work') && input.fileKinds.includes('lecture_material') ? 450 : 0,
+        minReplyChars: input.mode === 'exam_rescue' && input.fileKinds.includes('graded_work') && input.fileKinds.includes('lecture_material')
+          ? 450 : (input.filePaths.length || input.images.length) ? 240 : 0,
         logger: (event, failedModel, reason) => {
           console.warn('[Kritic provider]', event, failedModel, reason);
         },
@@ -197,7 +238,7 @@ export async function POST(req: Request) {
       if (fallbackUsed) console.info('[Kritic provider] Recovery model succeeded.');
       return NextResponse.json({
         reply,
-        benchmark_used: input.mode === 'exam_rescue' ? 'Exam Rescue · Evidence-informed · No grade guarantees' : 'BQA-informed academic guidance · Not official grading',
+        benchmark_used: input.mode === 'exam_rescue' ? 'Exam Rescue · Evidence-informed · No grade guarantees' : multiStepUsed ? 'Evidence-mapped review · Botswana academic guidance · Not official grading' : 'BQA-informed academic guidance · Not official grading',
         is_preview: false,
       }, { headers: { 'Cache-Control': 'no-store' } });
     } catch {
