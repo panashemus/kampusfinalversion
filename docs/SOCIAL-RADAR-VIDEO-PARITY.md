@@ -24,4 +24,8 @@ Rollback: restore previous Vercel production deployment; retain privacy-reducing
 
 ## Release evidence
 
-Pending execution. Multi-account production acceptance requires genuine consenting accounts and must be reported separately from local fixtures and live read-only checks.
+Implementation validation: 92 app tests and 15 isolated Radar database scenarios passed; types and production build passed; lint has zero errors and two existing warnings in unrelated components. Eleven local browser checks passed at 320/390/1280 pixels, including selected consent, permission denial/recovery, map filtering, stop/watcher cleanup, editable invitation draft, failure/retry, confirmed send and Escape dismissal. Browser map tiles were deliberately intercepted; screenshots establish controls/layout, not tile-service availability.
+
+Live inspection before migration confirmed RPC-only Radar tables (no anon/authenticated raw SELECT), membership checks backed by confirmed Auth users, and a healthy every-minute expiry job. Existing project-wide advisors include legacy projection views, helper-function grants, an extension placement warning and disabled leaked-password protection; this release does not silently rewrite unrelated access models.
+
+Rollout is tracked in [PR #12](https://github.com/panashemus/kampusfinalversion/pull/12); deployment and migration outcomes belong in the accompanying delivery report. Genuine multi-account production acceptance, real device GPS/permission behavior, background suspension by mobile operating systems and actual meetings remain unverified. Synthetic fixture results are not production-account results. A roughly 100 m grid reduces coordinate precision; it is not anonymity and a status note may disclose a meeting place.
