@@ -21,6 +21,13 @@ export function normalizeModeration(text:string):Normalized {
 const collapse=(s:string)=>s.replace(/(.)\1+/g,'$1');
 const decode=(s:string,one='i')=>s.replace(/[034@$5789!1]/g,c=>c==='1'||c==='!'?one:leet[c]);
 const collapsedNames=new Set(NAME_CORPUS.filter(n=>!CONTEXT_NAMES.has(n)).map(collapse));
+function maskedNameMatches(candidate:string,name:string){
+ let positions=[0];
+ for(const part of candidate.match(/[*#?_]+|[^*#?_]+/g)||[]){
+  const next=new Set<number>();for(const position of positions){if(/^[*#?_]+$/.test(part)){for(let size=1;size<=4&&position+size<=name.length;size++)next.add(position+size);}else if(name.startsWith(part,position))next.add(position+part.length);}
+  positions=Array.from(next);if(!positions.length)return false;
+ }return positions.includes(name.length);
+}
 // Bounded optimal-string-alignment distance: insertion/deletion/substitution/transposition.
 export function distanceAtMostOne(a:string,b:string){
   if(Math.abs(a.length-b.length)>1)return false;if(a===b)return true;
@@ -76,7 +83,7 @@ export function moderateText(input:string):ModerationResult {
   // Masks are anchored and bounded: do not turn arbitrary punctuation into an unbounded regex.
   if(/[*#?_]/.test(token)&&token.length>=4&&(token.match(/[a-z]/g)||[]).length>=3){
     const letters=(token.match(/[a-z]/g)||[]).length;
-    if(letters/token.length>=0.45&&variants.some(v=>{const pattern=new RegExp('^'+v.split(/([*#?_]+)/).map(part=>/^[*#?_]+$/.test(part)?'.{1,4}':part.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('')+'$');return HIGH_CONFIDENCE_NAMES.some(n=>pattern.test(n));}))add(start,end,'mask','censored_name');
+    if(letters/token.length>=0.45&&variants.some(v=>HIGH_CONFIDENCE_NAMES.some(n=>maskedNameMatches(v,n))))add(start,end,'mask','censored_name');
   }
   if(plain.length>=5&&plain.length<=24&&HIGH_CONFIDENCE_NAMES.some(n=>distanceAtMostOne(collapse(plain),collapse(n))))add(start,end,'fuzzy','one_edit_name');
  }
