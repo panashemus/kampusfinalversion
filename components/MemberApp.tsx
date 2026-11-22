@@ -696,7 +696,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
         )}
 
         {/* Main Viewport */}
-        <main className={`flex-1 min-h-0 relative flex flex-col pb-28 ${activeView === 'kritic' ? 'overflow-hidden' : 'overflow-y-auto overscroll-y-contain'}`}>
+        <main className={`flex-1 min-h-0 relative flex flex-col ${activeView === 'radar' ? 'overflow-hidden pb-0' : activeView === 'kritic' ? 'overflow-hidden pb-28' : 'overflow-y-auto overscroll-y-contain pb-28'}`}>
           {profile && activeView !== 'profile' && <div className="px-4 shrink-0"><PushNotificationBanner userId={profile.id}/></div>}
           {activeView === 'kritic' && profile && !isValidKriticCourse(profile.course_code) && (
             <div className="flex-1 min-h-[65vh] flex items-center justify-center p-6 text-center">
@@ -720,7 +720,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
           )}
 
           {activeView === 'radar' && (
-            <div className="absolute inset-0">
+            <div className="absolute inset-x-0 top-0 bottom-[calc(100px+env(safe-area-inset-bottom))]">
               <RadarMap
                 profile={profile}
                 onOpenHazard={setOpenHazard}
