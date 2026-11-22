@@ -1,5 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
+import { useState } from 'react';
+import ChatRoom from '@/components/ChatRoom';
+import { RADAR_JOIN_DRAFT } from '@/lib/radar-privacy';
 import type { Profile } from "@/lib/types";
 const RadarMap = dynamic(() => import("@/components/RadarMap"), { ssr: false });
 const profile: Profile = {
@@ -17,6 +20,7 @@ const profile: Profile = {
   ewallet_number: "",
 };
 export default function RadarPreview() {
+  const [chat,setChat]=useState<{id:string;name:string}|null>(null);
   return (
     <main className="fixed inset-0 bg-midnight">
       <div className="absolute inset-x-0 top-0 z-[5000] bg-amber-200 p-1 text-center text-[10px] text-black">
@@ -30,8 +34,10 @@ export default function RadarPreview() {
           sosAlerts={[]}
           onLocate={() => {}}
           onMessageUser={() => alert("Preview: opens existing Kampus chat")}
+          onJoinUser={(id,name)=>setChat({id,name})}
         />
       </div>
+      {chat && <ChatRoom myId={profile.id} peerId={chat.id} peerUsername={chat.name} initialDraft={RADAR_JOIN_DRAFT} radarInvite onClose={()=>setChat(null)} />}
     </main>
   );
 }

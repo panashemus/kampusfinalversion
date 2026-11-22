@@ -1,6 +1,10 @@
 # Social Radar implementation
 
-Current: peer pins disabled, old location table owner-only; map shows hazards, SOS and promoted places.
+Current: Social Radar provides accepted-friend pins, explicit timed sharing, selected audiences, statuses, Company welcome, private chat and immediate server-side revocation. Existing hazards, SOS and promoted places remain. See [video parity and current release evidence](SOCIAL-RADAR-VIDEO-PARITY.md).
+
+## Historical implementation notes
+
+The following records the original local implementation. Its “not deployed” and prerequisite statements describe that earlier checkpoint; the production rollout section and video-parity release evidence supersede them.
 Target: map-first Radar, accepted friends, explicit timed sharing (30/60/180 minutes), all/selected friends, temporary status and company-welcome invitation, direct messaging, stop/revoke/block, fresh timestamps.
 
 Branch: feature/social-radar. Existing SOS remains separate. No payments or production publishing.

@@ -51,6 +51,7 @@ import CommentThread from '@/components/CommentThread';
 import PublicProfileModal from '@/components/PublicProfileModal';
 import OtpModal from '@/components/OtpModal';
 import ChatRoom from '@/components/ChatRoom';
+import { RADAR_JOIN_DRAFT } from '@/lib/radar-privacy';
 import ChatInbox from '@/components/ChatInbox';
 import AdminQueue from '@/components/AdminQueue';
 import LegalModal from '@/components/LegalModal';
@@ -142,6 +143,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
     peerId: string;
     peerUsername: string;
     listingId?: string;
+    radarInvite?: boolean;
   } | null>(null);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
 
@@ -725,6 +727,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                 sosAlerts={activeSosAlerts}
                 onLocate={(pos) => setUserCoords(pos)}
                 onMessageUser={openChat}
+                onJoinUser={(peerId, peerUsername) => requireVerified(() => setActiveChat({peerId,peerUsername,radarInvite:true}))}
                 focusPlace={destination.search}
               />
 
@@ -1230,6 +1233,8 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
             peerId={activeChat.peerId}
             peerUsername={activeChat.peerUsername}
             listingId={activeChat.listingId}
+            initialDraft={activeChat.radarInvite ? RADAR_JOIN_DRAFT : undefined}
+            radarInvite={activeChat.radarInvite}
             onClose={() => setActiveChat(null)}
           />
         )}

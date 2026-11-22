@@ -20,12 +20,16 @@ import {
 } from "./ui/dialog";
 import type { RadarShare, RadarState } from "@/lib/use-radar";
 import { supabase } from "@/lib/supabase";
+import { filterRadarShares, type RadarFilter } from '@/lib/radar-privacy';
 
 type Props = {
   radar: RadarState;
   selected: RadarShare | null;
   onSelect: (s: RadarShare | null) => void;
   onMessage?: (id: string, name: string) => void;
+  onJoin?: (id: string, name: string) => void;
+  filter: RadarFilter;
+  onFilter: (filter: RadarFilter) => void;
   onFocus: (lat: number, lng: number) => void;
   places: { id: string; title: string; lat: number; lng: number }[];
   signedIn: boolean;
@@ -37,6 +41,9 @@ export default function RadarSocial({
   selected,
   onSelect,
   onMessage,
+  onJoin,
+  filter: tab,
+  onFilter: setTab,
   onFocus,
   places,
   signedIn,
@@ -44,8 +51,7 @@ export default function RadarSocial({
   const { data, busy, now } = radar;
   const [panel, setPanel] = useState<"share" | "friends" | "places" | null>(
       null,
-    ),
-    [tab, setTab] = useState<"all" | "welcome">("all");
+    );
   const [status, setStatus] = useState(""),
     [welcome, setWelcome] = useState(false),
     [minutes, setMinutes] = useState(60),
@@ -79,6 +85,7 @@ export default function RadarSocial({
   const shareAttempt = useRef(0);
   useEffect(() => () => { shareAttempt.current++; }, []);
   const start = async () => {
+    if (locating || busy || document.hidden) return;
     const attempt = ++shareAttempt.current;
     setLocating(true);
     setNotice("");
@@ -94,10 +101,11 @@ export default function RadarSocial({
                 "Allow location access in your browser, then try again.",
               ),
             ),
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 5000 },
         ),
       );
       if (attempt !== shareAttempt.current) return;
+      if (document.hidden) throw new Error('Return to Radar and try sharing again.');
       await radar.run("radar_start_share", {
         latitude: p.coords.latitude,
         longitude: p.coords.longitude,
@@ -115,10 +123,7 @@ export default function RadarSocial({
       setLocating(false);
     }
   };
-  const list =
-    tab === "welcome"
-      ? data.shares.filter((s) => s.company_welcome)
-      : data.shares;
+  const list = filterRadarShares(data.shares, tab);
   return (
     <>
       <div className="absolute inset-x-3 top-3 z-[1000] flex flex-col gap-3 pointer-events-none sm:inset-x-5">
@@ -171,6 +176,8 @@ export default function RadarSocial({
             <span>
               {data.own
                 ? `${data.own.audience === "selected" ? "Selected friends" : "Friends only"} · ends ${new Date(data.own.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : radar.loading
+                  ? "Checking sharing status…"
                 : radar.error
                   ? "Sharing status unavailable. Retry to confirm."
                   : "Sharing is off. Explore without broadcasting your location."}
@@ -294,7 +301,7 @@ export default function RadarSocial({
             {selected
               ? "Reach out before heading over."
               : panel === "share"
-                ? "Only accepted friends you choose can see your pin."
+                ? "Only accepted friends you choose can see your approximate pin (about 100 m grid). Status notes may reveal your meeting place."
                 : panel === "friends"
                   ? "Friend requests never share your location automatically."
                   : "Choose a campus or a place to explore."}
@@ -329,18 +336,18 @@ export default function RadarSocial({
                   </p>
                 )}
                 <p className="text-xs text-zinc-400">
-                  Sharing ends{" "}
+                  Approximate pin · sharing ends{" "}
                   {new Date(peer.expires_at).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
                 </p>
                 <button
-                  disabled={!onMessage}
+                  disabled={peer.company_welcome ? !onJoin && !onMessage : !onMessage}
                   className={`${button} bg-pine text-midnight w-full flex items-center justify-center gap-2`}
                   onClick={() => {
                     onSelect(null);
-                    onMessage?.(peer.user_id, peer.username || "Friend");
+                    (peer.company_welcome ? onJoin || onMessage : onMessage)?.(peer.user_id, peer.username || "Friend");
                   }}
                 >
                   <MessageCircle size={18} />
@@ -485,7 +492,7 @@ export default function RadarSocial({
                 </p>
               )}
               <p className="text-xs text-zinc-400">
-                Updates while Radar is open. Pins hide after 5 minutes without
+                Off by default. Updates only while Radar is open and visible. Pins hide after 5 minutes without
                 an update. Sharing ends automatically.
               </p>
               <button

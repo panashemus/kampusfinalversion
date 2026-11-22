@@ -2,6 +2,7 @@
 import SecureImage from './SecureImage';
 import RadarSocial from './RadarSocial';
 import {useRadar, escapeRadarText, type RadarShare} from '@/lib/use-radar';
+import { filterRadarShares, type RadarFilter } from '@/lib/radar-privacy';
 
 import L from 'leaflet';
 import { useEffect, useState, useRef } from 'react';
@@ -155,6 +156,7 @@ export default function RadarMap({
   sosAlerts,
   onLocate,
   onMessageUser,
+  onJoinUser,
   focusPlace,
 }: {
   profile: Profile | null;
@@ -162,6 +164,7 @@ export default function RadarMap({
   sosAlerts: SosAlert[];
   onLocate: (pos: [number, number]) => void;
   onMessageUser?: (userId: string, username: string) => void;
+  onJoinUser?: (userId: string, username: string) => void;
   focusPlace?: string;
 }) {
   const { toast } = useToast();
@@ -170,6 +173,7 @@ export default function RadarMap({
   const [localPosition,setLocalPosition]=useState<[number,number]|null>(null);
 
   const radar=useRadar(profile?.id);
+  const [friendFilter,setFriendFilter]=useState<RadarFilter>('all');
   const [selectedPeer,setSelectedPeer]=useState<RadarShare|null>(null);
   const [hazards, setHazards] = useState<Hazard[]>([]);
   const [selectedSos, setSelectedSos] = useState<SosAlert | null>(null);
@@ -256,7 +260,7 @@ export default function RadarMap({
     };
   }, [profile]);
 
-  const visibleSharesKey=JSON.stringify(radar.data.shares);
+  const visibleSharesKey=JSON.stringify(filterRadarShares(radar.data.shares,friendFilter));
   useEffect(()=>{
    if(!mapInstance)return;
    const group=L.layerGroup().addTo(mapInstance);
@@ -299,7 +303,7 @@ export default function RadarMap({
   return (
     <div className="relative w-full h-full">
       {nearbyCampus && inCampusMode !== nearbyCampus && (
-        <div className="absolute top-[195px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
+        <div className="absolute top-[245px] min-[360px]:top-[210px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
           <button
             onClick={handleEnterCampusMode}
             className="flex items-center gap-2 bg-zinc-900/90 backdrop-blur-md ring-1 ring-white/10 text-white px-4 py-2 rounded-full font-semibold text-xs shadow-xl active:scale-[0.98] transition-all"
@@ -314,7 +318,7 @@ export default function RadarMap({
       )}
 
       {inCampusMode && (
-        <div className="absolute top-[195px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
+        <div className="absolute top-[245px] min-[360px]:top-[210px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
           <div className="bg-emerald-950/80 border border-emerald-700/40 backdrop-blur-md text-emerald-300 px-3.5 py-1.5 rounded-full font-medium text-xs flex items-center gap-2 shadow-lg">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>
@@ -354,7 +358,7 @@ export default function RadarMap({
         </button>
       )}
 
-      <RadarSocial radar={radar} selected={selectedPeer} onSelect={setSelectedPeer} onMessage={onMessageUser} signedIn={!!profile}
+      <RadarSocial radar={radar} selected={selectedPeer} onSelect={setSelectedPeer} onMessage={onMessageUser} onJoin={onJoinUser} filter={friendFilter} onFilter={setFriendFilter} signedIn={!!profile}
         onFocus={(lat,lng)=>mapInstance?.flyTo([lat,lng],16,{duration:.8,animate:!window.matchMedia('(prefers-reduced-motion: reduce)').matches})}
         places={[...Object.entries(CAMPUSES).map(([id,c])=>({id,title:c.name,lat:c.lat,lng:c.lng})),...promotedLocations]} />
 
