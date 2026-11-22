@@ -13,6 +13,9 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  GraduationCap,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -35,6 +38,12 @@ type Props = {
   onFocus: (lat: number, lng: number) => void;
   places: { id: string; title: string; lat: number; lng: number }[];
   signedIn: boolean;
+  campusFocus?: {
+    label: string;
+    active: boolean;
+    onFocus: () => void;
+    onClear: () => void;
+  };
 };
 const button =
   "min-h-[44px] rounded-2xl px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine disabled:opacity-40";
@@ -49,6 +58,7 @@ export default function RadarSocial({
   onFocus,
   places,
   signedIn,
+  campusFocus,
 }: Props) {
   const { data, busy, now } = radar;
   // Map-first by default: the full toolbars are available on demand.
@@ -216,6 +226,35 @@ export default function RadarSocial({
             </div>
           )}
         </div>
+        {/* Campus focus is in the same flow as the header, never floating into map actions. */}
+        {campusFocus && (
+          <div className="pointer-events-auto self-start max-w-[calc(100%-4rem)]">
+            {campusFocus.active ? (
+              <div className="flex min-h-10 max-w-full items-center gap-2 rounded-full border border-emerald-700/40 bg-emerald-950/90 px-3 py-1.5 text-xs font-medium text-emerald-200 shadow-lg backdrop-blur-md">
+                <GraduationCap className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{campusFocus.label}</span>
+                <button
+                  type="button"
+                  onClick={campusFocus.onClear}
+                  aria-label="Dismiss focused campus"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-black/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={campusFocus.onFocus}
+                className="flex min-h-11 max-w-full items-center gap-2 rounded-full border border-white/15 bg-zinc-900/95 px-3 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine"
+              >
+                <GraduationCap className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                <span className="truncate">Focus {campusFocus.label}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
         {(radar.error || radar.trackingError || notice) && !panel && !selected && (
           <div role="status" className="rounded-2xl bg-midnight p-3 text-xs text-amber-200 pointer-events-auto">
             {notice || radar.error || radar.trackingError}
