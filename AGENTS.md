@@ -13,7 +13,7 @@ This file is the shared, project-scoped guide for Codex and any other coding age
 - Source of truth: this repository and actual Supabase migrations. User-reported features or plans are not proof of implemented behavior.
 - Live domains: https://www.kampusbw.site and https://kampusbw.site. Do not assume local or preview success establishes production success.
 - Preserve the existing dark green, gold and dark UI system. Favor readable, touch-friendly, accessible components. Icons instead of decorative emoji; never strip user-authored content.
-- Kritic is the primary acquisition feature. Cirkles, P30 Pro and weekly full-quality critiques are **plans**, not launched functionality.
+- Kritic is the primary acquisition feature. Cirkles augments the existing Campus Feed with TEZEmber stories and server-moderated submissions while preserving the `community` route. P30 Pro and weekly full-quality critiques remain **plans**, not launched functionality.
 
 ## Task workflow (ECC-inspired, adapted for KAMPUS)
 1. **Inspect before editing:** read related components, server routes, types, SQL migrations, tests and docs. Confirm deployed behavior when relevant. Never infer schema from a UI screenshot.
