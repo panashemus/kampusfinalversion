@@ -11,6 +11,11 @@ import {
   UserPlus,
   ArrowUpRight,
   Loader2,
+  ChevronDown,
+  ChevronUp,
+  GraduationCap,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,6 +38,12 @@ type Props = {
   onFocus: (lat: number, lng: number) => void;
   places: { id: string; title: string; lat: number; lng: number }[];
   signedIn: boolean;
+  campusFocus?: {
+    label: string;
+    active: boolean;
+    onFocus: () => void;
+    onClear: () => void;
+  };
 };
 const button =
   "min-h-[44px] rounded-2xl px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine disabled:opacity-40";
@@ -47,8 +58,12 @@ export default function RadarSocial({
   onFocus,
   places,
   signedIn,
+  campusFocus,
 }: Props) {
   const { data, busy, now } = radar;
+  // Map-first by default: the full toolbars are available on demand.
+  const [topCollapsed, setTopCollapsed] = useState(true);
+  const [bottomCollapsed, setBottomCollapsed] = useState(true);
   const [panel, setPanel] = useState<"share" | "friends" | "places" | null>(
       null,
     );
@@ -126,150 +141,193 @@ export default function RadarSocial({
   const list = filterRadarShares(data.shares, tab);
   return (
     <>
-      <div className="absolute inset-x-3 top-3 z-[1000] flex flex-col gap-3 pointer-events-none sm:inset-x-5">
-        <div className="rounded-3xl border border-white/10 bg-[#101f18]/95 p-4 shadow-xl backdrop-blur-md pointer-events-auto">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] uppercase tracking-[.23em] text-emerald-300">
-                Your campus, connected
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-white">
-                Find your people.
-              </h2>
+
+      {/* Compact map-first controls. No location permissions are requested by opening these panels. */}
+      <div className="absolute inset-x-3 top-3 z-[1000] flex flex-col gap-2 pointer-events-none sm:inset-x-5">
+        <div className="rounded-2xl border border-white/10 bg-[#101f18]/95 px-3 py-2.5 shadow-xl backdrop-blur-md pointer-events-auto">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] uppercase tracking-[.15em] text-emerald-300">Your campus, connected</p>
+              <h2 className="truncate text-sm font-semibold text-white">Find your people.</h2>
             </div>
-            <button
-              type="button"
-              className={`${button} bg-white/5 text-white flex gap-2 items-center`}
-              onClick={() => {
-                setNotice("");
-                setPanel("friends");
-              }}
-            >
-              <Users size={18} />
-              <span className="hidden min-[360px]:inline">Friends</span>
-            </button>
-          </div>
-          <div className="mt-3 flex gap-2">
             <button
               type="button"
               disabled={!signedIn || busy}
               onClick={openShare}
-              className={`${button} flex-1 bg-pine text-midnight flex items-center justify-center gap-2`}
+              className={button + " flex shrink-0 items-center justify-center gap-1.5 bg-pine px-3 py-2 text-midnight"}
             >
-              <Radio size={16} />
-              {data.own ? "Manage sharing" : "Share my location"}
+              <Radio size={15} aria-hidden="true" />
+              <span>{data.own ? "Manage" : "Share"}</span>
             </button>
             <button
               type="button"
-              onClick={() => {
-                setNotice("");
-                setPanel("places");
-              }}
-              className={`${button} bg-white/5 text-white flex items-center gap-1`}
+              onClick={() => setTopCollapsed(value => !value)}
+              aria-label={topCollapsed ? "Expand Radar controls" : "Minimize Radar controls"}
+              aria-expanded={!topCollapsed}
+              aria-controls="radar-extra-controls"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white"
             >
-              <MapPin size={16} />
-              Places
+              {topCollapsed ? <ChevronDown size={19} aria-hidden="true" /> : <ChevronUp size={19} aria-hidden="true" />}
             </button>
           </div>
-          <div className="mt-3 flex items-start gap-2 text-xs text-zinc-300">
-            <Shield size={14} className="shrink-0 mt-0.5" />
-            <span>
-              {data.own
-                ? `${data.own.audience === "selected" ? "Selected friends" : "Friends only"} · ends ${new Date(data.own.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                : radar.loading
-                  ? "Checking sharing status…"
-                : radar.error
-                  ? "Sharing status unavailable. Retry to confirm."
-                  : "Sharing is off. Explore without broadcasting your location."}
-            </span>
-            {data.own && (
+          {topCollapsed ? (
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-300">
+              <Shield size={13} className="shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                {data.own
+                  ? "Sharing with " + (data.own.audience === "selected" ? "selected friends" : "friends") + " · manage to stop"
+                  : radar.loading
+                    ? "Checking sharing status…"
+                    : radar.error
+                      ? "Sharing status unavailable"
+                      : "Location sharing is off"}
+              </span>
+            </p>
+          ) : (
+            <div id="radar-extra-controls" className="mt-3 border-t border-white/10 pt-3">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setNotice(""); setPanel("friends"); }}
+                  className={button + " flex items-center justify-center gap-2 bg-white/5 px-2 text-white"}
+                >
+                  <Users size={18} aria-hidden="true" /> Friends
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setNotice(""); setPanel("places"); }}
+                  className={button + " flex items-center justify-center gap-2 bg-white/5 px-2 text-white"}
+                >
+                  <MapPin size={18} aria-hidden="true" /> Places
+                </button>
+              </div>
+              <div className="mt-2 flex items-start gap-2 text-xs text-zinc-300">
+                <Shield size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span className="flex-1">
+                  {data.own
+                    ? (data.own.audience === "selected" ? "Selected friends" : "Friends only") + " · ends " + new Date(data.own.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    : radar.loading
+                      ? "Checking sharing status…"
+                      : radar.error
+                        ? "Sharing status unavailable. Retry to confirm."
+                        : "Sharing is off. Explore without broadcasting your location."}
+                </span>
+                {data.own && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void act(radar.stop, "Sharing stopped.")}
+                    className="min-h-8 shrink-0 px-1 text-pine underline"
+                  >
+                    Stop
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Campus focus is in the same flow as the header, never floating into map actions. */}
+        {campusFocus && (
+          <div className="pointer-events-auto self-start max-w-[calc(100%-4rem)]">
+            {campusFocus.active ? (
+              <div className="flex min-h-10 max-w-full items-center gap-2 rounded-full border border-emerald-700/40 bg-emerald-950/90 px-3 py-1.5 text-xs font-medium text-emerald-200 shadow-lg backdrop-blur-md">
+                <GraduationCap className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{campusFocus.label}</span>
+                <button
+                  type="button"
+                  onClick={campusFocus.onClear}
+                  aria-label="Dismiss focused campus"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-black/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
               <button
-                disabled={busy}
-                onClick={() => void act(radar.stop, "Sharing stopped.")}
-                className="ml-auto underline text-pine min-h-8 px-1"
+                type="button"
+                onClick={campusFocus.onFocus}
+                className="flex min-h-11 max-w-full items-center gap-2 rounded-full border border-white/15 bg-zinc-900/95 px-3 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine"
               >
-                Stop
+                <GraduationCap className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                <span className="truncate">Focus {campusFocus.label}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
               </button>
             )}
           </div>
-        </div>
-        {(radar.error || radar.trackingError || notice) &&
-          !panel &&
-          !selected && (
-            <div
-              role="status"
-              className="rounded-2xl bg-midnight p-3 text-xs text-amber-200 pointer-events-auto"
-            >
-              {notice || radar.error || radar.trackingError}
-              {radar.error && (
-                <button
-                  onClick={() => void radar.refresh()}
-                  className="underline ml-3 min-h-8"
-                >
-                  Retry
-                </button>
-              )}
-            </div>
-          )}
+        )}
+        {(radar.error || radar.trackingError || notice) && !panel && !selected && (
+          <div role="status" className="rounded-2xl bg-midnight p-3 text-xs text-amber-200 pointer-events-auto">
+            {notice || radar.error || radar.trackingError}
+            {radar.error && (
+              <button type="button" onClick={() => void radar.refresh()} className="ml-3 min-h-8 underline">Retry</button>
+            )}
+          </div>
+        )}
       </div>
-      <div className="absolute bottom-5 inset-x-3 z-[1000] pointer-events-none sm:inset-x-5">
-        <div className="rounded-3xl border border-white/10 bg-[#101f18]/95 p-4 shadow-xl backdrop-blur-md pointer-events-auto">
-          <div className="flex items-center gap-2 mb-3">
+
+      {/* Friends tray stays entirely above the bottom navigation and can be minimized. */}
+      <div className="absolute bottom-3 inset-x-3 z-[1000] pointer-events-none sm:inset-x-5">
+        <div className="rounded-2xl border border-white/10 bg-[#101f18]/95 px-3 py-2 shadow-xl backdrop-blur-md pointer-events-auto">
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setTab("all")}
+              type="button"
+              onClick={() => { setTab("all"); setBottomCollapsed(false); }}
               aria-pressed={tab === "all"}
-              className={`${button} py-2 ${tab === "all" ? "bg-white/10 text-white" : "text-zinc-400"}`}
+              className={button + " min-w-0 flex-1 px-2 py-2 text-xs " + (tab === "all" ? "bg-white/10 text-white" : "text-zinc-400")}
             >
-              Friends on map{" "}
-              <span className="text-pine">{data.shares.length}</span>
+              Friends <span className="hidden min-[390px]:inline">on map</span> <span className="text-pine">{data.shares.length}</span>
             </button>
             <button
-              onClick={() => setTab("welcome")}
+              type="button"
+              onClick={() => { setTab("welcome"); setBottomCollapsed(false); }}
               aria-pressed={tab === "welcome"}
-              className={`${button} py-2 ${tab === "welcome" ? "bg-emerald-900 text-emerald-200" : "text-zinc-400"}`}
+              className={button + " min-w-0 flex-1 px-2 py-2 text-xs " + (tab === "welcome" ? "bg-emerald-900 text-emerald-200" : "text-zinc-400")}
             >
               Join me
             </button>
+            <button
+              type="button"
+              onClick={() => setBottomCollapsed(value => !value)}
+              aria-label={bottomCollapsed ? "Expand friends list" : "Minimize friends list"}
+              aria-expanded={!bottomCollapsed}
+              aria-controls="radar-friends-results"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-white"
+            >
+              {bottomCollapsed ? <ChevronUp size={19} aria-hidden="true" /> : <ChevronDown size={19} aria-hidden="true" />}
+            </button>
           </div>
-          {radar.loading ? (
-            <p role="status" className="text-sm text-zinc-400">
-              Finding your connections…
-            </p>
-          ) : list.length ? (
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {list.map((p) => (
-                <button
-                  key={p.user_id}
-                  onClick={() => {
-                    onSelect(p);
-                    onFocus(p.lat, p.lng);
-                  }}
-                  className="flex min-w-[160px] max-w-[230px] gap-3 rounded-2xl bg-white/5 p-3 text-left"
-                >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-900 text-emerald-200 ring-2 ring-emerald-400">
-                    {(p.username || "?")[0].toUpperCase()}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm text-white truncate">
-                      {p.username || "Friend"}
-                    </span>
-                    <span className="block text-xs text-emerald-300 truncate">
-                      {p.company_welcome
-                        ? "Company welcome"
-                        : p.status_text || "Sharing with you"}
-                    </span>
-                  </span>
-                </button>
-              ))}
+          {!bottomCollapsed && (
+            <div id="radar-friends-results" className="mt-2 border-t border-white/10 pt-2">
+              {radar.loading ? (
+                <p role="status" className="text-sm text-zinc-400">Finding your connections…</p>
+              ) : list.length ? (
+                <div className="flex gap-3 overflow-x-auto pb-1">
+                  {list.map((p) => (
+                    <button
+                      key={p.user_id}
+                      onClick={() => { onSelect(p); onFocus(p.lat, p.lng); }}
+                      className="flex min-w-[160px] max-w-[230px] gap-3 rounded-2xl bg-white/5 p-3 text-left"
+                    >
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-900 text-emerald-200 ring-2 ring-emerald-400">
+                        {(p.username || "?")[0].toUpperCase()}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm text-white">{p.username || "Friend"}</span>
+                        <span className="block truncate text-xs text-emerald-300">{p.company_welcome ? "Company welcome" : p.status_text || "Sharing with you"}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed text-zinc-400">
+                  {tab === "welcome"
+                    ? "No open invitations right now. Share a study session or a coffee break."
+                    : friends.length
+                      ? "Your friends aren’t sharing right now. Check back later."
+                      : "Add a friend, then share a little of your campus day."}
+                </p>
+              )}
             </div>
-          ) : (
-            <p className="text-sm leading-relaxed text-zinc-400">
-              {tab === "welcome"
-                ? "No open invitations right now. Share a study session or a coffee break."
-                : friends.length
-                  ? "Your friends aren’t sharing right now. Check back later."
-                  : "Add a friend, then share a little of your campus day."}
-            </p>
           )}
         </div>
       </div>

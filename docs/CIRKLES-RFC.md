@@ -22,3 +22,5 @@ Name filters cannot be bulletproof or infer every identity from context. Ambiguo
 
 ## Validation checkpoint
 188 app tests pass, including the moderation corpus/bypass suite and semantic/classifier/authority/export checks; 13 isolated database scenarios pass, including a second migration application. Browser → real Next endpoints → isolated Postgres passed with labelled synthetic sessions. Preview secrets are scoped correctly: public Supabase configuration exists in preview, while the existing Gemini and service-role keys remain production-only. No production secret was copied into previews. Public preview rendering is therefore a separate gate from the local authenticated submission test.
+
+Concurrent main-branch Feed/Radar fixes were merged before release. Latest remains the strict chronological default; Cirkles adds only the explicit Trending alternative. The compact Radar controls and unified action toolbar are preserved.

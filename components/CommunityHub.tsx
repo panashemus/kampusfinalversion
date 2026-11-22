@@ -95,7 +95,7 @@ export default function CommunityHub({
   const [publicPost,setPublicPost]=useState(false);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
   const [cirkle,setCirkle]=useState<'all'|'qa'|CirkleSlug>('all');
-  const [sort,setSort]=useState<'latest'|'trending'|'for-you'>('latest');
+  const [sort,setSort]=useState<'latest'|'trending'>('latest');
   const [heroOpen,setHeroOpen]=useState(true);
   const [composeCircle,setComposeCircle]=useState<CirkleSlug|null>(null);
   const [storyPrompt,setStoryPrompt]=useState<string|null>(null);
@@ -124,7 +124,9 @@ export default function CommunityHub({
     // A skeleton belongs only to the FIRST load. Afterward, keep posts and
     // draft inputs mounted while refreshed data arrives in the background.
     if (!hasLoadedFeedRef.current) { setLoading(true);setLoadError(''); }
-    let query=supabase.from('feed_preview').select('*').order(sort==='trending'?'cirkles_hot_score':'created_at',{ascending:false}).order('id',{ascending:false});
+    let query=supabase.from('feed_preview').select('*');
+    query=sort==='trending'?query.order('cirkles_hot_score',{ascending:false}):query.order('created_at',{ascending:false});
+    query=query.order('id',{ascending:false});
     if(!selectedPostId){
       if(cirkle==='qa')query=query.is('circle_slug',null);
       else if(cirkle!=='all')query=query.eq('circle_slug',cirkle);
@@ -203,7 +205,9 @@ export default function CommunityHub({
   }, [loadPosts]);
 
   const q = searchQuery.trim().toLowerCase();
-  const visible = [...posts].sort((a,b)=>{if(sort!=='for-you')return 0;const score=(p:EnhancedCommunityPost)=>(profile?.preferences?.institutionFirst!==false&&p.institution===profile?.university?2:0)+(profile?.preferences?.topics?.includes(p.category)?1:0);return score(b)-score(a);}).filter((p) => {
+  // The query already returns newest first. Keep that chronology intact instead
+  // of silently promoting an older same-institution post above newer discussions.
+  const visible = posts.filter((p) => {
     if(selectedPostId)return p.id===selectedPostId;
     const matchesCategory = filter === 'All Questions' || p.category === filter;
     const matchesSearch = !q || p.text.toLowerCase().includes(q) || p.author.toLowerCase().includes(q);
@@ -315,7 +319,7 @@ export default function CommunityHub({
           {[{slug:'all',label:'All Cirkles & Feed',short:'All'},...CIRKLES,{slug:'qa',label:'Campus Q&A',short:'Q&A'}].map(c=><button key={c.slug} type="button" aria-pressed={cirkle===c.slug} aria-label={c.label} onClick={()=>{setCirkle(c.slug as typeof cirkle);setFilter('All Questions');setPage(0);}} className="min-w-[76px] max-w-[92px] flex flex-col items-center gap-2 text-center text-[10px] leading-snug"><span className={['grid place-items-center h-14 w-14 rounded-full border-2 bg-surface ',cirkle===c.slug?'border-pine text-pine':'border-gray-800 text-sage'].join(' ')}><CirklesLogo variant="nav" size={28}/></span><span className={cirkle===c.slug?'text-pine font-bold':'text-sage'}>{c.label}</span></button>)}
         </nav>
         {(cirkle==='all'||cirkle==='qa')&&<nav aria-label="Campus categories" className="flex gap-2 overflow-x-auto shrink-0">{FILTERS.map(f=><button key={f} type="button" aria-pressed={filter===f} onClick={()=>{setFilter(f);setPage(0);}} className={['min-h-11 whitespace-nowrap rounded-full px-4 text-xs font-semibold border ',filter===f?'bg-pine text-midnight border-pine':'border-gray-800 text-sage'].join(' ')}>{f==='All Questions'?'All categories':f}</button>)}</nav>}
-        <div className="flex items-center justify-between gap-3 text-xs text-sage shrink-0"><span>{selectedPostId?'Discussion':cirkle==='all'?'Every Cirkle. Every campus question.':cirkle==='qa'?'Classic Campus Q&A':cirkleLabel(cirkle)}</span><label className="sr-only" htmlFor="cirkles-sort">Sort feed</label><select id="cirkles-sort" value={sort} onChange={e=>{setSort(e.target.value as typeof sort);setPage(0);}} className="rounded-xl border border-gray-800 bg-surface p-3 text-sage"><option value="latest">Latest</option><option value="trending">Trending</option><option value="for-you">For you</option></select></div>
+        <div className="flex items-center justify-between gap-3 text-xs text-sage shrink-0"><span>{selectedPostId?'Discussion':cirkle==='all'?'Every Cirkle. Every campus question.':cirkle==='qa'?'Classic Campus Q&A':cirkleLabel(cirkle)}</span><label className="sr-only" htmlFor="cirkles-sort">Sort feed</label><select id="cirkles-sort" value={sort} onChange={e=>{setSort(e.target.value as typeof sort);setPage(0);}} className="rounded-xl border border-gray-800 bg-surface p-3 text-sage"><option value="latest">Latest</option><option value="trending">Trending</option></select></div>
 
         <AdSlot />
 
