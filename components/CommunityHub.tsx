@@ -1,7 +1,7 @@
 'use client';
 import SecureImage from './SecureImage';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { MessageSquare, ArrowBigUp, Plus, X, Loader as Loader2, MessageCircleQuestion, MoveVertical as MoreVertical, Flag, Trash2, Megaphone, UserRound } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
@@ -16,10 +16,17 @@ import ReportModal from '@/components/ReportModal';
 import ContextActions from './ContextActions';
 import type { Destination, Visibility } from '@/lib/interconnect';
 import { useToast } from '@/hooks/use-toast';
+import CirklesLogo from './CirklesLogo';
+import CirklesModerationNotice from './CirklesModerationNotice';
+import CirklesStoryCard from './CirklesStoryCard';
+import {CIRKLES,CIRKLE_PROMPTS,cirkleLabel,type CirkleSlug} from '@/lib/cirkles';
+import {moderateText,type ModerationResult} from '@/lib/moderation';
+import {publishCirkles,CirklesSubmissionError} from '@/lib/cirkles-client';
 
 const FILTERS: CommunityCategory[] = ['All Questions', 'Academic', 'Housing', 'Tech', 'General', 'Textbooks', 'Beauty'];
 
 type FeedPostRow = {
+  circle_slug?: CirkleSlug | null; story_prompt?: string | null; moderation_status?: string; cirkles_hot_score?: number;
   visibility: Visibility; public_approved: boolean; institution: string | null; is_owner: boolean;
   id: string;
   user_id: string;
@@ -48,6 +55,7 @@ type FeedCommentRow = {
 };
 
 type EnhancedCommunityPost = {
+  circleSlug: CirkleSlug | null; storyPrompt: string | null; hotScore: number; createdAt: string;
   visibility: Visibility; approved: boolean; institution: string | null; isOwner: boolean;
   id: string;
   authorId: string;
@@ -86,10 +94,20 @@ export default function CommunityHub({
   const [page,setPage]=useState(0);
   const [publicPost,setPublicPost]=useState(false);
   const [filter, setFilter] = useState<CommunityCategory>('All Questions');
+  const [cirkle,setCirkle]=useState<'all'|'qa'|CirkleSlug>('all');
+  const [sort,setSort]=useState<'latest'|'trending'>('latest');
+  const [heroOpen,setHeroOpen]=useState(true);
+  const [composeCircle,setComposeCircle]=useState<CirkleSlug|null>(null);
+  const [storyPrompt,setStoryPrompt]=useState<string|null>(null);
+  const [submissionError,setSubmissionError]=useState('');
+  const [serverModeration,setServerModeration]=useState<ModerationResult|null>(null);
   
   const [askModalType, setAskModalType] = useState<'standard' | 'anonymous' | null>(null);
   
   const [newQuestion, setNewQuestion] = useState('');
+  const localModeration=useMemo(()=>moderateText(newQuestion),[newQuestion]);
+  const composerDialog=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{if(askModalType&&!composerDialog.current?.open)composerDialog.current?.showModal();},[askModalType]);
   const [newCategory, setNewCategory] = useState<Exclude<CommunityCategory, 'All Questions'>>('General');
   const [newImages, setNewImages] = useState<string[]>([]);
   
@@ -106,10 +124,17 @@ export default function CommunityHub({
     // A skeleton belongs only to the FIRST load. Afterward, keep posts and
     // draft inputs mounted while refreshed data arrives in the background.
     if (!hasLoadedFeedRef.current) { setLoading(true);setLoadError(''); }
-    let query=supabase.from('feed_preview').select('*').order('created_at',{ascending:false});
+    let query=supabase.from('feed_preview').select('*');
+    query=sort==='trending'?query.order('cirkles_hot_score',{ascending:false}):query.order('created_at',{ascending:false});
+    query=query.order('id',{ascending:false});
+    if(!selectedPostId){
+      if(cirkle==='qa')query=query.is('circle_slug',null);
+      else if(cirkle!=='all')query=query.eq('circle_slug',cirkle);
+      if((cirkle==='all'||cirkle==='qa')&&filter!=='All Questions')query=query.eq('category',filter);
+    }
     if(selectedPostId)query=query.eq('id',selectedPostId);
-    if(searchQuery.trim())query=query.ilike('text','%'+searchQuery.trim().replace(/[\%_]/g,'')+'%');
-    const {data,error}=await query.range(page*40,page*40+39);
+    if(!selectedPostId&&searchQuery.trim())query=query.ilike('text','%'+searchQuery.trim().replace(/[\%_]/g,'')+'%');
+    const {data,error}=await query.range(selectedPostId?0:page*40,selectedPostId?0:page*40+39);
     if(requestId !== latestFeedRequestRef.current) return;
     if(error||!data){
       if(!hasLoadedFeedRef.current){setLoadError('The feed could not be loaded. Please try again.');setLoading(false);}
@@ -130,6 +155,7 @@ export default function CommunityHub({
       const isPostAnon = p.is_anonymous || false;
       return {
         id: p.id,
+        circleSlug:p.circle_slug||null,storyPrompt:p.story_prompt||null,hotScore:p.cirkles_hot_score||0,createdAt:p.created_at,
         visibility:p.visibility,approved:p.public_approved,institution:p.institution,isOwner:p.is_owner,
         authorId: p.user_id ?? '',
         author: p.author_name ?? 'Student',
@@ -165,7 +191,7 @@ export default function CommunityHub({
     setPosts(mapped);
     setLoadError('');
     setLoading(false);
-  }, [selectedPostId,searchQuery,page]);
+  }, [selectedPostId,searchQuery,page,cirkle,filter,sort]);
 
   useEffect(() => {
     loadPosts();
@@ -182,6 +208,7 @@ export default function CommunityHub({
   // The query already returns newest first. Keep that chronology intact instead
   // of silently promoting an older same-institution post above newer discussions.
   const visible = posts.filter((p) => {
+    if(selectedPostId)return p.id===selectedPostId;
     const matchesCategory = filter === 'All Questions' || p.category === filter;
     const matchesSearch = !q || p.text.toLowerCase().includes(q) || p.author.toLowerCase().includes(q);
     return matchesCategory && matchesSearch;
@@ -205,11 +232,13 @@ export default function CommunityHub({
     if (existingVote) {
       const newCount = Math.max(0, post.upvotes - 1);
       setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p)));
-      await supabase.from('feed_post_votes').delete().eq('id', existingVote.id);
+      const {error}=await supabase.from('feed_post_votes').delete().eq('id', existingVote.id);
+      if(error){setPosts(prev=>prev.map(p=>p.id===id?{...p,upvotes:post.upvotes}:p));toast({title:'Vote not saved',description:'Check your connection and try again.'});}
     } else {
       const newCount = post.upvotes + 1;
       setPosts((prev) => prev.map((p) => (p.id === id ? { ...p, upvotes: newCount } : p)));
-      await supabase.from('feed_post_votes').insert({ post_id: id, user_id: profile.id });
+      const {error}=await supabase.from('feed_post_votes').insert({ post_id: id, user_id: profile.id });
+      if(error){setPosts(prev=>prev.map(p=>p.id===id?{...p,upvotes:post.upvotes}:p));toast({title:'Vote not saved',description:'Check your connection and try again.'});}
     }
   };
 
@@ -220,135 +249,82 @@ export default function CommunityHub({
     const isPostAnon = targetPost?.is_anonymous ?? false;
 
     try {
-      const {error}=await supabase.from('feed_comments').insert({
+      await publishCirkles('comments',{
         post_id: postId,
         user_id: profile.id,
         author_name: isPostAnon ? 'Anonymous' : myName,
         is_anonymous: isPostAnon,
         text: comment.text,
       });
-      if(error) throw error;
       // Inserting the comment is the success condition. A later feed refresh
       // failure must not mislead the student into posting the same reply twice.
       void loadPosts().catch(() => undefined);
       return true;
-    } catch {
-      toast({title:"Reply not saved",description:"Please try again. Your draft is still here.",variant:"destructive"});
+    } catch(error) {
+      toast({title:"Reply not saved",description:error instanceof Error?error.message:"Please try again. Your draft is still here.",variant:"destructive"});
+      if(error instanceof CirklesSubmissionError)throw error;
       return false;
     }
   };
 
   const deletePost = async (postId: string) => {
     setMenuOpenId(null);
+    const {data,error}=await supabase.from('feed_posts').delete().eq('id',postId).select('id');
+    if(error||!data?.length){toast({title:'Post not deleted',description:'Check your connection and permission, then try again.'});return;}
     setPosts((prev) => prev.filter((p) => p.id !== postId));
-    await supabase.from('feed_posts').delete().eq('id', postId);
     toast({ title: 'Post deleted' });
   };
 
   const deleteComment = async (postId: string, commentId: string) => {
+    const {data,error}=await supabase.from('feed_comments').delete().eq('id',commentId).select('id');
+    if(error||!data?.length){toast({title:'Reply not deleted',description:'Check your connection and permission, then try again.'});return;}
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, comments: p.comments.filter(c => c.id !== commentId) } : p));
-    await supabase.from('feed_comments').delete().eq('id', commentId);
     toast({ title: 'Comment deleted' });
   };
 
   const submitQuestion = async () => {
     const text = newQuestion.trim();
-    if (!text || !profile || !askModalType) return;
+    if (!text || !profile || !askModalType || posting) return;
+    setSubmissionError('');setServerModeration(null);
+    if(!localModeration.allowed){setServerModeration(localModeration);return;}
     setPosting(true);
-    
     const isAnonymous = askModalType === 'anonymous';
-    const startingImpact = 0;
-
-    const { data, error } = await supabase
-      .from('feed_posts')
-      .insert({
-        user_id: profile.id,
-        visibility:publicPost ? "public" : "campus",
-        institution:profile.university,
-        author_name: myName,
-        post_kind: isAnonymous ? 'confession' : 'question',
-        category: newCategory,
-        text,
-        upvotes: 0,
-        images: newImages.length > 0 ? newImages : null,
-        is_anonymous: isAnonymous,
-        is_blasted: false,
-        impact_score: startingImpact
-      })
-      .select()
-      .maybeSingle();
-    
-    if (data) {
-      const post: EnhancedCommunityPost = {
-        id: (data as FeedPostRow).id,
-        visibility:publicPost?"public":"campus",approved:false,institution:profile.university,isOwner:true,
-        authorId: profile.id,
-        author: isAnonymous ? 'Anonymous' : myName,
-        avatarUrl: isAnonymous ? null : profile.avatar_url,
-        time: 'just now',
-        category: newCategory,
-        text,
-        upvotes: 0,
-        comments: [],
-        images: newImages,
-        is_anonymous: isAnonymous,
-        is_blasted: false,
-        impact_score: startingImpact
-      };
-      setPosts((prev) => [post, ...prev]);
-
-      toast({title:'Posted to Campus Feed',description:isAnonymous?'Your confession and its replies will be anonymous.':'Your question and its replies will display student names.'});
-    } else {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to post.', variant: 'destructive' });
-    }
-    
-    setNewQuestion('');
-    setNewImages([]);
-    setPosting(false);
-    setAskModalType(null);
+    try {
+      await publishCirkles('posts',{
+        text,category:newCategory,post_kind: isAnonymous ? 'confession' : 'question',
+        visibility:publicPost?'public':'campus',images:newImages,
+        circle_slug:composeCircle,story_prompt:storyPrompt,
+      });
+      // Clear only a confirmed save; refresh errors must never suggest reposting.
+      setNewQuestion(current=>current.trim()===text?'':current);setNewImages(current=>current===newImages?[]:current);setStoryPrompt(null);setAskModalType(null);
+      void loadPosts().catch(() => undefined);
+      toast({title:'Posted to Cirkles',description:isAnonymous?'Your confession and its replies will be anonymous.':'Your question and its replies will display student names.'});
+    } catch(error) {
+      setSubmissionError(error instanceof Error?error.message:'Could not save. Your draft is still here.');
+      if(error instanceof CirklesSubmissionError&&error.matches.length)setServerModeration({allowed:false,matches:error.matches,suggestion:error.message});
+    } finally {setPosting(false);}
   };
+  const openDrop=()=>{setComposeCircle(cirkle==='all'||cirkle==='qa'?'tezember':cirkle);setSubmissionError('');setServerModeration(null);setAskModalType('anonymous');};
+  const openQuestion=()=>{setComposeCircle(null);setStoryPrompt(null);setSubmissionError('');setServerModeration(null);setAskModalType('standard');};
 
   return (
     <div className="flex-1 bg-midnight flex flex-col overflow-hidden">
-      <div className="px-4 py-3">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
-                filter === f ? 'bg-pine text-black' : 'bg-transparent border border-sage text-sage'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-24 flex flex-col gap-4">
-        
-        <div className="flex gap-3 mb-1 shrink-0 w-full">
-          <button
-            onClick={() => setAskModalType('standard')}
-            className="flex-1 h-12 rounded-xl bg-pine text-black flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg"
-          >
-            <Plus className="w-5 h-5" strokeWidth={2.5} />
-            <span className="font-bold text-sm">Ask Question</span>
-          </button>
-          <button
-            onClick={() => setAskModalType('anonymous')}
-            className="flex-1 h-12 rounded-xl bg-[#161616] border border-zinc-700 text-white flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-[0_0_15px_rgba(255,255,255,0.03)]"
-          >
-            <span className="font-bold text-sm">Confess</span>
-          </button>
-        </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-[max(96px,calc(80px+env(safe-area-inset-bottom)))] pt-4 flex flex-col gap-4">
+        <section className="rounded-2xl border border-pine/30 bg-surface p-4 shrink-0">
+          <div className="flex items-center gap-3"><CirklesLogo size={38}/><h1 className="font-black tracking-[.12em] text-white">CIRKLES</h1><span className="ml-auto rounded-full border border-pine/40 px-2.5 py-1 text-[10px] font-bold text-pine">TEZEmber</span><button type="button" aria-expanded={heroOpen} aria-label={heroOpen?'Collapse Cirkles introduction':'Expand Cirkles introduction'} onClick={()=>setHeroOpen(v=>!v)} className="min-h-11 px-2 text-sage text-xs">{heroOpen?'Less':'More'}</button></div>
+          {heroOpen&&<p className="mt-3 text-sm leading-relaxed text-sage">TEZEmber — Drop your holiday stories, spill the vibe (strictly no names), and connect before the new semester begins.</p>}
+          <div className="flex gap-2 mt-4"><button type="button" onClick={openDrop} className="min-h-11 flex-1 rounded-xl bg-pine px-3 py-3 font-bold text-xs text-midnight">Drop in a Cirkle</button><button type="button" onClick={openQuestion} className="min-h-11 rounded-xl border border-gray-800 bg-ink px-4 py-3 font-bold text-xs text-sage">Ask Campus</button></div>
+        </section>
+        <nav aria-label="Cirkles" className="flex gap-3 overflow-x-auto py-1 shrink-0">
+          {[{slug:'all',label:'All Cirkles & Feed',short:'All'},...CIRKLES,{slug:'qa',label:'Campus Q&A',short:'Q&A'}].map(c=><button key={c.slug} type="button" aria-pressed={cirkle===c.slug} aria-label={c.label} onClick={()=>{setCirkle(c.slug as typeof cirkle);setFilter('All Questions');setPage(0);}} className="min-w-[76px] max-w-[92px] flex flex-col items-center gap-2 text-center text-[10px] leading-snug"><span className={['grid place-items-center h-14 w-14 rounded-full border-2 bg-surface ',cirkle===c.slug?'border-pine text-pine':'border-gray-800 text-sage'].join(' ')}><CirklesLogo variant="nav" size={28}/></span><span className={cirkle===c.slug?'text-pine font-bold':'text-sage'}>{c.label}</span></button>)}
+        </nav>
+        {(cirkle==='all'||cirkle==='qa')&&<nav aria-label="Campus categories" className="flex gap-2 overflow-x-auto shrink-0">{FILTERS.map(f=><button key={f} type="button" aria-pressed={filter===f} onClick={()=>{setFilter(f);setPage(0);}} className={['min-h-11 whitespace-nowrap rounded-full px-4 text-xs font-semibold border ',filter===f?'bg-pine text-midnight border-pine':'border-gray-800 text-sage'].join(' ')}>{f==='All Questions'?'All categories':f}</button>)}</nav>}
+        <div className="flex items-center justify-between gap-3 text-xs text-sage shrink-0"><span>{selectedPostId?'Discussion':cirkle==='all'?'Every Cirkle. Every campus question.':cirkle==='qa'?'Classic Campus Q&A':cirkleLabel(cirkle)}</span><label className="sr-only" htmlFor="cirkles-sort">Sort feed</label><select id="cirkles-sort" value={sort} onChange={e=>{setSort(e.target.value as typeof sort);setPage(0);}} className="rounded-xl border border-gray-800 bg-surface p-3 text-sage"><option value="latest">Latest</option><option value="trending">Trending</option></select></div>
 
         <AdSlot />
 
         {loadError ? <div role="alert" className="foundation-card text-sage">{loadError}<button className="foundation-action mt-3" onClick={()=>loadPosts()}>Try again</button></div> : loading ? (
-          <span className="text-sage text-sm text-center mt-8">Loading feed...</span>
+          <div role="status" aria-label="Loading Cirkles" className="space-y-4"><span className="sr-only">Loading Cirkles…</span>{[0,1,2].map(i=><div key={i} className="h-48 rounded-2xl border border-gray-800 bg-surface animate-pulse motion-reduce:animate-none"/>)}</div>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 pt-16">
             <div className="w-16 h-16 rounded-full bg-surface border border-gray-800 flex items-center justify-center">
@@ -359,9 +335,10 @@ export default function CommunityHub({
           </div>
         ) : (
           visible.map((post) => (
-            <div key={post.id} className={`bg-surface rounded-2xl p-4 flex flex-col gap-3 relative ${post.is_blasted ? 'border border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : ''}`}>
+            <div id={'post-'+post.id} key={post.id} className={`bg-surface rounded-2xl p-4 flex flex-col gap-3 relative border ${post.circleSlug||post.is_blasted ? 'border-pine/30' : 'border-gray-800'}`}>
               <div className="absolute top-2 right-2 z-10">
                 <button
+                  aria-label="Post actions"
                   onClick={() => setMenuOpenId(menuOpenId === post.id ? null : post.id)}
                   className="w-7 h-7 rounded-full bg-midnight/50 flex items-center justify-center active:scale-95"
                 >
@@ -378,7 +355,7 @@ export default function CommunityHub({
                     {(post.isOwner || profile?.is_admin) && (
                       <button
                         onClick={() => deletePost(post.id)}
-                        className="flex items-center gap-2 px-3 py-2.5 text-left text-red-400 text-xs font-bold hover:bg-white/5 border-t border-gray-800"
+                        className="flex items-center gap-2 px-3 py-2.5 text-left text-pine text-xs font-bold hover:bg-white/5 border-t border-gray-800"
                       >
                         <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Delete
                       </button>
@@ -390,7 +367,7 @@ export default function CommunityHub({
               <div className="flex items-center justify-between pr-8">
                 <div className="flex items-center gap-2">
                   {post.is_anonymous ? (
-                    <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-lg shrink-0 shadow-inner">
+                    <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center text-lg shrink-0 shadow-inner">
                       <UserRound className="h-4 w-4 text-sage" aria-hidden="true" />
                     </div>
                   ) : (
@@ -402,7 +379,7 @@ export default function CommunityHub({
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                       {post.is_anonymous ? (
-                        <span className="text-zinc-200 text-xs font-bold transition-colors text-left">
+                        <span className="text-sage text-xs font-bold transition-colors text-left">
                           Anonymous Kamper
                         </span>
                       ) : (
@@ -414,7 +391,7 @@ export default function CommunityHub({
                         </button>
                       )}
                       {post.is_blasted && (
-                        <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-yellow-400 text-black animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.4)]">
+                        <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-pine text-black animate-pulse ">
                           Blast
                         </span>
                       )}
@@ -425,7 +402,10 @@ export default function CommunityHub({
 
               </div>
 
+              {post.circleSlug&&<span className="inline-flex self-start items-center gap-2 rounded-full border border-pine/30 px-2.5 py-1 text-[10px] font-semibold text-pine"><CirklesLogo size={14} variant="badge"/>{cirkleLabel(post.circleSlug)}</span>}
+              {post.storyPrompt&&<blockquote className="border-l-2 border-pine/40 pl-3 text-xs italic leading-relaxed text-sage">{post.storyPrompt}</blockquote>}
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">{post.text}</p>
+              {post.circleSlug&&<CirklesStoryCard post={{id:post.id,text:post.text,circle:post.circleSlug,visibility:post.visibility,approved:post.approved}}/>}
               <ContextActions content={{id:post.id,type:post.category==="Academic"?"academic-question":"discussion",module:"community",visibility:post.visibility,approved:post.approved,available:true,category:post.category,text:post.text}} userId={profile?.id} onNavigate={onNavigate}/>
 
               {post.images.length > 0 && (
@@ -445,6 +425,7 @@ export default function CommunityHub({
               <div className="flex items-center gap-4 mt-1">
                 <button
                   onClick={() => upvote(post.id)}
+                  aria-label="Upvote post"
                   className="flex items-center gap-1 active:scale-95 transition-transform"
                 >
                   <ArrowBigUp className="w-4 h-4 text-pine" strokeWidth={1.5} />
@@ -458,6 +439,7 @@ export default function CommunityHub({
 
               <div className="pt-2 border-t border-gray-800">
                 <CommentThread
+                  moderationEnabled
                   comments={post.comments}
                   onAdd={(c) => addComment(post.id, c)}
                   onDelete={(commentId) => deleteComment(post.id, commentId)}
@@ -485,16 +467,16 @@ export default function CommunityHub({
         </nav>
       )}
       {askModalType !== null && (
-        <div className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <dialog ref={composerDialog} aria-label="Create a Cirkles post" onCancel={e=>{e.preventDefault();if(!posting)setAskModalType(null);}} className="fixed inset-0 z-[5000] m-0 h-full w-full max-w-none max-h-none border-0 bg-transparent text-white flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/80 "
             onClick={() => setAskModalType(null)}
           />
           <div className="relative w-full sm:max-w-lg bg-surface rounded-t-3xl sm:rounded-3xl p-6 flex flex-col gap-4 animate-slide-up max-h-[85dvh] sm:max-h-[90vh] overflow-y-auto no-scrollbar pb-[max(80px,calc(80px+env(safe-area-inset-bottom)))]">
             
             <div className="flex items-center justify-between shrink-0">
               <span className="text-white font-black text-lg">
-                {askModalType === 'anonymous' ? 'Drop a Confession' : 'Ask a Campus Question'}
+                {composeCircle?'Drop in '+cirkleLabel(composeCircle):askModalType === 'anonymous' ? 'Drop a Confession' : 'Ask a Campus Question'}
               </span>
               <button 
                 onClick={() => setAskModalType(null)} 
@@ -505,6 +487,11 @@ export default function CommunityHub({
               </button>
             </div>
 
+            <div className="space-y-3">
+              <label className="block text-xs text-sage">Post in<select aria-label="Post in" value={composeCircle||'qa'} onChange={e=>{const c=e.target.value as CirkleSlug|'qa';setComposeCircle(c==='qa'?null:c);if(c==='confessions')setAskModalType('anonymous');if(c==='qa')setStoryPrompt(null);}} className="mt-2 w-full rounded-xl border border-gray-800 bg-ink p-3 text-white"><option value="qa">Campus Q&A</option>{CIRKLES.map(c=><option value={c.slug} key={c.slug}>{c.label}</option>)}</select></label>
+              <fieldset className="flex gap-2"><legend className="sr-only">Posting identity</legend><button type="button" aria-pressed={askModalType==='anonymous'} onClick={()=>setAskModalType('anonymous')} className={['min-h-11 rounded-xl border px-3 text-xs ',askModalType==='anonymous'?'border-pine text-pine':'border-gray-800 text-sage'].join(' ')}>Anonymous</button><button type="button" disabled={composeCircle==='confessions'} aria-pressed={askModalType==='standard'} onClick={()=>setAskModalType('standard')} className={['min-h-11 rounded-xl border px-3 text-xs disabled:opacity-40 ',askModalType==='standard'?'border-pine text-pine':'border-gray-800 text-sage'].join(' ')}>With my name</button></fieldset>
+              {composeCircle&&<div className="flex gap-2 overflow-x-auto pb-1" aria-label="Story prompts">{CIRKLE_PROMPTS.map(prompt=><button type="button" key={prompt} aria-pressed={storyPrompt===prompt} onClick={()=>setStoryPrompt(storyPrompt===prompt?null:prompt)} className={['min-h-11 min-w-[190px] max-w-[220px] rounded-xl border p-3 text-left text-xs leading-relaxed ',storyPrompt===prompt?'border-pine text-pine':'border-gray-800 text-sage'].join(' ')}>{prompt}</button>)}</div>}
+            </div>
             <div className="flex flex-col gap-2 shrink-0">
               <span className="text-sage text-xs font-bold uppercase tracking-wider">Category</span>
               <div className="flex flex-wrap gap-2">
@@ -533,8 +520,10 @@ export default function CommunityHub({
                 {askModalType === 'anonymous' ? 'Your Confession (Anonymous)' : 'Your Question'}
               </label>
               <textarea
+                maxLength={4000}
+                aria-label="Your post"
                 value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
+                onChange={(e) => {setNewQuestion(e.target.value);setServerModeration(null);setSubmissionError('');}}
                 onPaste={(e) => {
                   const items = e.clipboardData?.items;
                   if (!items) return;
@@ -564,10 +553,14 @@ export default function CommunityHub({
                 className="bg-ink rounded-xl w-full p-4 border border-gray-800 text-white placeholder:text-sage outline-none focus:border-pine transition-colors resize-none text-sm"
               />
               {newQuestion.length > 0 && newQuestion.length < 5 && (
-                <span className="text-red-400 text-[10px] font-bold">Must be at least 5 characters</span>
+                <span className="text-pine text-[10px] font-bold">Must be at least 5 characters</span>
               )}
             </div>
 
+            <CirklesModerationNotice text={newQuestion} result={serverModeration||localModeration} onChange={text=>{setNewQuestion(text);setServerModeration(null);setSubmissionError('');}}/>
+            {submissionError&&<p role="alert" className="text-xs text-pine">{submissionError}</p>}
+            {storyPrompt&&<blockquote className="border-l-2 border-pine/40 pl-3 text-xs text-sage">{storyPrompt}</blockquote>}
+            <p className="text-xs text-sage">Names and identifying details are checked before posting. Photos are not automatically scanned: only attach images you have permission to share.</p>
             <p className="text-xs text-sage shrink-0">Students who opt in to browser alerts can receive a notification about new campus posts. Public posts are reviewed before sharing.</p>
 
             {profile && (
@@ -583,16 +576,16 @@ export default function CommunityHub({
             <div className="pt-2 shrink-0">
               <button
                 onClick={submitQuestion}
-                disabled={newQuestion.trim().length < 5 || posting}
+                disabled={newQuestion.trim().length < 5 || posting || !localModeration.allowed}
                 className="w-full h-12 rounded-xl font-bold text-base active:scale-95 transition-transform disabled:opacity-40 flex items-center justify-center gap-2 shadow-lg bg-pine text-black"
               >
                 {posting && <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2} />}
-                {posting ? 'Posting...' : 'Post to Feed'}
+                {posting ? 'Checking & posting...' : 'Post to Cirkles'}
               </button>
             </div>
             
           </div>
-        </div>
+        </dialog>
       )}
 
       {reportPost && profile && (

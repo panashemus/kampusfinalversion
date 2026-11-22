@@ -37,7 +37,7 @@ test('a comment draft is only cleared after a confirmed save and stays on failur
   assert.match(feed, /Promise<boolean>/);
   assert.match(feed, /return false;[\s\S]*Reply not saved|Reply not saved[\s\S]*return false;/);
   assert.match(feed, /void loadPosts\(\)\.catch\(\(\) => undefined\);/);
-  assert.match(thread, /disabled=\{!text\.trim\(\) \|\| submitting\}/);
+  assert.match(thread, /disabled=\{!text\.trim\(\) \|\| submitting \|\| !localModeration\.allowed\}/);
 });
 
 test('Confess anonymity and named question replies are unchanged', () => {

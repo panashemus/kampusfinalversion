@@ -39,6 +39,9 @@ export type CommunityCategory =
   | 'Beauty';
 
 export type CommunityPost = {
+  circle_slug?: 'tezember'|'confessions'|'semester-wrap'|'holiday-linkup'|'unpopular-takes'|null;
+  story_prompt?: string|null;
+  moderation_status?: 'approved'|'flagged'|'blocked';
   id: string;
   authorId: string;
   author: string;
