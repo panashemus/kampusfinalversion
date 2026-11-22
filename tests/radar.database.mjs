@@ -16,7 +16,7 @@ await db.exec(
     "utf8",
   ),
 );
-await db.exec(fs.readFileSync('supabase/migrations/20261122003127_social_radar_video_privacy.sql','utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/20261122004319_social_radar_video_privacy.sql','utf8'));
 const ids = {
   a: "11111111-1111-4111-8111-111111111111",
   b: "22222222-2222-4222-8222-222222222222",
