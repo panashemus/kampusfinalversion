@@ -16,6 +16,7 @@ await db.exec(
     "utf8",
   ),
 );
+await db.exec(fs.readFileSync('supabase/migrations/20261122003127_social_radar_video_privacy.sql','utf8'));
 const ids = {
   a: "11111111-1111-4111-8111-111111111111",
   b: "22222222-2222-4222-8222-222222222222",
@@ -133,6 +134,45 @@ try {
       (await as(ids.c, "select * from radar_find_friend('a')")).length,
       0,
     );
+  });
+  await check('coordinates are rounded before storage and peer projection; updates preserve deadline',async()=>{
+    await action(ids.a,ids.b,'request');await action(ids.b,ids.a,'accept');
+    await as(ids.a,"select radar_start_share(-24.661587,25.933812,60,'selected',$1,'Library session until 5',true)",[[ids.b]]);
+    const before=(await snap(ids.a)).own;
+    assert.equal(before.lat,-24.662);assert.equal(before.lng,25.934);
+    const peer=(await snap(ids.b)).shares[0];assert.equal(peer.lat,before.lat);
+    assert.ok(!('selected_ids' in peer));assert.ok(!('audience' in peer));
+    await db.query("update radar_shares set updated_at=now()-interval '20 seconds' where user_id=$1",[ids.a]);
+    await as(ids.a,'select radar_update_position(-24.662123,25.934987)');
+    const after=(await snap(ids.a)).own;
+    assert.equal(after.lat,-24.662);assert.equal(after.lng,25.935);assert.equal(after.expires_at,before.expires_at);
+  });
+  await check('selected consent cannot revive after remove and reconnect',async()=>{
+    await action(ids.b,ids.a,'remove');
+    assert.deepEqual((await snap(ids.a)).own.selected_ids,[]);
+    await action(ids.b,ids.a,'request');await action(ids.a,ids.b,'accept');
+    assert.equal((await snap(ids.b)).shares.length,0);
+    await start(ids.a,'selected',[ids.b]);assert.equal((await snap(ids.b)).shares.length,1);
+  });
+  await check('blocks outside Radar delete friendship; unblock/reconnect cannot restore selected consent',async()=>{
+    await db.query('insert into user_blocks(user_id,blocked_id) values($1,$2)',[ids.b,ids.a]);
+    assert.equal((await snap(ids.b)).shares.length,0);assert.deepEqual((await snap(ids.a)).own.selected_ids,[]);
+    await db.query('delete from user_blocks where user_id=$1 and blocked_id=$2',[ids.b,ids.a]);
+    assert.equal((await snap(ids.a)).friends.length,0);
+    await action(ids.a,ids.b,'request');await action(ids.b,ids.a,'accept');
+    assert.equal((await snap(ids.b)).shares.length,0);
+  });
+  await check('position update never resurrects stopped or expired sharing',async()=>{
+    await as(ids.a,'select radar_stop_share()');
+    assert.equal((await as(ids.a,'select radar_update_position(1,2) as updated'))[0].updated,false);
+    await start(ids.a);await db.query("update radar_shares set expires_at=now()-interval '1 second',updated_at=now()-interval '1 minute' where user_id=$1",[ids.a]);
+    assert.equal((await as(ids.a,'select radar_update_position(1,2) as updated'))[0].updated,false);
+    assert.equal((await snap(ids.b)).shares.length,0);
+  });
+  await check('new internal trigger functions and mutation RPCs deny anon execution',async()=>{
+    for(const sql of ['select private.radar_forget_selected_friend()','select private.radar_block_revokes_friendship()',"select radar_start_share(0,0,60,'friends','{}','x',true)",'select radar_update_position(0,0)','select radar_stop_share()'])
+      await assert.rejects(asRole(db,'anon',null,sql));
+    await assert.rejects(as(ids.a,'select private.radar_forget_selected_friend()'));
   });
   console.log(`${count} Radar database checks passed`);
 } finally {

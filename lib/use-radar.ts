@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
+import { trackForegroundLocation } from './radar-privacy';
 
 export type RadarFriend = {
   user_id: string;
@@ -45,6 +46,7 @@ export function useRadar(userId?: string) {
       setLoading(false);
       return;
     }
+    if (document.hidden) return;
     const { data: result, error: e } = await supabase.rpc("radar_snapshot");
     if (version !== generation.current) return;
     if (e) {
@@ -67,10 +69,17 @@ export function useRadar(userId?: string) {
       void refresh();
     }, 15000);
     const clock = setInterval(() => setNow(Date.now()), 1000);
+    const visibility = () => {
+      invalidate();
+      if (document.hidden) setData(previous => ({ ...empty, own: previous.own }));
+      else void refresh();
+    };
+    document.addEventListener('visibilitychange', visibility);
     return () => {
       invalidate();
       clearInterval(timer);
       clearInterval(clock);
+      document.removeEventListener('visibilitychange', visibility);
     };
   }, [refresh, invalidate]);
   const run = useCallback(
@@ -137,17 +146,10 @@ export function useRadar(userId?: string) {
             "Location access interrupted. Your pin hides after five minutes without an update.",
           );
       };
-    const options = { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 };
-    const id = navigator.geolocation.watchPosition(update, unavailable, options);
-    // Some browsers only emit watch callbacks when the position changes.
-    const heartbeat = setInterval(() => {
-      if (!document.hidden && alive && !stopping.current)
-        navigator.geolocation.getCurrentPosition(update, unavailable, options);
-    }, 30000);
+    const cleanup = trackForegroundLocation(navigator.geolocation, document, update, unavailable);
     return () => {
       alive = false;
-      clearInterval(heartbeat);
-      navigator.geolocation.clearWatch(id);
+      cleanup();
     };
   }, [active?.expires_at, userId]);
   const stop = async () => {

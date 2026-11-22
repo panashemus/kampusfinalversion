@@ -22,23 +22,29 @@ export default function ChatRoom({
   myId, listingId,
   peerId,
   peerUsername,
+  initialDraft,
+  radarInvite = false,
   onClose,
 }: {
   myId: string;
   listingId?: string;
   peerId: string;
   peerUsername: string;
+  initialDraft?: string;
+  radarInvite?: boolean;
   onClose: () => void;
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialDraft || '');
+  const [inviteSent, setInviteSent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending,setSending]=useState(false);
   const [error,setError]=useState('');const [retry,setRetry]=useState(0);const [hasEarlier,setHasEarlier]=useState(false);
   const [sources,setSources]=useState<{id:string;title:string;available:boolean}[]>([]);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setInput(initialDraft || ''); setInviteSent(false); }, [myId, peerId, initialDraft]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,12 +115,13 @@ export default function ChatRoom({
 
     const msg = await sendMessage(conversationId, myId, text);
     if (msg) {
+      if (radarInvite) setInviteSent(true);
       setMessages((prev) =>
         [...prev.filter(m=>m.id!==optimistic.id&&m.id!==msg.id),msg]
       );
     }else{setMessages(prev=>prev.filter(m=>m.id!==optimistic.id));setInput(text);setError("Message was not sent. Check your connection or message permissions and try again.");}
     setSending(false);
-  }, [input, conversationId, myId,sending]);
+  }, [input, conversationId, myId,sending,radarInvite]);
 
   return (
     <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -151,6 +158,9 @@ export default function ChatRoom({
         {sources.length>0&&<div className="px-4 py-3 border-b border-gray-800 text-xs text-sage">Listing context{sources.map(source=><div key={source.id}>{source.available?<a className="text-pine block py-2" href={"#hustle?listing="+source.id} onClick={onClose}>{source.title}</a>:<span>{source.title}</span>}</div>)}</div>}
         {error&&<div role="alert" className="px-4 py-3 text-sm text-red-300">{error}{!conversationId&&<button className="foundation-action mt-2" onClick={()=>setRetry(v=>v+1)}>Try again</button>}</div>}
         {hasEarlier&&<button className="foundation-action" onClick={async()=>{if(!conversationId||!messages[0])return;try{const earlier=await fetchMessages(conversationId,messages[0].created_at);setMessages(prev=>[...earlier,...prev]);setHasEarlier(earlier.length===50);}catch{setError('Earlier messages could not be loaded.');}}}>Load earlier messages</button>}
+        {radarInvite && <p role="status" className="px-4 py-3 text-xs text-emerald-200 border-b border-white/10">
+          {inviteSent ? messages.at(-1)?.sender_id === peerId ? 'Your friend replied · confirm your plans together.' : 'Request sent · wait for your friend to reply.' : 'Join me invitation · edit your request, then send it.'} Meeting is never accepted automatically. Confirm the place in chat.
+        </p>}
         {/* Chat Stream */}
         <div className="flex-1 overflow-y-auto flex flex-col no-scrollbar bg-[#0B0F0E]">
           <div className="p-3.5 shrink-0">
