@@ -179,7 +179,9 @@ export default function CommunityHub({
   }, [loadPosts]);
 
   const q = searchQuery.trim().toLowerCase();
-  const visible = [...posts].sort((a,b)=>{const score=(p:EnhancedCommunityPost)=>(profile?.preferences?.institutionFirst!==false&&p.institution===profile?.university?2:0)+(profile?.preferences?.topics?.includes(p.category)?1:0);return score(b)-score(a);}).filter((p) => {
+  // The query already returns newest first. Keep that chronology intact instead
+  // of silently promoting an older same-institution post above newer discussions.
+  const visible = posts.filter((p) => {
     const matchesCategory = filter === 'All Questions' || p.category === filter;
     const matchesSearch = !q || p.text.toLowerCase().includes(q) || p.author.toLowerCase().includes(q);
     return matchesCategory && matchesSearch;
