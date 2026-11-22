@@ -16,8 +16,9 @@ import {
   Clock,
   User,
   Navigation,
-  GraduationCap,
-  ChevronRight,
+  Plus,
+  ShieldAlert,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -157,6 +158,8 @@ export default function RadarMap({
   onLocate,
   onMessageUser,
   onJoinUser,
+  onRequestSOS,
+  onReportHazard,
   focusPlace,
 }: {
   profile: Profile | null;
@@ -165,6 +168,8 @@ export default function RadarMap({
   onLocate: (pos: [number, number]) => void;
   onMessageUser?: (userId: string, username: string) => void;
   onJoinUser?: (userId: string, username: string) => void;
+  onRequestSOS?: () => void;
+  onReportHazard?: () => void;
   focusPlace?: string;
 }) {
   const { toast } = useToast();
@@ -302,38 +307,6 @@ export default function RadarMap({
 
   return (
     <div className="relative w-full h-full">
-      {nearbyCampus && inCampusMode !== nearbyCampus && (
-        <div className="absolute top-[245px] min-[360px]:top-[210px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
-          <button
-            onClick={handleEnterCampusMode}
-            className="flex items-center gap-2 bg-zinc-900/90 backdrop-blur-md ring-1 ring-white/10 text-white px-4 py-2 rounded-full font-semibold text-xs shadow-xl active:scale-[0.98] transition-all"
-          >
-            <GraduationCap className="w-4 h-4 text-emerald-400" />
-            <span>
-              Focus {CAMPUSES[nearbyCampus as keyof typeof CAMPUSES].name}
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
-          </button>
-        </div>
-      )}
-
-      {inCampusMode && (
-        <div className="absolute top-[245px] min-[360px]:top-[210px] left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto">
-          <div className="bg-emerald-950/80 border border-emerald-700/40 backdrop-blur-md text-emerald-300 px-3.5 py-1.5 rounded-full font-medium text-xs flex items-center gap-2 shadow-lg">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>
-              {CAMPUSES[inCampusMode as keyof typeof CAMPUSES].name}
-            </span>
-            <button
-              onClick={() => setInCampusMode(null)}
-              className="ml-1 bg-black/40 rounded-full p-0.5 hover:text-white"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
-
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -346,19 +319,56 @@ export default function RadarMap({
       <RequestedPlaceFocus map={mapInstance} place={focusPlace}/>
 
 
-      {!locateRequested && (
+      {/* A single action rail prevents SOS, hazard and locate from overlapping. */}
+      <div
+        role="group"
+        aria-label="Radar map actions"
+        className="pointer-events-none absolute right-3 top-1/2 z-[1200] flex -translate-y-1/2 flex-col items-center gap-2.5 sm:right-5"
+      >
+        {onRequestSOS && (
+          <button
+            type="button"
+            onClick={onRequestSOS}
+            aria-label="Campus SOS — request help"
+            title="Campus SOS"
+            className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-red-400/40 bg-red-600 text-white shadow-lg shadow-black/30 transition-transform active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          >
+            <ShieldAlert className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
+        {onReportHazard && (
+          <button
+            type="button"
+            onClick={onReportHazard}
+            aria-label="Drop new hazard pin"
+            title="Report hazard"
+            className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-yellow-300/50 bg-pine text-midnight shadow-lg shadow-black/30 transition-transform active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          >
+            <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
+          disabled={locateRequested}
           aria-label="Center map on my location"
           title="Locate me (only visible to you)"
           onClick={locate}
-          className="absolute bottom-48 right-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-full border border-pine/40 bg-surface/95 text-pine shadow-lg hover:bg-ink"
+          className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-pine/50 bg-[#102219]/95 text-pine shadow-lg shadow-black/30 transition-transform active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine disabled:opacity-60"
         >
-          <Navigation className="h-5 w-5" aria-hidden="true" />
+          {locateRequested
+            ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+            : <Navigation className="h-5 w-5" aria-hidden="true" />}
         </button>
-      )}
+      </div>
 
-      <RadarSocial radar={radar} selected={selectedPeer} onSelect={setSelectedPeer} onMessage={onMessageUser} onJoin={onJoinUser} filter={friendFilter} onFilter={setFriendFilter} signedIn={!!profile}
+      <RadarSocial
+        campusFocus={nearbyCampus ? {
+          label: CAMPUSES[nearbyCampus as keyof typeof CAMPUSES].name,
+          active: inCampusMode === nearbyCampus,
+          onFocus: handleEnterCampusMode,
+          onClear: () => setInCampusMode(null),
+        } : undefined}
+        radar={radar} selected={selectedPeer} onSelect={setSelectedPeer} onMessage={onMessageUser} onJoin={onJoinUser} filter={friendFilter} onFilter={setFriendFilter} signedIn={!!profile}
         onFocus={(lat,lng)=>mapInstance?.flyTo([lat,lng],16,{duration:.8,animate:!window.matchMedia('(prefers-reduced-motion: reduce)').matches})}
         places={[...Object.entries(CAMPUSES).map(([id,c])=>({id,title:c.name,lat:c.lat,lng:c.lng})),...promotedLocations]} />
 
