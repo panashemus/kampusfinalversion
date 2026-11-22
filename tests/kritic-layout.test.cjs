@@ -23,8 +23,8 @@ test('course and history controls cannot overlay the exam form',()=>{
 });
 
 test('full-height Kritic view avoids competing outer page scrolling',()=>{
-  assert.match(member,/flex-1 min-h-0 relative flex flex-col pb-28/);
-  assert.match(member,/activeView === 'kritic' \? 'overflow-hidden'/);
+  assert.match(member,/flex-1 min-h-0 relative flex flex-col/);
+  assert.match(member,/activeView === 'kritic' \? 'overflow-hidden pb-28'/);
   assert.match(member,/px-4 shrink-0"><PushNotificationBanner/);
   assert.match(kritic,/Composer stays outside the scrolling pane/);
 });
