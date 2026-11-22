@@ -44,6 +44,7 @@ import KriticCourseGate from '@/components/KriticCourseGate';
 import { isValidKriticCourse } from '@/lib/kritic-intake';
 import HustleHub from '@/components/HustleHub';
 import CommunityHub from '@/components/CommunityHub';
+import CirklesLogo from '@/components/CirklesLogo';
 import ProfileScreen from '@/components/ProfileScreen';
 import PushNotificationBanner from '@/components/PushNotificationBanner';
 import BottomNav from '@/components/BottomNav';
@@ -70,7 +71,7 @@ const HEADER_TITLES: Record<Exclude<View, 'auth'>, string> = {
   kritic: 'Kampus Kritic',
   radar: 'Kampus Radar',
   hustle: 'Hustle Hub',
-  community: 'Campus Feed',
+  community: 'Cirkles',
   escrow: 'Payments paused',
   profile: 'Student ID',
 };
@@ -525,7 +526,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
         {/* Original Forest Green & Yellow Top Banner */}
         <header className="sticky top-0 z-[1000] bg-midnight border-b border-gray-800 px-4 py-3.5 flex items-center justify-between shrink-0">
           <span className="text-white font-black text-lg tracking-tight flex items-center gap-2">
-            <KampusLogo/>
+            {activeView==='community'?<CirklesLogo variant="nav" size={26} className="text-pine"/>:<KampusLogo/>}
             {activeView==='auth'?'Kampus':HEADER_TITLES[activeView]}
           </span>
           <div className="flex items-center gap-2.5">
@@ -733,7 +734,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
 
               {destination.search?.toLowerCase().includes('tlokweng') && (
                 <div className="absolute top-[195px] left-4 right-4 z-[1100] pointer-events-none">
-                  <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 backdrop-blur-xl p-3.5 text-white shadow-xl">
+                  <div className="rounded-2xl border border-pine/40 bg-surface/95 p-3.5 text-white shadow-xl">
                     <p className="text-xs font-bold">Tlokweng, Metlhabeng · HER NAIL TECH area</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-sage">Radar is showing the general Tlokweng area, not the studio’s exact address. The technician shares precise directions two days before your confirmed booking.</p>
                     <Link className="pointer-events-auto mt-2 inline-flex text-xs font-bold text-pine underline" href="/store/her-nail-tech">Return to storefront</Link>
@@ -743,7 +744,7 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
 
               {destination.search?.toLowerCase() === 'gaborone rock n rolls' && (
                 <div className="absolute top-[195px] left-4 right-4 z-[1100] pointer-events-none">
-                  <div className="rounded-2xl border border-pine/40 bg-[#111b16]/95 p-3.5 text-white shadow-xl">
+                  <div className="rounded-2xl border border-pine/40 bg-surface/95 p-3.5 text-white shadow-xl">
                     <p className="text-xs font-bold">Gaborone · Rock ’n Rolls city area</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-sage">This is the general city area, not the bakery’s address. Ask Rock ’n Rolls for delivery or collection details.</p>
                     <Link className="pointer-events-auto mt-2 inline-flex min-h-8 items-center text-xs font-bold text-pine underline" href="/store/rock-n-rolls">Return to Rock ’n Rolls</Link>

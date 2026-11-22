@@ -9,6 +9,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import type { View } from '@/lib/types';
+import CirklesLogo from './CirklesLogo';
 
 const TABS: {
   id: Exclude<View, 'auth'>;
@@ -18,7 +19,7 @@ const TABS: {
   { id: 'kritic', label: 'Kritic', icon: Sparkles },
   { id: 'radar', label: 'Radar', icon: MapPin },
   { id: 'hustle', label: 'Hustle', icon: Store },
-  { id: 'community', label: 'Community', icon: MessageSquare },
+  { id: 'community', label: 'Cirkles', icon: MessageSquare },
   { id: 'profile', label: 'Profile', icon: UserIcon },
 ];
 
@@ -44,12 +45,12 @@ export default function BottomNav({
             {isActive && (
               <span className="absolute -top-2 w-5 h-0.5 rounded-full bg-pine transition-all duration-200" />
             )}
-            <Icon
+            {tab.id==='community'?<CirklesLogo variant="nav" size={20} className={isActive?'text-pine':'text-sage'}/>:<Icon
               className={`w-5 h-5 transition-colors duration-150 ${
                 isActive ? 'text-pine' : 'text-sage hover:text-white'
               }`}
               strokeWidth={isActive ? 2 : 1.5}
-            />
+            />}
             <span
               className={`text-[10px] mt-1 transition-colors duration-150 ${
                 isActive ? 'text-pine font-bold' : 'text-sage font-medium'
