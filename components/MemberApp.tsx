@@ -728,6 +728,8 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                 onLocate={(pos) => setUserCoords(pos)}
                 onMessageUser={openChat}
                 onJoinUser={(peerId, peerUsername) => requireVerified(() => setActiveChat({peerId,peerUsername,radarInvite:true}))}
+                onRequestSOS={() => { setSosGeoStatus('idle'); setIsSosModalOpen(true); }}
+                onReportHazard={() => setIsReportModalOpen(true)}
                 focusPlace={destination.search}
               />
 
@@ -750,26 +752,6 @@ export default function MemberApp({initialProfile, destination, onNavigate, onDi
                   </div>
                 </div>
               )}
-              <div className="absolute top-[270px] right-4 z-[1001] flex flex-col items-center gap-3">
-                <button
-                  onClick={() => {
-                    setSosGeoStatus('idle');
-                    setIsSosModalOpen(true);
-                  }}
-                  aria-label="Campus SOS — request help"
-                  className="h-13 w-13 p-3.5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-lg flex items-center justify-center active:scale-95 transition-all"
-                >
-                  <ShieldAlert className="w-5 h-5" strokeWidth={2} />
-                </button>
-                <button
-                  onClick={() => setIsReportModalOpen(true)}
-                  className="h-13 w-13 p-3.5 rounded-full bg-pine text-black flex items-center justify-center active:scale-95 transition-all shadow-lg"
-                  aria-label="Drop new hazard pin"
-                >
-                  <Plus className="w-5 h-5" strokeWidth={2.5} />
-                </button>
-              </div>
-
               {activeHelpCard && (
                 <div className="absolute top-[265px] left-4 right-20 z-[1100] max-h-[45%] overflow-y-auto">
                   <div className="bg-surface border border-red-500/40 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-slide-up">
