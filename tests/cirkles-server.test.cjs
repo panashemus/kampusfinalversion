@@ -43,3 +43,13 @@ test('Cirkles UI chrome uses the approved palette and no emoji; logo has three o
  const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),Logo=require('../components/CirklesLogo.tsx').default;
  for(const variant of ['brand','nav','badge']){const svg=renderToStaticMarkup(React.createElement(Logo,{size:48,variant}));assert.equal((svg.match(/<path /g)||[]).length,3);assert.equal((svg.match(/<circle /g)||[]).length,1);assert.ok(svg.includes('stroke-linecap="round"'));if(variant!=='brand'){assert.ok(svg.includes('currentColor'));assert.ok(!svg.includes('linearGradient'));}}
 });
+
+test('share cards extend to general posts and owner-consented approved campus posts only',()=>{
+ const p={id:user,text:'Our holiday story was fun',circle:'',category:'General',visibility:'campus',approved:false,moderationStatus:'approved',isOwner:true,anonymous:true};
+ assert.equal(canExportStory(p),true);
+ const card=buildStoryCard(p);assert.match(card,/General/);assert.match(card,/ANONYMOUS KAMPER/);assert.match(card,/kampusbw\.site/);assert.ok(!card.includes(user));
+ for(const change of [{isOwner:false},{moderationStatus:'flagged'},{visibility:'private'},{text:'Katlego'}])assert.equal(canExportStory({...p,...change}),false);
+ assert.equal(canExportStory({...p,isOwner:false,visibility:'public',approved:true}),true);
+ const standard=buildStoryCard({...p,anonymous:false});assert.match(standard,/COMMUNITY POST/);assert.doesNotMatch(standard,/ANONYMOUS KAMPER/);
+ const long=buildStoryCard({...p,text:'Our holiday story was fun. '.repeat(150)});assert.match(long,/Excerpt/);assert.match(long,/kampusbw\.site/);
+});
