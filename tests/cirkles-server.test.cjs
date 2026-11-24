@@ -53,3 +53,22 @@ test('share cards extend to general posts and owner-consented approved campus po
  const standard=buildStoryCard({...p,anonymous:false});assert.match(standard,/COMMUNITY POST/);assert.doesNotMatch(standard,/ANONYMOUS KAMPER/);
  const long=buildStoryCard({...p,text:'Our holiday story was fun. '.repeat(150)});assert.match(long,/Excerpt/);assert.match(long,/kampusbw\.site/);
 });
+
+test('promotional card route verifies the designated authenticated admin, consent and moderation before rendering',()=>{
+ const source=fs.readFileSync('app/api/cirkles/promo-card/route.ts','utf8');
+ assert.match(source,/await requireUser\(req\)/);
+ assert.match(source,/user\.email_confirmed_at/);
+ assert.match(source,/CIRKLES_PROMO_ADMIN_EMAIL/);
+ assert.match(source,/db\.rpc\('is_kampus_admin'\)/);
+ assert.match(source,/from\('feed_preview'\)/);
+ assert.match(source,/permissionConfirmed!==true/);
+ assert.match(source,/post\.moderation_status!=='approved'/);
+ assert.match(source,/!canExportStory\(card\)/);
+ assert.doesNotMatch(source,/service_role|SUPABASE_SERVICE_ROLE_KEY/);
+});
+test('card artwork retains website footer and uses distinct visual accents for each Cirkle',()=>{
+ const p={id:user,text:'Our holiday story was fun',circle:'tezember',visibility:'public',approved:true,anonymous:true};
+ const a=buildStoryCard(p),b=buildStoryCard({...p,circle:'confessions'});
+ assert.match(a,/radialGradient/);assert.match(a,/JOIN THE CONVERSATION/);assert.match(a,/kampusbw\.site/);
+ assert.notEqual(a,b);assert.match(b,/Confessions/);assert.ok(!a.includes(user));
+});
