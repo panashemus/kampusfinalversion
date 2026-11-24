@@ -49,19 +49,25 @@ export async function POST(req:Request) {
    const ref=notice.reference_id;
    if(!ref||!UUID.test(ref))return NextResponse.json({skipped:'Invalid source'});
    const {data:post,error:postError}=await admin.from('feed_posts')
-    .select('id,user_id,visibility,public_approved,is_anonymous').eq('id',ref).maybeSingle();
+    .select('id,user_id,visibility,public_approved,is_anonymous,moderation_status').eq('id',ref).maybeSingle();
    if(postError)throw postError;
-   if(!post || (post.visibility!=='campus' && !(post.visibility==='public'&&post.public_approved)))
+   if(!post || post.moderation_status!=='approved' || (post.visibility!=='campus' && !(post.visibility==='public'&&post.public_approved)))
     return NextResponse.json({skipped:'Post is not viewable'});
    url='/#community?post='+post.id;
    if(notice.type==='post'){
     if(post.user_id===notice.user_id)return NextResponse.json({skipped:'Own post'});
-    title=post.is_anonymous?'New anonymous confession':'New campus question';
-    body=post.is_anonymous?'A student shared a confession. Join the conversation.':'A student asked a question. Join the conversation.';
+    const {data:prefs,error:prefError}=await admin.from('cirkles_notification_preferences').select('push_new_posts').eq('user_id',notice.user_id).maybeSingle();
+    // Before the additive migration is installed, preserve the existing push behavior.
+    if(prefError&&!['42P01','PGRST205'].includes(prefError.code))throw prefError;
+    if(prefs?.push_new_posts===false)return NextResponse.json({skipped:'Post alerts disabled'});
+    const {count:blocks,error:blockError}=await admin.from('user_blocks').select('user_id',{count:'exact',head:true}).or(`and(user_id.eq.${notice.user_id},blocked_id.eq.${post.user_id}),and(user_id.eq.${post.user_id},blocked_id.eq.${notice.user_id})`);
+    if(blockError)throw blockError;
+    if(blocks)return NextResponse.json({skipped:'Blocked relationship'});
+    title='New post in Cirkles';body='A new campus conversation is waiting for you.';
    }else{
     if(post.user_id!==notice.user_id)return NextResponse.json({skipped:'Not the post owner'});
-    title='New reply on Campus Feed';
-    body=post.is_anonymous?'Someone replied to your anonymous confession.':'Someone replied to your question.';
+    title='New reply in Cirkles';
+    body='Someone replied to your post. Open Kampus to read it.';
    }
   }
 
