@@ -50,18 +50,21 @@ test('share cards extend to general posts and owner-consented approved campus po
  const card=buildStoryCard(p);assert.match(card,/General/);assert.match(card,/ANONYMOUS KAMPER/);assert.match(card,/kampusbw\.site/);assert.ok(!card.includes(user));
  for(const change of [{isOwner:false},{moderationStatus:'flagged'},{visibility:'private'},{text:'Katlego'}])assert.equal(canExportStory({...p,...change}),false);
  assert.equal(canExportStory({...p,isOwner:false,visibility:'public',approved:true}),true);
- const standard=buildStoryCard({...p,anonymous:false});assert.match(standard,/COMMUNITY POST/);assert.doesNotMatch(standard,/ANONYMOUS KAMPER/);
+ const standard=buildStoryCard({...p,anonymous:false});assert.match(standard,/ANONYMOUS KAMPER/);assert.doesNotMatch(standard,/COMMUNITY POST/);
  const long=buildStoryCard({...p,text:'Our holiday story was fun. '.repeat(150)});assert.match(long,/Excerpt/);assert.match(long,/kampusbw\.site/);
 });
 
-test('promotional card route verifies the designated authenticated admin, consent and moderation before rendering',()=>{
+test('promotional card route verifies designated authenticated admin, accessible post and moderation before rendering',()=>{
  const source=fs.readFileSync('app/api/cirkles/promo-card/route.ts','utf8');
  assert.match(source,/await requireUser\(req\)/);
  assert.match(source,/user\.email_confirmed_at/);
  assert.match(source,/CIRKLES_PROMO_ADMIN_EMAIL/);
  assert.match(source,/db\.rpc\('is_kampus_admin'\)/);
  assert.match(source,/from\('feed_preview'\)/);
- assert.match(source,/permissionConfirmed!==true/);
+ assert.doesNotMatch(source,/permissionConfirmed/);
+ assert.match(source,/\['campus','public','private'\]\.includes\(post\.visibility\)/);
+ assert.match(source,/anonymous:true/);
+ const ui=fs.readFileSync('components/CirklesStoryCard.tsx','utf8');assert.doesNotMatch(ui,/permissionConfirmed|setPermission|needsPermission/);
  assert.match(source,/post\.moderation_status!=='approved'/);
  assert.match(source,/!canExportStory\(card\)/);
  assert.doesNotMatch(source,/service_role|SUPABASE_SERVICE_ROLE_KEY/);
