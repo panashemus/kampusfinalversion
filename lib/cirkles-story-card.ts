@@ -43,7 +43,7 @@ export function buildStoryCard(post:StoryCardInput){
  const displayed=lines.slice(0,max);
  if(truncated)displayed[max-1]=Array.from(displayed[max-1]).slice(0,-2).join('')+'…';
  const label=post.circle?cirkleLabel(post.circle):post.category||'Community';
- const author=post.anonymous!==false?'ANONYMOUS KAMPER':'COMMUNITY POST';
+ const author='ANONYMOUS KAMPER';
  const top=430+Math.max(0,Math.min(200,(1040-displayed.length*step)/2));
  return '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">'+
  '<defs><linearGradient id="card-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="'+p.surface+'"/><stop offset="1" stop-color="'+p.midnight+'"/></linearGradient><radialGradient id="halo"><stop stop-color="'+accent+'" stop-opacity=".21"/><stop offset="1" stop-color="'+accent+'" stop-opacity="0"/></radialGradient><clipPath id="frame"><rect x="54" y="100" width="972" height="1670" rx="56"/></clipPath></defs>'+
