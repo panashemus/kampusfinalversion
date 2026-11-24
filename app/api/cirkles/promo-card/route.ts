@@ -12,14 +12,13 @@ export async function POST(req:Request){
   if(adminError||admin!==true)throw new HttpError(403,'Promotional exports require administrator permission.');
   const raw=await boundedJson(req,1024);
   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new HttpError(400,'Choose a post.');
-  const {id,permissionConfirmed}=raw as Record<string,unknown>;
+  const {id}=raw as Record<string,unknown>;
   if(typeof id!=='string'||!UUID.test(id))throw new HttpError(400,'Choose a valid post.');
   const {data:post,error}=await db.from('feed_preview').select('id,text,category,circle_slug,visibility,public_approved,is_owner,is_anonymous,moderation_status').eq('id',id).maybeSingle();
   if(error||!post)throw new HttpError(404,'Post unavailable.');
-  if(post.moderation_status!=='approved'||!['campus','public'].includes(post.visibility))throw new HttpError(403,'Private, flagged and blocked posts cannot be exported.');
-  if(!(post.visibility==='public'&&post.public_approved)&&!post.is_owner&&permissionConfirmed!==true)throw new HttpError(403,'Obtain the author’s permission before promoting a post outside its intended audience.');
+  if(post.moderation_status!=='approved'||!['campus','public','private'].includes(post.visibility))throw new HttpError(403,'Flagged and blocked posts cannot be exported.');
   // Use only moderated text from the existing RLS-filtered projection; never include identity or media.
-  const card={id:post.id,text:post.text,circle:post.circle_slug||'',category:post.category,visibility:'public',approved:true,anonymous:Boolean(post.is_anonymous),moderationStatus:post.moderation_status};
+  const card={id:post.id,text:post.text,circle:post.circle_slug||'',category:post.category,visibility:'public',approved:true,anonymous:true,moderationStatus:post.moderation_status};
   if(!canExportStory(card))throw new HttpError(422,'This post contains text that cannot safely be exported.');
   return Response.json({svg:buildStoryCard(card)},{headers:{'Cache-Control':'no-store'}});
  }catch(error){return errorResponse(error);}
