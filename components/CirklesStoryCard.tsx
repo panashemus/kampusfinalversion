@@ -20,24 +20,23 @@ async function renderCard(svg:string):Promise<Blob>{
 export default function CirklesStoryCard({post,adminHint=false}:{post:StoryCardInput;adminHint?:boolean}){
  const [open,setOpen]=useState(false),[file,setFile]=useState<File|null>(null),[preview,setPreview]=useState(''),[notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false);
- const [promo,setPromo]=useState<{id:string;svg:string}|null>(null),[permission,setPermission]=useState(false),[requesting,setRequesting]=useState(false);
+ const [promo,setPromo]=useState<{id:string;svg:string}|null>(null),[requesting,setRequesting]=useState(false);
  const requestRef=useRef<AbortController|null>(null);
  const standardAllowed=open&&canExportStory(post);
- const adminEligible=adminHint&&post.moderationStatus==='approved'&&['campus','public'].includes(post.visibility);
- const needsPermission=!(post.visibility==='public'&&post.approved)&&!post.isOwner;
+ const adminEligible=adminHint&&post.moderationStatus==='approved'&&['campus','public','private'].includes(post.visibility);
  const svg=open?(standardAllowed?buildStoryCard(post):promo?.id===post.id?promo.svg:''):'';
  const allowed=Boolean(svg);
  const onOpenChange=(next:boolean)=>{
   requestRef.current?.abort();requestRef.current=null;
-  setPromo(null);setPermission(false);setRequesting(false);setNotice('');setOpen(next);
+  setPromo(null);setRequesting(false);setNotice('');setOpen(next);
  };
  useEffect(()=>()=>requestRef.current?.abort(),[]);
  const requestPromo=async()=>{
-  if(!adminEligible||needsPermission&&!permission)return;
+  if(!adminEligible)return;
   requestRef.current?.abort();
   const controller=new AbortController();requestRef.current=controller;setRequesting(true);setNotice('');
   try{
-   const response=await fetch('/api/cirkles/promo-card',{method:'POST',headers:{'Content-Type':'application/json',...await authHeaders()},body:JSON.stringify({id:post.id,permissionConfirmed:permission}),signal:controller.signal});
+   const response=await fetch('/api/cirkles/promo-card',{method:'POST',headers:{'Content-Type':'application/json',...await authHeaders()},body:JSON.stringify({id:post.id}),signal:controller.signal});
    const body=await response.json();
    if(!response.ok||typeof body.svg!=='string')throw Error(body.error||'Promotional card unavailable.');
    if(!controller.signal.aborted)setPromo({id:post.id,svg:body.svg});
@@ -70,14 +69,13 @@ export default function CirklesStoryCard({post,adminHint=false}:{post:StoryCardI
   <DialogTrigger asChild><button type="button" aria-label="Share post card" title="Share post card" className="min-h-11 min-w-11 shrink-0 flex items-center justify-center rounded-full bg-midnight/50 text-pine hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine"><Share2 size={19} strokeWidth={1.8}/></button></DialogTrigger>
   <DialogContent className="z-[1300] w-[calc(100%-1.5rem)] max-w-sm max-h-[90dvh] overflow-y-auto rounded-2xl bg-surface border-pine/30 text-white p-4" overlayClassName="z-[1299]">
    <DialogTitle>Share post card</DialogTitle>
-   <DialogDescription className="text-sage text-xs">{allowed?'A branded, text-only 1080 × 1920 card for stories and TikTok. No profile details or attachments are exported.':'Approved public posts and your own approved campus posts can be exported. Designated administrators can request permission-based promotional cards.'}</DialogDescription>
+   <DialogDescription className="text-sage text-xs">{allowed?'A branded, text-only 1080 × 1920 card for stories and TikTok. No profile details or attachments are exported.':'Approved public posts and your own approved campus posts can be exported. The designated administrator can generate anonymous promotional cards from accessible posts.'}</DialogDescription>
    {!allowed&&adminEligible&&<div className="space-y-3 rounded-xl border border-pine/30 p-3">
     <p className="text-xs font-bold text-pine">Admin promotional export</p>
-    {needsPermission&&<label className="flex items-start gap-2 text-xs text-sage"><input type="checkbox" checked={permission} onChange={e=>setPermission(e.target.checked)} className="mt-0.5 shrink-0"/>I have permission from the author to share this post outside Kampus.</label>}
-    <button type="button" disabled={requesting||needsPermission&&!permission} onClick={()=>void requestPromo()} className="min-h-11 w-full rounded-xl bg-pine font-bold text-midnight disabled:opacity-50">{requesting?'Preparing card…':'Generate promotional card'}</button>
+    <button type="button" disabled={requesting} onClick={()=>void requestPromo()} className="min-h-11 w-full rounded-xl bg-pine font-bold text-midnight disabled:opacity-50">{requesting?'Preparing card…':'Generate promotional card'}</button>
    </div>}
    {allowed&&<>
-    {post.visibility==='campus'&&<p className="text-xs text-pine">Sharing a campus-only post as an image makes its contents visible outside Kampus.</p>}
+    {post.visibility!=='public'&&<p className="text-xs text-pine">Sharing this image makes the text visible outside its original audience. Only promote content covered by author permission.</p>}
     {preview?
       // eslint-disable-next-line @next/next/no-img-element
       <img src={preview} alt="Preview of your Kampus Cirkles sharing card" className="mx-auto block max-h-[53dvh] max-w-full rounded-xl border border-pine/20 object-contain"/>
