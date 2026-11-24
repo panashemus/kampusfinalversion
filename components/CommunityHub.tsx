@@ -337,7 +337,7 @@ export default function CommunityHub({
           visible.map((post) => (
             <div id={'post-'+post.id} key={post.id} className={`bg-surface rounded-2xl p-4 flex flex-col gap-3 relative border ${post.circleSlug||post.is_blasted ? 'border-pine/30' : 'border-gray-800'}`}>
               <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
-                <CirklesStoryCard post={{id:post.id,text:post.text,circle:post.circleSlug||'',category:post.category,visibility:post.visibility,approved:post.approved,isOwner:post.isOwner,anonymous:post.is_anonymous,moderationStatus:post.moderationStatus}}/>
+                <CirklesStoryCard adminHint={Boolean(profile?.is_admin)} post={{id:post.id,text:post.text,circle:post.circleSlug||'',category:post.category,visibility:post.visibility,approved:post.approved,isOwner:post.isOwner,anonymous:post.is_anonymous,moderationStatus:post.moderationStatus}}/>
                 <button
                   aria-label="Post actions"
                   onClick={() => setMenuOpenId(menuOpenId === post.id ? null : post.id)}
