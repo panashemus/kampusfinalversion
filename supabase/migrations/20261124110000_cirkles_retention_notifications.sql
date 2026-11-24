@@ -10,7 +10,7 @@ CREATE TABLE public.cirkles_notification_preferences (
 );
 ALTER TABLE public.cirkles_notification_preferences ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.cirkles_notification_preferences FROM PUBLIC,anon,authenticated;
-GRANT SELECT(user_id,push_new_posts,email_frequency,email_replies),INSERT(user_id,push_new_posts,email_frequency,email_replies),UPDATE(push_new_posts,email_frequency,email_replies) ON public.cirkles_notification_preferences TO authenticated;
+GRANT SELECT(user_id,push_new_posts,email_frequency,email_replies),INSERT(user_id,push_new_posts,email_frequency,email_replies),UPDATE(user_id,push_new_posts,email_frequency,email_replies) ON public.cirkles_notification_preferences TO authenticated;
 GRANT ALL ON public.cirkles_notification_preferences TO service_role;
 CREATE POLICY cirkles_prefs_read ON public.cirkles_notification_preferences FOR SELECT TO authenticated USING(user_id=(SELECT auth.uid()));
 CREATE POLICY cirkles_prefs_insert ON public.cirkles_notification_preferences FOR INSERT TO authenticated WITH CHECK(user_id=(SELECT auth.uid()) AND public.is_kampus_member());
