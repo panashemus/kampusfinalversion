@@ -46,7 +46,9 @@ test('server push is secret-authenticated, scoped and idempotent',()=>{
  assert.match(server,/push_delivery_claims/);
  assert.match(server,/push_subscriptions/);
  assert.match(server,/member\?\.verified/);
- assert.match(server,/post\.is_anonymous\?'New anonymous confession'/);
+ assert.match(server,/title='New post in Cirkles'/);
+ assert.match(server,/body='A new campus conversation is waiting for you\.'/);
+ assert.doesNotMatch(server,/post\.text|post\.author_name|post\.is_anonymous\?/);
  assert.match(sql,/vault\.decrypted_secrets/);
  assert.match(sql,/net\.http_post/);
  assert.match(sql,/new campus question/i);

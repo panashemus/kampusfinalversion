@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Profile } from '@/lib/types';
 import StudentPreferences from './StudentPreferences';
 import PushNotificationBanner from '@/components/PushNotificationBanner';
+import CirklesNotificationPreferences from './CirklesNotificationPreferences';
 
 function fmtDate(iso: string | null) {
   if (!iso) return 'Inactive';
@@ -134,11 +135,7 @@ export default function ProfileScreen({
     {
       icon: Bell,
       label: 'Notification Preferences',
-      onClick: () =>
-        toast({
-          title: 'Notification Preferences',
-          description: 'Push notifications are managed via browser settings.',
-        }),
+      onClick: () => document.getElementById('cirkles-notification-settings')?.scrollIntoView({behavior:'smooth',block:'start'}),
     },
     {
       icon: Mail,
@@ -633,6 +630,7 @@ export default function ProfileScreen({
       </div>
 
       {profile && <StudentPreferences profile={profile} onProfileUpdate={onProfileUpdate} />}
+      {profile && <CirklesNotificationPreferences userId={profile.id} />}
       <div className="w-full mt-4"><PushNotificationBanner userId={profile?.id ?? ''} /></div>
 
       {/* Emergency Hotlines */}

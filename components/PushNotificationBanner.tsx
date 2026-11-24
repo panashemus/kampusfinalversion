@@ -58,7 +58,7 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
       // The OS permission prompt must happen directly in the user's tap, especially on iOS.
       const access = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
       setPermission(access);
-      if (access !== 'granted') throw new Error('Allow notifications in your browser settings to receive campus alerts.');
+      if (access !== 'granted') throw new Error('Allow notifications in your browser settings to receive Cirkles alerts.');
       const configResponse = await fetch('/api/push/config', {cache:'no-store'});
       if (!configResponse.ok) throw new Error('KAMPUS push signing key is not ready. Please try again later.');
       const config = await configResponse.json() as {publicKey:string};
@@ -113,7 +113,7 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
       <div className="rounded-xl border border-pine/30 bg-pine/10 p-3 my-2 flex items-start gap-3">
         <Bell className="h-5 w-5 text-pine shrink-0 mt-1"/>
         <div className="flex-1 text-xs space-y-2">
-          <strong className="text-white">Get Campus Feed alerts on your iPhone lock screen</strong>
+          <strong className="text-white">Get Cirkles alerts on your iPhone lock screen</strong>
           <p className="text-sage">In Safari, tap Share → Add to Home Screen, then open KAMPUS from your new Home Screen icon. You can enable notifications inside the installed app.</p>
           <button onClick={() => {const until=Date.now()+7*24*60*60*1000;localStorage.setItem('kampus:push-remind-after',String(until));setDismissed(true);}} className="text-pine underline">Got it</button>
         </div>
@@ -132,7 +132,7 @@ export default function PushNotificationBanner({ userId }: { userId: string }) {
     <div className="rounded-xl border border-pine/30 bg-pine/10 p-3 my-2 flex items-start gap-3">
       <Bell className="h-5 w-5 text-pine shrink-0 mt-1"/>
       <div className="flex-1 text-xs space-y-2">
-        <strong className="text-white">Get Campus Feed alerts</strong>
+        <strong className="text-white">Get Cirkles alerts</strong>
         <p className="text-sage">Get new campus questions, anonymous confessions and replies on your phone’s lock screen, even when KAMPUS is closed. Only students who enable alerts receive these pushes.</p>
         {permission === 'denied' && <p className="text-amber-300">Notifications are blocked. Allow them in your browser’s site settings, then return here.</p>}
         {error && <p role="alert" className="text-red-300">{error}</p>}
