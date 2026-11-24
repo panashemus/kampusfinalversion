@@ -73,5 +73,5 @@ $$('[role=tablist]').forEach(list=>list.addEventListener('keydown',e=>{if(!['Arr
 hydrate();renderProduct();renderPhase('community');
 // This presentation explicitly requests cinematic motion. The visible pause
 // control remains available at all times, including when a dialog is open.
-const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');setMotion(false);
+const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');setMotion(reducedMotion.matches);reducedMotion.addEventListener?.('change',event=>setMotion(event.matches));
 if('IntersectionObserver'in window){const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.remove('pending');observer.unobserve(entry.target);}}),{threshold:.08});$$('.reveal').forEach(el=>{if(el.getBoundingClientRect().top>innerHeight&&!document.body.classList.contains('motion-paused'))el.classList.add('pending');observer.observe(el);});}
