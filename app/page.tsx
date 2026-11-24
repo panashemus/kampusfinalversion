@@ -45,5 +45,7 @@ export default function Home(){
  if(checking)return <div className="bg-midnight text-sage min-h-screen grid place-content-center" role="status">Opening Kampus…</div>;
  if(destination.module==='auth')return <AuthScreen onVerified={resume} onExplore={()=>navigate(parseDestination(safeReturnDestination(sessionStorage.getItem('kampus:return'))))}/>;
  if(profile)return <MemberApp key={profile.id} initialProfile={profile} destination={destination} onNavigate={navigate} onDisconnect={()=>{setProfile(null);navigate({module:'discover'});}}/>;
+ // The showcase is isolated from the authenticated app and existing deep links.
+ if(destination.module==='discover'&&!error&&!destination.search)return <iframe title="Discover Kampus" src="/landing/index.html" sandbox="allow-scripts allow-forms allow-top-navigation-by-user-activation" className="w-full h-[100dvh] flex-1 border-0 bg-midnight" />;
  return <GuestPreview destination={destination} onNavigate={navigate} onSignIn={requestAuth} sessionError={error}/>;
 }

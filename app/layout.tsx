@@ -10,16 +10,16 @@ export const viewport: Viewport = {width:'device-width',initialScale:1,viewportF
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.kampusbw.site'),
-  title: 'KAMPUS — Verified Student Safety Network',
-  description: 'Your verified student safety network for UB and BAC — campus radar, student listings, academic critique, and peer-to-peer community support.',
+  title: 'Kampus — Your campus. Connected.',
+  description: 'Discover Cirkles, improve your coursework with Kritic, and explore student life with Radar and Hustle Hub. Built for students in Botswana.',
   manifest: '/manifest.json',
   icons: {
     icon: [{ url: '/favicon.png', type: 'image/png', sizes: '332x390' }],
     apple: [{ url: '/apple-touch-icon.png', sizes: '332x390' }],
   },
   openGraph: {
-    title: 'KAMPUS — Verified Student Safety Network',
-    description: 'Campus radar, student listings, academic critique, and peer-to-peer community support for UB & BAC.',
+    title: 'Kampus — Your campus. Connected.',
+    description: 'Find your people, improve your work, and discover student life with Kampus.',
     url: 'https://kampusbw.site',
     siteName: 'Kampus',
     images: [
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary',
-    title: 'KAMPUS — Verified Student Safety Network',
+    title: 'Kampus — Your campus. Connected.',
     description: 'Campus radar, student listings, academic critique, and peer-to-peer community support for UB & BAC.',
     images: ['/images/ClipSnap_20260723201232.png'],
   },
