@@ -55,7 +55,7 @@ type FeedCommentRow = {
 };
 
 type EnhancedCommunityPost = {
-  circleSlug: CirkleSlug | null; storyPrompt: string | null; hotScore: number; createdAt: string;
+  circleSlug: CirkleSlug | null; storyPrompt: string | null; hotScore: number; createdAt: string; moderationStatus?: string;
   visibility: Visibility; approved: boolean; institution: string | null; isOwner: boolean;
   id: string;
   authorId: string;
@@ -156,7 +156,7 @@ export default function CommunityHub({
       return {
         id: p.id,
         circleSlug:p.circle_slug||null,storyPrompt:p.story_prompt||null,hotScore:p.cirkles_hot_score||0,createdAt:p.created_at,
-        visibility:p.visibility,approved:p.public_approved,institution:p.institution,isOwner:p.is_owner,
+        visibility:p.visibility,approved:p.public_approved,institution:p.institution,isOwner:p.is_owner,moderationStatus:p.moderation_status,
         authorId: p.user_id ?? '',
         author: p.author_name ?? 'Student',
         avatarUrl: isPostAnon ? null : (p.avatar_url ?? null),
@@ -336,7 +336,8 @@ export default function CommunityHub({
         ) : (
           visible.map((post) => (
             <div id={'post-'+post.id} key={post.id} className={`bg-surface rounded-2xl p-4 flex flex-col gap-3 relative border ${post.circleSlug||post.is_blasted ? 'border-pine/30' : 'border-gray-800'}`}>
-              <div className="absolute top-2 right-2 z-10">
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+                <CirklesStoryCard post={{id:post.id,text:post.text,circle:post.circleSlug||'',category:post.category,visibility:post.visibility,approved:post.approved,isOwner:post.isOwner,anonymous:post.is_anonymous,moderationStatus:post.moderationStatus}}/>
                 <button
                   aria-label="Post actions"
                   onClick={() => setMenuOpenId(menuOpenId === post.id ? null : post.id)}
@@ -364,7 +365,7 @@ export default function CommunityHub({
                 )}
               </div>
 
-              <div className="flex items-center justify-between pr-8">
+              <div className="flex items-center justify-between pr-20 min-h-9">
                 <div className="flex items-center gap-2">
                   {post.is_anonymous ? (
                     <div className="w-9 h-9 rounded-full bg-ink border border-gray-800 flex items-center justify-center text-lg shrink-0 shadow-inner">
@@ -405,7 +406,6 @@ export default function CommunityHub({
               {post.circleSlug&&<span className="inline-flex self-start items-center gap-2 rounded-full border border-pine/30 px-2.5 py-1 text-[10px] font-semibold text-pine"><CirklesLogo size={14} variant="badge"/>{cirkleLabel(post.circleSlug)}</span>}
               {post.storyPrompt&&<blockquote className="border-l-2 border-pine/40 pl-3 text-xs italic leading-relaxed text-sage">{post.storyPrompt}</blockquote>}
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap break-words">{post.text}</p>
-              {post.circleSlug&&<CirklesStoryCard post={{id:post.id,text:post.text,circle:post.circleSlug,visibility:post.visibility,approved:post.approved}}/>}
               <ContextActions content={{id:post.id,type:post.category==="Academic"?"academic-question":"discussion",module:"community",visibility:post.visibility,approved:post.approved,available:true,category:post.category,text:post.text}} userId={profile?.id} onNavigate={onNavigate}/>
 
               {post.images.length > 0 && (
